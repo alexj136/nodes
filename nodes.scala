@@ -1,5 +1,5 @@
 type Name = String
-type Prog = Map[Name, Statement]
+type Prog = Map[Name, List[Statement]]
 abstract class Statement
 case class Skip extends Statement
 case class Input(name: Name, node: Name) extends Statement
@@ -13,9 +13,10 @@ case class Cons(hd: Expression, tl: Expression) extends Expression
 case class Head(exp: Expression) extends Expression
 case class Tail(exp: Expression) extends Expression
 type Store = Map[Name, Expression]
-type Context = Map[Name, ( , Store)]
+type MessageQueue = Map[Name, Expression]
+type Context = Map[Name, (List[Statement], MessageQueue, Store)]
 object Nodes {
-  def evalExpression(store: Store, node: Name, exp: Expression): Expression =
+  def evalExpression(ctx: Context, exp: Expression): Expression =
     exp match {
       case Variable(varName) => store(node)(varName)
       case EmptyList => exp
@@ -27,10 +28,32 @@ object Nodes {
       case Tail(Cons(hd, tl)) => evalExpression(tl)
       case Tail(other) => evalExpression(Tail(evalExpression(other)))
   }
-  def evalStatement(ctx: Context, node: Name, stmt: Statement): Context =
+  def evalStatement(ctx: Context, curNode: Name, stmt: Statement): Context =
     stmt match {
       case Skip => ctx
-      case Input(name, node) =>
-        evalStatement(
+      case Input(varName, sndrNode) =>
+        ctx(curNode) match { case (stmts, msgQ, store) => {
+          msgQ(sndrNode) match {
+            case Nil => // switch to sender
+            case msgQHead :: msgQTail => {
+              val newCtx = ctx(name) + (name, (stmts, msgQTail, store))
+              evalStatement(newCtx, curNode, Assign(varName, msgQHead)
+            }
+          }
+        }
+      }
+      case Output(exp, name) =>
+        val newMsgQ = ctx(name)._2 ++ exp
+        // update message queue for receiver node in context with evalExp
+      case While(exp, stmts) =>
+        val evalExp = evalExpression(ctx, exp)
+        if (evalExp.equals(EmptyList))
+          ctx
+        else
+          // update statement queue for current node with tail of loop body list
+          // recursively call evalStatement for the head of the loop body list
+      case Assign(name, exp) =>
+        val evalExp = evalExpression(ctx, exp)
+        // update store for current node with evalExp
     }
 }
