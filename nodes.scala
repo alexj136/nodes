@@ -1,12 +1,17 @@
 type Name = String
 
+/** The expression language is the language of binary trees.
+ */
 abstract class Expression
 case class Variable(name: Name) extends Expression
-case class EmptyList() extends Expression
+case class Atom() extends Expression
 case class Cons(hd: Expression, tl: Expression) extends Expression
 case class Head(exp: Expression) extends Expression
 case class Tail(exp: Expression) extends Expression
 
+/** A while language with very simple concurrency. Each 'node' (a named
+ *  instruction) can send messages to other nodes while they execute.
+ */
 abstract class Statement
 case class Skip() extends Statement
 case class Input(name: Name, node: Name) extends Statement
@@ -68,7 +73,7 @@ class Context(cmap: ContextMap) {
     this.cmap.get(nodeName) match {
       case None => throw new RuntimeException("Node name not in context")
       case Some((_, _, store)) => store.get(varName) match {
-        case None => EmptyList()
+        case None => Atom()
         case Some(exp) => exp
       }
     }
@@ -94,22 +99,26 @@ class Context(cmap: ContextMap) {
 
 object Nodes {
 
+  /** Evaluate the given expression, on the given node, with the given context.
+   */
   def evalExpression(ctx: Context, curNode: Name, exp: Expression): Expression =
     exp match {
       case Variable(varName) => ctx.varGet(curNode, varName)
-      case EmptyList() => exp
+      case Atom() => exp
       case Cons(a, b) =>
         Cons(evalExpression(ctx, curNode, a), evalExpression(ctx, curNode, b))
-      case Head(EmptyList()) => EmptyList()
+      case Head(Atom()) => Atom()
       case Head(Cons(hd, tl)) => evalExpression(ctx, curNode, hd)
       case Head(other) =>
         evalExpression(ctx, curNode, Head(evalExpression(ctx, curNode, other)))
-      case Tail(EmptyList()) => EmptyList()
+      case Tail(Atom()) => Atom()
       case Tail(Cons(hd, tl)) => evalExpression(ctx, curNode, tl)
       case Tail(other) =>
         evalExpression(ctx, curNode, Tail(evalExpression(ctx, curNode, other)))
   }
 
+  /** Evaluate the given statement, on the given node, with the given context.
+   */
   def evalStatement(ctx: Context, curNode: Name, stmt: Statement): Context =
     stmt match {
       case Skip() => continueOrSwitch(ctx, curNode)
@@ -121,7 +130,7 @@ object Nodes {
       case Output(exp, rcvrName) =>
         continueOrSwitch(ctx.messagePut(rcvrName, curNode, exp), curNode)
       case While(exp, stmts) =>
-        if (evalExpression(ctx, curNode, exp) == EmptyList())
+        if (evalExpression(ctx, curNode, exp) == Atom())
           continueOrSwitch(ctx, curNode)
         else
           continueOrSwitch(ctx.statementsPut(curNode, stmts :+ stmt), curNode)
