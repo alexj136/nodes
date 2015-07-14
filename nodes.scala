@@ -1,26 +1,17 @@
 type Name = String
 
-trait Expression
+abstract class Expression
 case class Variable(name: Name) extends Expression
 case class EmptyList() extends Expression
 case class Cons(hd: Expression, tl: Expression) extends Expression
 case class Head(exp: Expression) extends Expression
 case class Tail(exp: Expression) extends Expression
 
-trait Statement {
-  def nodeNames: Set[Name] = Set.empty
-}
+abstract class Statement
 case class Skip() extends Statement
-case class Input(name: Name, node: Name) extends Statement {
-  override def nodeNames: Set[Name] = Set(this.node)
-}
-case class Output(exp: Expression, node: Name) extends Statement {
-  override def nodeNames: Set[Name] = Set(this.node)
-}
-case class While(exp: Expression, stmts: List[Statement]) extends Statement {
-  override def nodeNames: Set[Name] =
-    this.stmts.map(_.nodeNames).fold(Set.empty){ (a, b) => a ++ b }
-}
+case class Input(name: Name, node: Name) extends Statement
+case class Output(exp: Expression, node: Name) extends Statement
+case class While(exp: Expression, stmts: List[Statement]) extends Statement
 case class Assign(name: Name, exp: Expression) extends Statement
 
 type Prog = Map[Name, Statement]
@@ -30,8 +21,10 @@ type ContextMap = Map[Name, (List[Statement], MessageQueue, Store)]
 
 class Context(cmap: ContextMap) {
 
-  //def this(prog: Prog) =
-    //this(prog.map({ case (nodeName, stmts) => (nodeName, (stmts, prog.values.map(_.nodeNames).fold(Set.empty){ (a, b) => a ++ b}, Map())) }))
+  def fromProg(prog: Prog): Context = {
+    val initialNodeNameMap: Map[Name, List[Expression]] = Map(prog.keySet.map({n => (n, List()})))
+    throw new RuntimeException("")
+  }
 
   def statementGet(nodeName: Name): Option[(Context, Statement)] = 
     this.cmap.get(nodeName) match {
