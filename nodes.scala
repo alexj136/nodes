@@ -1,8 +1,7 @@
 type Name = String
-type Prog = Map[Name, List[Statement]]
 
 abstract class Statement
-case class Skip extends Statement
+case class Skip() extends Statement
 case class Input(name: Name, node: Name) extends Statement
 case class Output(exp: Expression, node: Name) extends Statement
 case class While(exp: Expression, stmts: List[Statement]) extends Statement
@@ -10,63 +9,80 @@ case class Assign(name: Name, exp: Expression) extends Statement
 
 abstract class Expression
 case class Variable(name: Name) extends Expression
-case class EmptyList extends Expression
+case class EmptyList() extends Expression
 case class Cons(hd: Expression, tl: Expression) extends Expression
 case class Head(exp: Expression) extends Expression
 case class Tail(exp: Expression) extends Expression
 
+type Prog = Map[Name, List[Statement]]
 type Store = Map[Name, Expression]
 type MessageQueue = Map[Name, List[Expression]]
 
-class Context(map: Map[Name, (List[Statement], MessageQueue, Store)]) {
+class Context(cmap: Map[Name, (List[Statement], MessageQueue, Store)]) {
+
   def statementGet(nodeName: Name): Option[(Context, Statement)] = 
-    this.map.get(nodeName) match {
+    this.cmap.get(nodeName) match {
       case None => throw new RuntimeException("Node name not in context")
       case Some((Nil, _, _)) => None
       case Some((stmt :: stmts, msgQ, store)) =>
-        Some((Context(this.map + (nodeName, (stmts, msgQ, store))), stmt))
+        Some((Context(this.cmap + ((nodeName, (stmts, msgQ, store)))), stmt))
     }
-  def statementPut(nodeName: Name, stmt: Statement): Context =
-    this.map.get(nodeName) match {
+
+  def statementsPut(nodeName: Name, stmts: List[Statement]): Context =
+    this.cmap.get(nodeName) match {
       case None => throw new RuntimeException("Node name not in context")
-      case Some((stmts, msgQ, store)) =>
-        Context(this.map + (nodeName, (stmt :: stmts, msgQ, store)))
+      case Some((oldStmts, msgQ, store)) =>
+        Context(this.cmap + ((nodeName, (stmts ++ oldStmts, msgQ, store))))
     }
+
   def messageGet(rcvrName: Name, sndrName: Name): Option[(Context, Expression)] =
-    this.map.get(rcvrName) match {
+    this.cmap.get(rcvrName) match {
       case None => throw new RuntimeException("Node name not in context")
       case Some((stmts, msgQ, store)) => msgQ.get(sndrName) match {
-        case None => throw new
-          RuntimeException("Node name not in message queue")
+        case None =>
+          throw new RuntimeException("Node name not in message queue")
         case Some(Nil) => None
-        case Some(msg :: msgs) => Some((Context(this.map +
-          (rcvrName, (stmts, msgQ + (sndrName, msgs), store))), msg))
+        case Some(msg :: msgs) => Some((Context(this.cmap +
+          ((rcvrName, (stmts, msgQ + ((sndrName, msgs)), store)))), msg))
       }
     }
+
   def messagePut(rcvrName: Name, sndrName: Name, msg: Expression): Context =
-    this.map.get(rcvrName) match {
+    this.cmap.get(rcvrName) match {
       case None => throw new RuntimeException("Node name not in context")
       case Some((stmts, msgQ, store)) => msgQ.get(sndrName) match {
-        case None => throw new
-          RuntimeException("Node name not in message queue")
-        case Some(msgs) => Context(this.map +
-          (rcvrName, (stmts, msgQ + (sndrName, msgs ++ List(msg)), store)))
+        case None =>
+          throw new RuntimeException("Node name not in message queue")
+        case Some(msgs) => Context(this.cmap +
+          ((rcvrName, (stmts, msgQ + ((sndrName, msgs :+ msg)), store))))
       }
     }
+
   def varGet(nodeName: Name, varName: Name): Expression =
-    this.map.get(nodeName) match {
+    this.cmap.get(nodeName) match {
       case None => throw new RuntimeException("Node name not in context")
       case Some((_, _, store)) => store.get(varName) match {
-        case None => EmptyList
+        case None => EmptyList()
         case Some(exp) => exp
       }
     }
+
   def varPut(nodeName: Name, varName: Name, exp: Expression): Context =
-    this.map.get(nodeName) match {
+    this.cmap.get(nodeName) match {
       case None => throw new RuntimeException("Node name not in context")
       case Some((stmts, msgQ, store)) =>
-        Context(this.map + (nodeName, (stmts, msgQ, store + (varName, exp))))
+        Context(this.cmap + ((nodeName, (stmts, msgQ, store + ((varName, exp))))))
     }
+
+  def nodesWithStatements: Set[Name] = {
+    def hasMoreStatements(
+      cmapEntry: (Name, (List[Statement], MessageQueue, Store))): Boolean =
+        cmapEntry match {
+          case (_, (Nil, _, _)) => false
+          case (_, (_, _, _)) => true
+        }
+    this.cmap.filter(e => hasMoreStatements(e)).keySet
+  }
 }
 
 object Nodes {
@@ -74,46 +90,49 @@ object Nodes {
   def evalExpression(ctx: Context, curNode: Name, exp: Expression): Expression =
     exp match {
       case Variable(varName) => ctx.varGet(curNode, varName)
-      case EmptyList => exp
-      case Cons(a, b) => Cons(evalExpression(a), evalExpression(b))
-      case Head(EmptyList) => EmptyList
-      case Head(Cons(hd, tl)) => evalExpression(hd)
-      case Head(other) => evalExpression(Head(evalExpression(other)))
-      case Tail(EmptyList) => EmptyList
-      case Tail(Cons(hd, tl)) => evalExpression(tl)
-      case Tail(other) => evalExpression(Tail(evalExpression(other)))
+      case EmptyList() => exp
+      case Cons(a, b) =>
+        Cons(evalExpression(ctx, curNode, a), evalExpression(ctx, curNode, b))
+      case Head(EmptyList()) => EmptyList()
+      case Head(Cons(hd, tl)) => evalExpression(ctx, curNode, hd)
+      case Head(other) =>
+        evalExpression(ctx, curNode, Head(evalExpression(ctx, curNode, other)))
+      case Tail(EmptyList()) => EmptyList()
+      case Tail(Cons(hd, tl)) => evalExpression(ctx, curNode, tl)
+      case Tail(other) =>
+        evalExpression(ctx, curNode, Tail(evalExpression(ctx, curNode, other)))
   }
 
   def evalStatement(ctx: Context, curNode: Name, stmt: Statement): Context =
     stmt match {
-      case Skip => ctx
-      case Input(varName, sndrNode) =>
-        ctx(curNode) match { case (stmts, msgQ, store) => {
-          msgQ(sndrNode) match {
-            case Nil => {
-              val (optionNextStmt, restStmts) = ctx(sndrNode)._1.splitAtHead
-              val newCtx = ctx + (name, (stmt :: stmts, msgQ, store))
-                + (sndrNode, (restStmts, ))
-            }
-            case msgQHead :: msgQTail => {
-              val newCtx = ctx + (name, (stmts, msgQ + (sndrNode, msgQTail), store))
-              evalStatement(newCtx, curNode, Assign(varName, msgQHead))
-            }
-          }
-        }
+      case Skip() => continueOrSwitch(ctx, curNode)
+      case Input(varName, sndrNode) => ctx.messageGet(curNode, sndrNode) match {
+        case None => continueOrSwitch(ctx, sndrNode)
+        case Some((newCtx: Context, exp: Expression)) =>
+          evalStatement(newCtx, curNode, Assign(varName, exp))
       }
-      case Output(exp, name) =>
-        val newMsgQ = ctx(name)._2 ++ exp
-        // update message queue for receiver node in context with evalExp
+      case Output(exp, rcvrName) =>
+        continueOrSwitch(ctx.messagePut(rcvrName, curNode, exp), curNode)
       case While(exp, stmts) =>
-        val evalExp = evalExpression(ctx, exp)
-        if (evalExp.equals(EmptyList))
-          ctx
+        if (evalExpression(ctx, curNode, exp) == EmptyList())
+          continueOrSwitch(ctx, curNode)
         else
-          // update statement queue for current node with tail of loop body list
-          // recursively call evalStatement for the head of the loop body list
-      case Assign(name, exp) =>
-        val evalExp = evalExpression(ctx, exp)
-        // update store for current node with evalExp
+          continueOrSwitch(ctx.statementsPut(curNode, stmts :+ stmt), curNode)
+      case Assign(varName, exp) =>
+        ctx.varPut(curNode, varName, evalExpression(ctx, curNode, exp))
+    }
+
+  /** Continue execution on the current node if there are statements left to
+   *  execute. Otherwise, arbitrarily choose another node that does have
+   *  statements left, and continue execution there.
+   */
+  def continueOrSwitch(ctx: Context, curNode: Name): Context =
+    ctx.statementGet(curNode) match {
+      case Some((newCtx: Context, nextStmt: Statement)) =>
+        evalStatement(newCtx, curNode, nextStmt)
+      case None => ctx.nodesWithStatements.headOption match {
+        case Some(newNode: Name) => continueOrSwitch(ctx, newNode)
+        case None => ctx
+      }
     }
 }
