@@ -14,7 +14,14 @@ case class Head(exp: Expression) extends Expression
 case class Tail(exp: Expression) extends Expression
 type Store = Map[Name, Expression]
 type MessageQueue = Map[Name, Expression]
-type Context = Map[Name, (List[Statement], MessageQueue, Store)]
+class Context(map: Map[Name, (List[Statement], MessageQueue, Store)]) {
+  def statementGet(nodeName: Name): (Context, Statement) =
+  def statementPut(nodeName: Name, stmt: Statement): Context =
+  def messageGet(rcvrName: Name, sndrName: Name): (Context, Expression) =
+  def messagePut(rcvrName: Name, sndrName: Name, msg: Expression): Context =
+  def varLookup(nodeName: Name, varName: Name): Expression =
+  def varInsert(nodeName: Name, varName: Name, exp: Expression): Context =
+}
 object Nodes {
   def evalExpression(ctx: Context, exp: Expression): Expression =
     exp match {
@@ -34,10 +41,14 @@ object Nodes {
       case Input(varName, sndrNode) =>
         ctx(curNode) match { case (stmts, msgQ, store) => {
           msgQ(sndrNode) match {
-            case Nil => // switch to sender
+            case Nil => {
+              val (optionNextStmt, restStmts) = ctx(sndrNode)._1.splitAtHead
+              val newCtx = ctx + (name, (stmt :: stmts, msgQ, store))
+                + (sndrNode, (restStmts, ))
+            }
             case msgQHead :: msgQTail => {
-              val newCtx = ctx(name) + (name, (stmts, msgQTail, store))
-              evalStatement(newCtx, curNode, Assign(varName, msgQHead)
+              val newCtx = ctx + (name, (stmts, msgQ + (sndrNode, msgQTail), store))
+              evalStatement(newCtx, curNode, Assign(varName, msgQHead))
             }
           }
         }
