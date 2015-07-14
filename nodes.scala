@@ -1,38 +1,52 @@
 type Name = String
 
-abstract class Statement
-case class Skip() extends Statement
-case class Input(name: Name, node: Name) extends Statement
-case class Output(exp: Expression, node: Name) extends Statement
-case class While(exp: Expression, stmts: List[Statement]) extends Statement
-case class Assign(name: Name, exp: Expression) extends Statement
-
-abstract class Expression
+trait Expression
 case class Variable(name: Name) extends Expression
 case class EmptyList() extends Expression
 case class Cons(hd: Expression, tl: Expression) extends Expression
 case class Head(exp: Expression) extends Expression
 case class Tail(exp: Expression) extends Expression
 
-type Prog = Map[Name, List[Statement]]
+trait Statement {
+  def nodeNames: Set[Name] = Set.empty
+}
+case class Skip() extends Statement
+case class Input(name: Name, node: Name) extends Statement {
+  override def nodeNames: Set[Name] = Set(this.node)
+}
+case class Output(exp: Expression, node: Name) extends Statement {
+  override def nodeNames: Set[Name] = Set(this.node)
+}
+case class While(exp: Expression, stmts: List[Statement]) extends Statement {
+  override def nodeNames: Set[Name] =
+    this.stmts.map(_.nodeNames).fold(Set.empty){ (a, b) => a ++ b }
+}
+case class Assign(name: Name, exp: Expression) extends Statement
+
+type Prog = Map[Name, Statement]
 type Store = Map[Name, Expression]
 type MessageQueue = Map[Name, List[Expression]]
+type ContextMap = Map[Name, (List[Statement], MessageQueue, Store)]
 
-class Context(cmap: Map[Name, (List[Statement], MessageQueue, Store)]) {
+class Context(cmap: ContextMap) {
+
+  //def this(prog: Prog) =
+    //this(prog.map({ case (nodeName, stmts) => (nodeName, (stmts, prog.values.map(_.nodeNames).fold(Set.empty){ (a, b) => a ++ b}, Map())) }))
 
   def statementGet(nodeName: Name): Option[(Context, Statement)] = 
     this.cmap.get(nodeName) match {
       case None => throw new RuntimeException("Node name not in context")
       case Some((Nil, _, _)) => None
       case Some((stmt :: stmts, msgQ, store)) =>
-        Some((Context(this.cmap + ((nodeName, (stmts, msgQ, store)))), stmt))
+        Some((new Context(this.cmap +
+          ((nodeName, (stmts, msgQ, store)))), stmt))
     }
 
   def statementsPut(nodeName: Name, stmts: List[Statement]): Context =
     this.cmap.get(nodeName) match {
       case None => throw new RuntimeException("Node name not in context")
       case Some((oldStmts, msgQ, store)) =>
-        Context(this.cmap + ((nodeName, (stmts ++ oldStmts, msgQ, store))))
+        new Context(this.cmap + ((nodeName, (stmts ++ oldStmts, msgQ, store))))
     }
 
   def messageGet(rcvrName: Name, sndrName: Name): Option[(Context, Expression)] =
@@ -42,8 +56,9 @@ class Context(cmap: Map[Name, (List[Statement], MessageQueue, Store)]) {
         case None =>
           throw new RuntimeException("Node name not in message queue")
         case Some(Nil) => None
-        case Some(msg :: msgs) => Some((Context(this.cmap +
-          ((rcvrName, (stmts, msgQ + ((sndrName, msgs)), store)))), msg))
+        case Some(msg :: msgs) =>
+          Some((new Context(this.cmap +
+            ((rcvrName, (stmts, msgQ + ((sndrName, msgs)), store)))), msg))
       }
     }
 
@@ -53,8 +68,9 @@ class Context(cmap: Map[Name, (List[Statement], MessageQueue, Store)]) {
       case Some((stmts, msgQ, store)) => msgQ.get(sndrName) match {
         case None =>
           throw new RuntimeException("Node name not in message queue")
-        case Some(msgs) => Context(this.cmap +
-          ((rcvrName, (stmts, msgQ + ((sndrName, msgs :+ msg)), store))))
+        case Some(msgs) =>
+          new Context(this.cmap +
+            ((rcvrName, (stmts, msgQ + ((sndrName, msgs :+ msg)), store))))
       }
     }
 
@@ -71,7 +87,8 @@ class Context(cmap: Map[Name, (List[Statement], MessageQueue, Store)]) {
     this.cmap.get(nodeName) match {
       case None => throw new RuntimeException("Node name not in context")
       case Some((stmts, msgQ, store)) =>
-        Context(this.cmap + ((nodeName, (stmts, msgQ, store + ((varName, exp))))))
+        new Context(this.cmap +
+          ((nodeName, (stmts, msgQ, store + ((varName, exp))))))
     }
 
   def nodesWithStatements: Set[Name] = {
@@ -108,7 +125,7 @@ object Nodes {
       case Skip() => continueOrSwitch(ctx, curNode)
       case Input(varName, sndrNode) => ctx.messageGet(curNode, sndrNode) match {
         case None => continueOrSwitch(ctx, sndrNode)
-        case Some((newCtx: Context, exp: Expression)) =>
+        case Some((newCtx, exp)) =>
           evalStatement(newCtx, curNode, Assign(varName, exp))
       }
       case Output(exp, rcvrName) =>
@@ -128,10 +145,10 @@ object Nodes {
    */
   def continueOrSwitch(ctx: Context, curNode: Name): Context =
     ctx.statementGet(curNode) match {
-      case Some((newCtx: Context, nextStmt: Statement)) =>
+      case Some((newCtx, nextStmt)) =>
         evalStatement(newCtx, curNode, nextStmt)
       case None => ctx.nodesWithStatements.headOption match {
-        case Some(newNode: Name) => continueOrSwitch(ctx, newNode)
+        case Some(newNode) => continueOrSwitch(ctx, newNode)
         case None => ctx
       }
     }
