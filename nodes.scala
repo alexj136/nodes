@@ -21,10 +21,7 @@ type ContextMap = Map[Name, (List[Statement], MessageQueue, Store)]
 
 class Context(cmap: ContextMap) {
 
-  def fromProg(prog: Prog): Context = {
-    val initialNodeNameMap: Map[Name, List[Expression]] = Map(prog.keySet.map({n => (n, List()})))
-    throw new RuntimeException("")
-  }
+  override def toString(): String = this.cmap.toString()
 
   def statementGet(nodeName: Name): Option[(Context, Statement)] = 
     this.cmap.get(nodeName) match {
@@ -145,4 +142,18 @@ object Nodes {
         case None => ctx
       }
     }
+}
+
+object Interpreter {
+
+  def createContext(prog: Prog): Context = {
+    new Context(prog.mapValues({s => (List(s),
+      prog.keySet.map({n => (n, List(): List[Expression])}).toMap, Map.empty)}))
+  }
+
+  def interpret(prog: Prog): Context = {
+    val initialContext: Context = createContext(prog)
+    val finalContext: Context = Nodes.continueOrSwitch(initialContext, "main")
+    finalContext
+  }
 }
