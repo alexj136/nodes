@@ -1,0 +1,3 @@
+mkdir -p bin
+scalac src/syntax.scala -d bin/ -cp bin/
+scalac src/interpreter.scala -d bin/ -cp bin/

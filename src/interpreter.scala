@@ -22,7 +22,8 @@ package Interpreter {
           new Context(this.cmap + ((nodeName, (stmts ++ oldStmts, msgQ, store))))
       }
 
-    def messageGet(rcvrName: Name, sndrName: Name): Option[(Context, Expression)] =
+    def messageGet(rcvrName: Name,
+                   sndrName: Name): Option[(Context, Expression)] =
       this.cmap.get(rcvrName) match {
         case None => throw new RuntimeException("Node name not in context")
         case Some((stmts, msgQ, store)) => msgQ.get(sndrName) match {
@@ -66,7 +67,9 @@ package Interpreter {
 
     def nodesWithStatements: Set[Name] = {
       def hasMoreStatements(
-        cmapEntry: (Name, (List[Statement], Interpreter.MessageQueue, Interpreter.Store))): Boolean =
+        cmapEntry: (Name, (List[Statement],
+                    Interpreter.MessageQueue,
+                    Interpreter.Store))): Boolean =
           cmapEntry match {
             case (_, (Nil, _, _)) => false
             case (_, (_, _, _)) => true
@@ -83,7 +86,8 @@ package Interpreter {
 
     def createContext(prog: Prog): Context = {
       new Context(prog.mapValues({s => (List(s),
-        prog.keySet.map({n => (n, List(): List[Expression])}).toMap, Map.empty)}))
+        prog.keySet.map({n => (n, List(): List[Expression])}).toMap,
+        Map.empty)}))
     }
 
     def interpret(prog: Prog): Context = {
@@ -94,7 +98,9 @@ package Interpreter {
 
     /** Evaluate the given expression, on the given node, with the given context.
     */
-    def evalExpression(ctx: Context, curNode: Name, exp: Expression): Expression =
+    def evalExpression(ctx: Context,
+                       curNode: Name,
+                       exp: Expression): Expression =
       exp match {
         case Variable(varName) => ctx.varGet(curNode, varName)
         case Atom() => exp
@@ -115,11 +121,12 @@ package Interpreter {
     def evalStatement(ctx: Context, curNode: Name, stmt: Statement): Context =
       stmt match {
         case Skip() => continueOrSwitch(ctx, curNode)
-        case Input(varName, sndrNode) => ctx.messageGet(curNode, sndrNode) match {
-          case None => continueOrSwitch(ctx, sndrNode)
-          case Some((newCtx, exp)) =>
-            evalStatement(newCtx, curNode, Assign(varName, exp))
-        }
+        case Input(varName, sndrNode) =>
+          ctx.messageGet(curNode, sndrNode) match {
+            case None => continueOrSwitch(ctx, sndrNode)
+            case Some((newCtx, exp)) =>
+              evalStatement(newCtx, curNode, Assign(varName, exp))
+          }
         case Output(exp, rcvrName) =>
           continueOrSwitch(ctx.messagePut(rcvrName, curNode, exp), curNode)
         case While(exp, stmts) =>
