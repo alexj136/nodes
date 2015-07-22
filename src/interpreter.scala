@@ -1,4 +1,4 @@
-package Interpreter {
+package object Interpreter {
 
   import Syntax.Syntax._
 

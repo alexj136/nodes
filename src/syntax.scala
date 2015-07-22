@@ -1,5 +1,4 @@
 package Syntax {
-
   object Syntax {
 
     class Name(value: String)
