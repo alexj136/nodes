@@ -2,26 +2,42 @@ package Syntax {
 
   object Syntax {
 
-    type Name = String
-    type Prog = Map[Name, Statement]
+    class Name(value: String)
+    class Program(processes: List[Restrict])
+    class Restrict(names: Set[Name], processes: List[Process])
+    class Process(repeats: Boolean, action: Action)
 
-    /** The expression language is the language of binary trees.
-    */
-    abstract class Expression
+    sealed abstract class Action {
+      def isSending(): Boolean = this match {
+        case Send(_, _, _) => true
+        case _ => false
+      }
+      def isReceiving(): Boolean = this match {
+        case Receive(_, _, _) => true
+        case _ => false
+      }
+    }
+    case class Send(chan: Name, msg: Expression, next: Action) extends Action
+    case class Receive(chan: Name, bind: Expression, next: Action) extends Action
+    case class LetIn(name: Name, exp: Expression, next: Action) extends Action
+    case class IfThenElse(exp: Expression, tNext: Action, fNext: Action) extends Action
+    case object End extends Action
+
+    sealed abstract class Expression
     case class Variable(name: Name) extends Expression
-    case class Atom() extends Expression
-    case class Cons(hd: Expression, tl: Expression) extends Expression
-    case class Head(exp: Expression) extends Expression
-    case class Tail(exp: Expression) extends Expression
+    case class IntLiteral(value: Int) extends Expression
+    case class BoolLiteral(value: Boolean) extends Expression
+    case class ChanLiteral(name: Name) extends Expression
+    case class BinExp(binOpType: BinOpType, lhs: Expression, rhs: Expression)
+      extends Expression
 
-    /** A while language with very simple concurrency. Each 'node' (a named
-    *  instruction) can send messages to other nodes while they execute.
-    */
-    abstract class Statement
-    case class Skip() extends Statement
-    case class Input(name: Name, node: Name) extends Statement
-    case class Output(exp: Expression, node: Name) extends Statement
-    case class While(exp: Expression, stmts: List[Statement]) extends Statement
-    case class Assign(name: Name, exp: Expression) extends Statement
+    sealed abstract class BinOpType
+    case object Add extends BinOpType
+    case object Sub extends BinOpType
+    case object Mul extends BinOpType
+    case object Div extends BinOpType
+    case object Mod extends BinOpType
+    case object And extends BinOpType
+    case object Or extends BinOpType
   }
 }
