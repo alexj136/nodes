@@ -9,7 +9,7 @@ package object Interpreter {
     case class EEBool(value: Boolean) extends EvalExp
     case class EEChan(name: Name) extends EvalExp
 
-    def runAction(act: Action): Action = act match {
+    def runAct(act: Action): Action = act match {
       case Send(_, _, _) => throw new RuntimeException("Not yet implemented")
       case Receive(_, _, _) => throw new RuntimeException("Not yet implemented")
       case LetIn(name, exp, next) =>
@@ -18,6 +18,50 @@ package object Interpreter {
         throw new RuntimeException("Not yet implemented")
       case End => End
     }
+
+    /** Substitute the Name 'to' for the Name 'from' within the Action act, and
+     *  obtain the resulting Action.
+     */
+    def substituteAct(act: Action, from: Name, to: Name): Action = {
+      val subA : Function[Action, Action] =
+        a => substituteAct(a, from, to)
+      val subE : Function[Expression, Expression] =
+        e => substituteExp(e, from, to)
+      act match {
+        case Send(ch, msg, next) if ch == from =>
+          Send(to, subE(msg), subA(next))
+
+        case Send(ch, msg, next) if ch != from =>
+          Send(ch, subE(msg), subA(next))
+
+        case Receive(ch, bind, next) if ch == from && bind == from =>
+          Receive(to, bind, next)
+
+        case Receive(ch, bind, next) if ch == from && bind != from =>
+          Receive(to, bind, subA(next))
+
+        case Receive(ch, bind, next) if ch != from && bind == from =>
+          act
+
+        case Receive(ch, bind, next) if ch != from && bind != from =>
+          Receive(ch, bind, subA(next))
+
+        case LetIn(name, exp, next) if name == from =>
+          LetIn(name, subE(exp), next)
+
+        case LetIn(name, exp, next) if name != from =>
+          LetIn(name, subE(exp), subA(next))
+
+        case IfThenElse(exp, tAct, fAct) =>
+          IfThenElse(subE(exp), subA(tAct), subA(fAct))
+
+        case End =>
+          End
+      }
+    }
+
+    def substituteExp(exp: Expression, from: Name, to: Name): Expression =
+      throw new RuntimeException("not implemented")
 
     def evalExp(exp: Expression): EvalExp = exp match {
       case Variable(n) =>
