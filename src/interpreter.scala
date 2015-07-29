@@ -10,12 +10,10 @@ package object Interpreter {
     case class EEChan(name: Name) extends EvalExp
 
     def runAct(act: Action): Action = act match {
-      case Send(_, _, _) => throw new RuntimeException("Not yet implemented")
-      case Receive(_, _, _) => throw new RuntimeException("Not yet implemented")
-      case LetIn(name, exp, next) =>
-        throw new RuntimeException("Not yet implemented")
-      case IfThenElse(exp, tAct, fAct) =>
-        throw new RuntimeException("Not yet implemented")
+      case Send(_, _, _) => ???
+      case Receive(_, _, _) => ???
+      case LetIn(name, exp, next) => ???
+      case IfThenElse(exp, tAct, fAct) => ???
       case End => End
     }
 
@@ -60,12 +58,11 @@ package object Interpreter {
       }
     }
 
-    def substituteExp(exp: Expression, from: Name, to: Name): Expression =
-      throw new RuntimeException("not implemented")
+    def substituteExp(exp: Expression, from: Name, to: Name): Expression = ???
 
     def evalExp(exp: Expression): EvalExp = exp match {
       case Variable(n) =>
-        throw new RuntimeException("Free variable error: '" + n + "'.")
+        throw new RuntimeException(s"Free variable error: '${n}'.")
       case IntLiteral(x) => EEInt(x)
       case BoolLiteral(x) => EEBool(x)
       case ChanLiteral(c) => EEChan(c)
