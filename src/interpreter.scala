@@ -4,65 +4,97 @@ package object Interpreter {
 
   object Interpreter {
 
+    type MachineState = (List[Process], Map[Name, List[Process]])
+
     sealed abstract class EvalExp
     case class EEInt(value: Int) extends EvalExp
     case class EEBool(value: Boolean) extends EvalExp
     case class EEChan(name: Name) extends EvalExp
 
-    def runAct(act: Action): Action = act match {
+    def unEvalExp(e: EvalExp): Expression = e match {
+      case EEInt(value) => IntLiteral(value)
+      case EEBool(value) => BoolLiteral(value)
+      case EEChan(name) => ChanLiteral(name)
+    }
+
+    def channelName(e: EvalExp): Name = e match {
+      case EEInt(value) =>
+        throw new RuntimeException("Type error: an int is not a channel")
+      case EEBool(value) =>
+        throw new RuntimeException("Type error: a bool is not a channel")
+      case EEChan(name) => name
+    }
+
+    def runProc(p: Process): Process = p match {
       case Send(_, _, _) => ???
       case Receive(_, _, _) => ???
-      case LetIn(name, exp, next) => ???
-      case IfThenElse(exp, tAct, fAct) => ???
+      case RepRec(_, _, _) => ???
+      case LetIn(name, exp, q) => ???
+      case IfThenElse(exp, tP, fP) => ???
+      case Parallel(q, r) => ???
       case End => End
     }
 
-    /** Substitute the Name 'to' for the Name 'from' within the Action act, and
-     *  obtain the resulting Action.
-     */
-    def substituteAct(act: Action, from: Name, to: Name): Action = {
-      val subA : Function[Action, Action] =
-        a => substituteAct(a, from, to)
-      val subE : Function[Expression, Expression] =
-        e => substituteExp(e, from, to)
-      act match {
-        case Send(ch, msg, next) if ch == from =>
-          Send(to, subE(msg), subA(next))
+    def step(state: MachineState): Option[MachineState] = state match {
+      case (Nil, _) => None
+      case (rq, wm) => {
+        val newRQ = rq match {
 
-        case Send(ch, msg, next) if ch != from =>
-          Send(ch, subE(msg), subA(next))
+          case Parallel(p, q) :: rqt => (p :: (rqt :+ q), wm)
 
-        case Receive(ch, bind, next) if ch == from && bind == from =>
-          Receive(to, bind, next)
-
-        case Receive(ch, bind, next) if ch == from && bind != from =>
-          Receive(to, bind, subA(next))
-
-        case Receive(ch, bind, next) if ch != from && bind == from =>
-          act
-
-        case Receive(ch, bind, next) if ch != from && bind != from =>
-          Receive(ch, bind, subA(next))
-
-        case LetIn(name, exp, next) if name == from =>
-          LetIn(name, subE(exp), next)
-
-        case LetIn(name, exp, next) if name != from =>
-          LetIn(name, subE(exp), subA(next))
-
-        case IfThenElse(exp, tAct, fAct) =>
-          IfThenElse(subE(exp), subA(tAct), subA(fAct))
-
-        case End =>
-          End
+          case LetIn(n, e, q) :: rqt =>
+            (substituteProc(q, n, evalExp(e)) :: rqt, wm)
+        }
+        Some(newRQ)
       }
     }
 
-    def substituteExp(exp: Expression, from: Name, to: Name): Expression = {
+    /** Substitute the Name 'to' for the Name 'from' within the Process act, and
+     *  obtain the resulting Process.
+     */
+    def substituteProc(p: Process, from: Name, to: EvalExp): Process = {
+      val subP : Function[Process, Process] =
+        q => substituteProc(q, from, to)
+      val subE : Function[Expression, Expression] =
+        e => substituteExp(e, from, to)
+      p match {
+
+        case Send(ch, msg, q) => {
+          val newCh = if (ch == from) channelName(to) else ch
+          Send(newCh, subE(msg), subP(q))
+        }
+
+        case Receive(ch, bind, q) => {
+          val newCh = if (ch == from) channelName(to) else ch
+          val newQ = if (bind == from) q else subP(q)
+          Receive(newCh, bind, newQ)
+        }
+
+        case RepRec(ch, bind, q) => {
+          val newCh = if (ch == from) channelName(to) else ch
+          val newQ = if (bind == from) q else subP(q)
+          RepRec(newCh, bind, newQ)
+        }
+
+        case LetIn(name, exp, q) => {
+          val newQ = if (name == from) q else subP(q)
+          LetIn(name, subE(exp), newQ)
+        }
+
+        case IfThenElse(exp, tP, fP) =>
+          IfThenElse(subE(exp), subP(tP), subP(fP))
+
+        case Parallel(q, r) => Parallel(subP(q), subP(r))
+
+        case End => End
+      }
+    }
+
+    def substituteExp(exp: Expression, from: Name, to: EvalExp): Expression = {
       val subE : Function[Expression, Expression] =
         e => substituteExp(e, from, to)
       exp match {
-        case Variable(n) if n == from => Variable(to)
+        case Variable(n) if n == from => unEvalExp(to)
         case Variable(n) if n != from => exp
         case IntLiteral(x) => exp
         case BoolLiteral(x) => exp
