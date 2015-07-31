@@ -58,7 +58,19 @@ package object Interpreter {
       }
     }
 
-    def substituteExp(exp: Expression, from: Name, to: Name): Expression = ???
+    def substituteExp(exp: Expression, from: Name, to: Name): Expression = {
+      val subE : Function[Expression, Expression] =
+        e => substituteExp(e, from, to)
+      exp match {
+        case Variable(n) if n == from => Variable(to)
+        case Variable(n) if n != from => exp
+        case IntLiteral(x) => exp
+        case BoolLiteral(x) => exp
+        case ChanLiteral(c) => exp
+        case Not(e) => Not(subE(e))
+        case BinExp(ty, lhs, rhs) => BinExp(ty, subE(lhs), subE(rhs))
+      }
+    }
 
     def evalExp(exp: Expression): EvalExp = exp match {
       case Variable(n) =>
