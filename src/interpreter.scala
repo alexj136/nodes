@@ -4,30 +4,60 @@ package object Interpreter {
 
   object Interpreter {
 
-    class MachineState(run: List[Process], wait: Map[Name, List[Process]]) {
-      def runHead: Process = this.run.head
-      def runTail: List[Process] = this.run.tail
-      def waitOnHead(ch: Name): Process = this.wait(ch).head
-      def waitOnTail(ch: Name): List[Process] = this.wait(ch).tail
+    class MachineState(
+        run: List[Process],
+        wait: Map[Name, List[Process]],
+        next: Name) {
       def withRun(newRun: List[Process]): MachineState =
-        new MachineState(newRun, this.wait)
-      def withSomeRun(newRun: List[Process]): Option[MachineState] =
-        Some(this.withRun(newRun))
+        new MachineState(newRun, this.wait, this.next)
       def withWait(ch: Name, onCh: List[Process]): MachineState =
-        new MachineState(this.run, this.wait.updated(ch, onCh))
-      def withSomeWait(ch: Name, onCh: List[Process]): Option[MachineState] =
-        Some(this.withWait(ch, onCh))
+        new MachineState(this.run, this.wait.updated(ch, onCh), this.next)
+      def withNext(newNext: Name): MachineState =
+        new MachineState(this.run, this.wait, newNext)
+      def someOf: Option[MachineState] = Some(this)
 
       def step(): Option[MachineState] = this.run match {
         case Nil => None
 
-        case Parallel(p, q) :: rqt =>
-          this.withSomeRun(p :: (rqt :+ q))
+        case Send(ch, msg, p) :: runTail => this.wait(ch) match {
 
-        case LetIn(n, e, q) :: rqt =>
-          this.withSomeRun(substituteProc(q, n, evalExp(e)) :: rqt)
+          case Receive(repl, _, bind, q) :: moreRecs => {
+            val qSub: Process = substituteProc(q, bind, evalExp(msg))
+            val waitTail: List[Process] =
+              if (repl) List(Receive(true, ch, bind, q)) else Nil
+            this.withRun(p :: (runTail :+ qSub))
+                .withWait(ch, moreRecs ++ waitTail)
+                .someOf
+          }
+          case nilOrSends =>
+            this.withRun(runTail)
+                .withWait(ch, nilOrSends :+ Send(ch, msg, p))
+                .someOf
+        }
 
-        case _ => ???
+        case Receive(false, ch, bind, p) :: runTail => ???
+        case Receive(true, ch, bind, p) :: runTail => ???
+
+        case LetIn(name, exp, p) :: runTail =>
+          this.withRun(substituteProc(p, name, evalExp(exp)) :: runTail).someOf
+
+        case IfThenElse(exp, tP, fP) :: runTail => evalExp(exp) match {
+          case EEBool(true) => this.withRun(tP :: runTail).someOf
+          case EEBool(false) => this.withRun(fP :: runTail).someOf
+          case _ =>
+            throw new RuntimeException("Type error: condition was not boolean")
+        }
+
+        case Parallel(p, q) :: runTail =>
+          this.withRun(p :: (runTail :+ q)).someOf
+
+        case Restrict(name, p) :: runTail => {
+          val nu: Name = this.next.next
+          val newP: Process = substituteProc(p, name, EEChan(nu))
+          this.withWait(nu, Nil).withRun(newP :: runTail).withNext(nu).someOf
+        }
+
+        case End :: runTail => this.withRun(runTail).someOf
       }
     }
 
@@ -55,6 +85,7 @@ package object Interpreter {
       case LetIn(name, exp, q) => ???
       case IfThenElse(exp, tP, fP) => ???
       case Parallel(q, r) => ???
+      case Restrict(name, p) => ???
       case End => End
     }
 
@@ -88,6 +119,9 @@ package object Interpreter {
           IfThenElse(subE(exp), subP(tP), subP(fP))
 
         case Parallel(q, r) => Parallel(subP(q), subP(r))
+
+        case Restrict(name, q) =>
+          Restrict(name, if(name == from) q else subP(q))
 
         case End => End
       }

@@ -1,16 +1,19 @@
 package Syntax {
   object Syntax {
 
-    class Name(value: String)
+    class Name(id: Int) {
+      def next: Name = new Name(this.id + 1)
+    }
 
     sealed abstract class Process
-    case class Send(chan: Name, msg: Expression, q: Process) extends Process
-    case class Receive(repl: Boolean, chan: Name, bind: Name, q: Process)
+    case class Send(ch: Name, msg: Expression, p: Process) extends Process
+    case class Receive(repl: Boolean, ch: Name, bind: Name, p: Process)
       extends Process
-    case class LetIn(name: Name, exp: Expression, q: Process) extends Process
+    case class LetIn(name: Name, exp: Expression, p: Process) extends Process
     case class IfThenElse(exp: Expression, tP: Process, fP: Process)
       extends Process
     case class Parallel(p: Process, q: Process) extends Process
+    case class Restrict(name: Name, p: Process) extends Process
     case object End extends Process
 
     sealed abstract class Expression
