@@ -5,9 +5,8 @@ package Syntax {
 
     sealed abstract class Process
     case class Send(chan: Name, msg: Expression, q: Process) extends Process
-    case class Receive(chan: Name, bind: Name, q: Process)
+    case class Receive(repl: Boolean, chan: Name, bind: Name, q: Process)
       extends Process
-    case class RepRec(chan: Name, bind: Name, q: Process) extends Process
     case class LetIn(name: Name, exp: Expression, q: Process) extends Process
     case class IfThenElse(exp: Expression, tP: Process, fP: Process)
       extends Process

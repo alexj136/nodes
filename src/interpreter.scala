@@ -4,49 +4,58 @@ package object Interpreter {
 
   object Interpreter {
 
-    type MachineState = (List[Process], Map[Name, List[Process]])
+    class MachineState(run: List[Process], wait: Map[Name, List[Process]]) {
+      def runHead: Process = this.run.head
+      def runTail: List[Process] = this.run.tail
+      def waitOnHead(ch: Name): Process = this.wait(ch).head
+      def waitOnTail(ch: Name): List[Process] = this.wait(ch).tail
+      def withRun(newRun: List[Process]): MachineState =
+        new MachineState(newRun, this.wait)
+      def withSomeRun(newRun: List[Process]): Option[MachineState] =
+        Some(this.withRun(newRun))
+      def withWait(ch: Name, onCh: List[Process]): MachineState =
+        new MachineState(this.run, this.wait.updated(ch, onCh))
+      def withSomeWait(ch: Name, onCh: List[Process]): Option[MachineState] =
+        Some(this.withWait(ch, onCh))
 
-    sealed abstract class EvalExp
+      def step(): Option[MachineState] = this.run match {
+        case Nil => None
+
+        case Parallel(p, q) :: rqt =>
+          this.withSomeRun(p :: (rqt :+ q))
+
+        case LetIn(n, e, q) :: rqt =>
+          this.withSomeRun(substituteProc(q, n, evalExp(e)) :: rqt)
+
+        case _ => ???
+      }
+    }
+
+    sealed abstract class EvalExp {
+      def unEvalExp: Expression = this match {
+        case EEInt(value) => IntLiteral(value)
+        case EEBool(value) => BoolLiteral(value)
+        case EEChan(name) => ChanLiteral(name)
+      }
+      def channelName: Name = this match {
+        case EEInt(value) =>
+          throw new RuntimeException("Type error: an int is not a channel")
+        case EEBool(value) =>
+          throw new RuntimeException("Type error: a bool is not a channel")
+        case EEChan(name) => name
+      }
+    }
     case class EEInt(value: Int) extends EvalExp
     case class EEBool(value: Boolean) extends EvalExp
     case class EEChan(name: Name) extends EvalExp
 
-    def unEvalExp(e: EvalExp): Expression = e match {
-      case EEInt(value) => IntLiteral(value)
-      case EEBool(value) => BoolLiteral(value)
-      case EEChan(name) => ChanLiteral(name)
-    }
-
-    def channelName(e: EvalExp): Name = e match {
-      case EEInt(value) =>
-        throw new RuntimeException("Type error: an int is not a channel")
-      case EEBool(value) =>
-        throw new RuntimeException("Type error: a bool is not a channel")
-      case EEChan(name) => name
-    }
-
     def runProc(p: Process): Process = p match {
       case Send(_, _, _) => ???
-      case Receive(_, _, _) => ???
-      case RepRec(_, _, _) => ???
+      case Receive(_, _, _, _) => ???
       case LetIn(name, exp, q) => ???
       case IfThenElse(exp, tP, fP) => ???
       case Parallel(q, r) => ???
       case End => End
-    }
-
-    def step(state: MachineState): Option[MachineState] = state match {
-      case (Nil, _) => None
-      case (rq, wm) => {
-        val newRQ = rq match {
-
-          case Parallel(p, q) :: rqt => (p :: (rqt :+ q), wm)
-
-          case LetIn(n, e, q) :: rqt =>
-            (substituteProc(q, n, evalExp(e)) :: rqt, wm)
-        }
-        Some(newRQ)
-      }
     }
 
     /** Substitute the Name 'to' for the Name 'from' within the Process act, and
@@ -60,20 +69,14 @@ package object Interpreter {
       p match {
 
         case Send(ch, msg, q) => {
-          val newCh = if (ch == from) channelName(to) else ch
+          val newCh = if (ch == from) to.channelName else ch
           Send(newCh, subE(msg), subP(q))
         }
 
-        case Receive(ch, bind, q) => {
-          val newCh = if (ch == from) channelName(to) else ch
+        case Receive(repl, ch, bind, q) => {
+          val newCh = if (ch == from) to.channelName else ch
           val newQ = if (bind == from) q else subP(q)
-          Receive(newCh, bind, newQ)
-        }
-
-        case RepRec(ch, bind, q) => {
-          val newCh = if (ch == from) channelName(to) else ch
-          val newQ = if (bind == from) q else subP(q)
-          RepRec(newCh, bind, newQ)
+          Receive(repl, newCh, bind, newQ)
         }
 
         case LetIn(name, exp, q) => {
@@ -94,7 +97,7 @@ package object Interpreter {
       val subE : Function[Expression, Expression] =
         e => substituteExp(e, from, to)
       exp match {
-        case Variable(n) if n == from => unEvalExp(to)
+        case Variable(n) if n == from => to.unEvalExp
         case Variable(n) if n != from => exp
         case IntLiteral(x) => exp
         case BoolLiteral(x) => exp
