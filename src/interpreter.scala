@@ -35,8 +35,24 @@ package object Interpreter {
                 .someOf
         }
 
-        case Receive(false, ch, bind, p) :: runTail => ???
-        case Receive(true, ch, bind, p) :: runTail => ???
+        case Receive(repl, ch, bind, p) :: runTail => this.wait(ch) match {
+
+          case Send(_, msg, q) :: moreSends => {
+            val pSub: Process = substituteProc(p, bind, evalExp(msg))
+            val newRun: List[Process] =
+              if (repl)
+                Receive(true, ch, bind, p) :: (runTail :+ pSub :+ q)
+              else
+                pSub :: (runTail :+ q)
+            this.withRun(newRun)
+                .withWait(ch, moreSends)
+                .someOf
+          }
+          case nilOrReceives =>
+            this.withRun(runTail)
+                .withWait(ch, nilOrReceives :+ Receive(false, ch, bind, p))
+                .someOf
+        }
 
         case LetIn(name, exp, p) :: runTail =>
           this.withRun(substituteProc(p, name, evalExp(exp)) :: runTail).someOf
