@@ -1,5 +1,6 @@
 package parser;
 
+import syntax.Name;
 import scala.Tuple2;
 import java_cup.runtime.Symbol;
 import java_cup.runtime.ComplexSymbolFactory;
@@ -24,8 +25,8 @@ import java.util.HashMap;
     private ComplexSymbolFactory csf;
 
     // Used in converting identifier strings to integers
-    private HashMap<String, Integer> nameMap;
-    private int nextAvailableName;
+    private HashMap<String, Name> nameMap;
+    private Name nextAvailableName;
 
     /**
      * Construct a new Lexer.
@@ -35,16 +36,16 @@ import java.util.HashMap;
     public Lexer(InputStreamReader input, ComplexSymbolFactory csf) {
         this(input);
         this.csf = csf;
-        this.nameMap = new HashMap<String, Integer>();
-        this.nextAvailableName = 0;
+        this.nameMap = new HashMap<String, Name>();
+        this.nextAvailableName = new Name(0);
     }
 
     /**
      * Access the nameMap and nextAvailableName for subsequent usage.
      * @return the nameMap and nextAvailableName as a pair
      */
-    public Tuple2<HashMap<String, Integer>, Integer> getNameInfo() {
-        return new Tuple2<HashMap<String, Integer>, Integer>
+    public Tuple2<HashMap<String, Name>, Name> getNameInfo() {
+        return new Tuple2<HashMap<String, Name>, Name>
                 (this.nameMap, this.nextAvailableName);
     }
 
@@ -62,15 +63,15 @@ import java.util.HashMap;
     /**
      * Construct a new Symbol containing the symbol type and scanned text.
      * @param type the token type
-     * @param name the token text
+     * @param text the token text
      * @return a new Symbol with type and text information. The text information
      * is an int that is a key in the nameMap, and can be used to look up the
      * actual String value.
      */
-    public Symbol symbol(int type, String name) {
+    public Symbol symbol(int type, String text) {
         Tuple2<Location, Location> loc = this.getLocation();
         return csf.newSymbol(sym.terminalNames[type], type, loc._1, loc._2,
-                this.lease(name));
+                type == sym.INT ? Integer.parseInt(text) : this.lease(text));
     }
 
     /**
@@ -92,15 +93,15 @@ import java.util.HashMap;
      * @param strName the String to use to obtain an intname
      * @return an int that corresponds to the given String name
      */
-    public int lease(String strName) {
+    public Name lease(String strName) {
         if(this.nameMap.containsKey(strName)) {
             return this.nameMap.get(strName);
         }
         else {
-            int intName = nextAvailableName;
-            nextAvailableName++;
-            this.nameMap.put(strName, intName);
-            return intName;
+            Name toLease = nextAvailableName;
+            nextAvailableName = toLease.next();
+            this.nameMap.put(strName, toLease);
+            return toLease;
         }
     }
 %}
@@ -118,18 +119,19 @@ Comment = "//"[^\r\n]* {NewLine}?
 
     "!"       { return symbol(sym.BANG);   }
     "?"       { return symbol(sym.QMARK);  }
+    "["       { return symbol(sym.LSQUAR); }
+    "]"       { return symbol(sym.RSQUAR); }
     "*"       { return symbol(sym.STAR);   }
-    "("       { return symbol(sym.LPAREN); }
-    ")"       { return symbol(sym.RPAREN); }
     "."       { return symbol(sym.DOT);    }
     "let"     { return symbol(sym.LET);    }
     "new"     { return symbol(sym.NEW);    }
-    "in"      { return symbol(sym.IN);     }
     "if"      { return symbol(sym.IF);     }
     "then"    { return symbol(sym.THEN);   }
     "else"    { return symbol(sym.ELSE);   }
     "|"       { return symbol(sym.BAR);    }
     "end"     { return symbol(sym.END);    }
+    "("       { return symbol(sym.LPAREN); }
+    ")"       { return symbol(sym.RPAREN); }
     "true"    { return symbol(sym.TRUE);   }
     "false"   { return symbol(sym.FALSE);  }
     "+"       { return symbol(sym.PLUS);   }

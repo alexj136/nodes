@@ -15,18 +15,18 @@ import java.io.InputStreamReader;
 parser code {:
     public Parser(Lexer lexer, ComplexSymbolFactory csf) { super(lexer, csf); }
 
-    public static Tuple3<Proc, Map<String, Integer>, Integer>
+    public static Tuple3<Proc, Map<String, Name>, Name>
             parseStream(InputStream input) throws Exception {
 
         ComplexSymbolFactory csf = new ComplexSymbolFactory();
         Lexer lexer = new Lexer(new InputStreamReader(input), csf);
         Proc parsedTerm = (Proc)
                 (new Parser(new ScannerBuffer(lexer), csf).parse().value);
-        Tuple2<HashMap<String, Integer>, Integer> nameInfo =
+        Tuple2<HashMap<String, Name>, Name> nameInfo =
                 lexer.getNameInfo();
-        Map<String, Integer> scalaNameMap =
+        Map<String, Name> scalaNameMap =
                 JavaConversions.mapAsScalaMap(nameInfo._1);
-        return new Tuple3<Proc, Map<String, Integer>, Integer>
+        return new Tuple3<Proc, Map<String, Name>, Name>
                 (parsedTerm, scalaNameMap, nameInfo._2);
     }
 :};
@@ -34,17 +34,18 @@ parser code {:
 terminal            BANG    ,
                     QMARK   ,
                     STAR    ,
-                    LPAREN  ,
-                    RPAREN  ,
+                    LSQUAR  ,
+                    RSQUAR  ,
                     DOT     ,
                     LET     ,
                     NEW     ,
-                    IN      ,
                     IF      ,
                     THEN    ,
                     ELSE    ,
                     BAR     ,
                     END     ,
+                    LPAREN  ,
+                    RPAREN  ,
                     TRUE    ,
                     FALSE   ,
                     PLUS    ,
@@ -60,9 +61,9 @@ terminal            BANG    ,
                     GRTREQ  ,
                     AND     ,
                     OR      ;
-terminal Integer    CHAN    ,
-                    IDENT   ,
-                    INT     ;
+terminal Name       CHAN    ,
+                    IDENT   ;
+terminal int        INT     ;
 
 non terminal Proc   p;
 non terminal Exp    e;
@@ -73,48 +74,50 @@ precedence left STAR, FSLASH;
 precedence left PERC;
 precedence left AND, OR;
 precedence nonassoc EQEQ, NEQ, LESS, LESSEQ, GRTR, GRTREQ;
-precedence left BAR;
+precedence nonassoc BAR;
+precedence nonassoc DOT;
 
 start with p;
 
-p ::= CHAN:ch BANG LPAREN e:msg RPAREN DOT p:proc
-        {: RESULT = new Send(new Name(ch), msg, proc);                      :}
-    | CHAN:ch QMARK LPAREN IDENT:bind RPAREN DOT p:proc
-        {: RESULT = new Receive(false, new Name(ch), new Name(bind), proc); :}
-    | CHAN:ch QMARK STAR LPAREN IDENT:bind RPAREN DOT p:proc
-        {: RESULT = new Receive(true, new Name(ch), new Name(bind), proc);  :}
-    | LET IDENT:bind EQUAL e:value IN p:proc
-        {: RESULT = new LetIn(new Name(bind), value, proc);                 :}
+p ::= CHAN:ch BANG LSQUAR e:msg RSQUAR DOT p:proc
+        {: RESULT = new Send(ch, msg, proc);            :}
+    | CHAN:ch QMARK LSQUAR IDENT:bind RSQUAR DOT p:proc
+        {: RESULT = new Receive(false, ch, bind, proc); :}
+    | CHAN:ch QMARK STAR LSQUAR IDENT:bind RSQUAR DOT p:proc
+        {: RESULT = new Receive(true, ch, bind, proc);  :}
+    | LET IDENT:bind EQUAL e:value DOT p:proc
+        {: RESULT = new LetIn(bind, value, proc);       :}
     | IF e:cond THEN p:proct ELSE p:procf
-        {: RESULT = new IfThenElse(cond, proct, procf);                     :}
+        {: RESULT = new IfThenElse(cond, proct, procf); :}
     | p:proc1 BAR p:proc2
-        {: RESULT = new Parallel(proc1, proc2);                             :}
-    | NEW IDENT:bind IN p:proc
-        {: RESULT = new Restrict(new Name(bind), proc);                     :}
-    | END
-        {: RESULT = End$.MODULE$;                                           :}
+        {: RESULT = new Parallel(proc1, proc2);         :}
+    | NEW IDENT:bind DOT p:proc
+        {: RESULT = new Restrict(bind, proc);           :}
+    | END                   {: RESULT = End$.MODULE$;   :}
+    | LPAREN p:proc RPAREN  {: RESULT = proc;           :}
     ;
 
-e ::= IDENT:name    {: RESULT = new Variable(new Name(name));   :}
-    | CHAN:ch       {: RESULT = new ChanLiteral(new Name(ch));  :}
-    | INT:x         {: RESULT = new IntLiteral(x);              :}
-    | TRUE          {: RESULT = new BoolLiteral(true);          :}
-    | FALSE         {: RESULT = new BoolLiteral(false);         :}
-    | e:l o:op e:r  {: RESULT = new BinExp(op, l, r);           :}
-    | BANG e:exp    {: RESULT = new Not(exp);                   :}
+e ::= IDENT:name            {: RESULT = new Variable(name);     :}
+    | CHAN:ch               {: RESULT = new ChanLiteral(ch);    :}
+    | INT:x                 {: RESULT = new IntLiteral(x);      :}
+    | TRUE                  {: RESULT = new BoolLiteral(true);  :}
+    | FALSE                 {: RESULT = new BoolLiteral(false); :}
+    | e:l o:op e:r          {: RESULT = new BinExp(op, l, r);   :}
+    | BANG e:exp            {: RESULT = new Not(exp);           :}
+    | LPAREN e:exp RPAREN   {: RESULT = exp;                    :}
     ;
 
-o ::= PLUS          {: RESULT = Add$.MODULE$;           :}
-    | DASH          {: RESULT = Sub$.MODULE$;           :}
-    | STAR          {: RESULT = Mul$.MODULE$;           :}
-    | FSLASH        {: RESULT = Div$.MODULE$;           :}
-    | PERC          {: RESULT = Mod$.MODULE$;           :}
-    | EQEQ          {: RESULT = Equal$.MODULE$;         :}
-    | NEQ           {: RESULT = NotEqual$.MODULE$;      :}
-    | LESS          {: RESULT = Less$.MODULE$;          :}
-    | LESSEQ        {: RESULT = LessEq$.MODULE$;        :}
-    | GRTR          {: RESULT = Greater$.MODULE$;       :}
-    | GRTREQ        {: RESULT = GreaterEq$.MODULE$;     :}
-    | AND           {: RESULT = And$.MODULE$;           :}
-    | OR            {: RESULT = Or$.MODULE$;            :}
+o ::= PLUS          {: RESULT = Add$.MODULE$;       :}
+    | DASH          {: RESULT = Sub$.MODULE$;       :}
+    | STAR          {: RESULT = Mul$.MODULE$;       :}
+    | FSLASH        {: RESULT = Div$.MODULE$;       :}
+    | PERC          {: RESULT = Mod$.MODULE$;       :}
+    | EQEQ          {: RESULT = Equal$.MODULE$;     :}
+    | NEQ           {: RESULT = NotEqual$.MODULE$;  :}
+    | LESS          {: RESULT = Less$.MODULE$;      :}
+    | LESSEQ        {: RESULT = LessEq$.MODULE$;    :}
+    | GRTR          {: RESULT = Greater$.MODULE$;   :}
+    | GRTREQ        {: RESULT = GreaterEq$.MODULE$; :}
+    | AND           {: RESULT = And$.MODULE$;       :}
+    | OR            {: RESULT = Or$.MODULE$;        :}
     ;

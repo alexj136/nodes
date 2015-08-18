@@ -1,10 +1,25 @@
 package syntax
 
 class Name(id: Int) {
+  override def toString: String = s"Name(${this.id.toString})"
   def next: Name = new Name(this.id + 1)
 }
 
-sealed abstract class Proc
+sealed abstract class Proc {
+  def pstr(names: Map[Name, String]): String = this match {
+    case Send(ch, msg, p) =>
+      s"${names(ch)}![${msg.pstr(names)}].${p.pstr(names)}"
+    case Receive(repl, ch, bind, p) =>
+      s"${names(ch)}?${if (repl) "*" else ""}[${names(bind)}].${p.pstr(names)}"
+    case LetIn(bind, exp, p) =>
+      s"let ${names(bind)} = ${exp.pstr(names)}.${p.pstr(names)}"
+    case IfThenElse(exp, tP, fP) =>
+      s"if ${exp.pstr(names)} then ${tP.pstr(names)} else ${fP.pstr(names)}"
+    case Parallel(p, q) => s"${p.pstr(names)} | ${q.pstr(names)}"
+    case Restrict(name, p) => s"new ${names(name)}.${p.pstr(names)}"
+    case End => "end"
+  }
+}
 case class Send(ch: Name, msg: Exp, p: Proc) extends Proc
 case class Receive(repl: Boolean, ch: Name, bind: Name, p: Proc) extends Proc
 case class LetIn(name: Name, exp: Exp, p: Proc) extends Proc
@@ -13,7 +28,16 @@ case class Parallel(p: Proc, q: Proc) extends Proc
 case class Restrict(name: Name, p: Proc) extends Proc
 case object End extends Proc
 
-sealed abstract class Exp
+sealed abstract class Exp {
+  def pstr(names: Map[Name, String]): String = this match {
+    case Variable(name) => names(name)
+    case IntLiteral(value) => value.toString
+    case BoolLiteral(value) => value.toString
+    case ChanLiteral(name) => names(name)
+    case BinExp(ty, l, r) => s"${l.pstr(names)} ${ty.toString} ${r.pstr(names)}"
+    case Not(of) => s"!${of.pstr(names)}"
+  }
+}
 case class Variable(name: Name) extends Exp
 case class IntLiteral(value: Int) extends Exp
 case class BoolLiteral(value: Boolean) extends Exp
@@ -21,7 +45,23 @@ case class ChanLiteral(name: Name) extends Exp
 case class BinExp(binOpType: BinOp, lhs: Exp, rhs: Exp) extends Exp
 case class Not(of: Exp) extends Exp
 
-sealed abstract class BinOp
+sealed abstract class BinOp {
+  override def toString: String = this match {
+    case Add  => "+"
+    case Sub  => "-"
+    case Mul  => "*"
+    case Div  => "/"
+    case Mod  => "%"
+    case Equal  => "=="
+    case NotEqual  => "!="
+    case Less  => "<"
+    case LessEq  => "<="
+    case Greater  => ">"
+    case GreaterEq  => ">="
+    case And  => "&&"
+    case Or  => "||"
+  }
+}
 case object Add extends BinOp
 case object Sub extends BinOp
 case object Mul extends BinOp

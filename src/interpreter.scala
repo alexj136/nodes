@@ -5,6 +5,7 @@ import syntax._
 object Evaluator {
 
   class MachineState(run: List[Proc], wait: Map[Name, List[Proc]], next: Name) {
+    def toProc: Process = this.run.fold(End){ (p, q) => Parallel(p, q) }
     def withRun(newRun: List[Proc]): MachineState =
       new MachineState(newRun, this.wait, this.next)
     def withWait(ch: Name, onCh: List[Proc]): MachineState =
@@ -13,7 +14,7 @@ object Evaluator {
       new MachineState(this.run, this.wait, newNext)
     def someOf: Option[MachineState] = Some(this)
 
-    def step(): Option[MachineState] = this.run match {
+    def step: Option[MachineState] = this.run match {
       case Nil => None
 
       case Send(ch, msg, p) :: runTail => this.wait(ch) match {
