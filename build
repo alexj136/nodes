@@ -18,6 +18,8 @@ function doBuild() {
             -cp ./lib/java-cup-11b-runtime.jar:./bin/:$SCALA_HOME/lib/scala-library.jar \
             -d ./bin/ ./src/*.java
 
+    scalac src/main.scala -d bin/ -cp bin/
+
     echo "Done."
 }
 

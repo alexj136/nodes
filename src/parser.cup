@@ -6,6 +6,8 @@ import java_cup.runtime.ComplexSymbolFactory.ComplexSymbol;
 import syntax.*;
 import scala.Tuple2;
 import scala.Tuple3;
+import scala.collection.Map;
+import scala.collection.JavaConversions;
 import java.util.HashMap;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -13,7 +15,7 @@ import java.io.InputStreamReader;
 parser code {:
     public Parser(Lexer lexer, ComplexSymbolFactory csf) { super(lexer, csf); }
 
-    public static Tuple3<Proc, HashMap<String, Integer>, Integer>
+    public static Tuple3<Proc, Map<String, Integer>, Integer>
             parseStream(InputStream input) throws Exception {
 
         ComplexSymbolFactory csf = new ComplexSymbolFactory();
@@ -22,8 +24,10 @@ parser code {:
                 (new Parser(new ScannerBuffer(lexer), csf).parse().value);
         Tuple2<HashMap<String, Integer>, Integer> nameInfo =
                 lexer.getNameInfo();
-        return new Tuple3<Proc, HashMap<String, Integer>, Integer>
-                (parsedTerm, nameInfo._1, nameInfo._2);
+        Map<String, Integer> scalaNameMap =
+                JavaConversions.mapAsScalaMap(nameInfo._1);
+        return new Tuple3<Proc, Map<String, Integer>, Integer>
+                (parsedTerm, scalaNameMap, nameInfo._2);
     }
 :};
 
