@@ -4,10 +4,7 @@ import syntax._
 
 object Evaluator {
 
-  class MachineState(
-      run: List[Proc],
-      wait: Map[Name, List[Proc]],
-      next: Name) {
+  class MachineState(run: List[Proc], wait: Map[Name, List[Proc]], next: Name) {
     def withRun(newRun: List[Proc]): MachineState =
       new MachineState(newRun, this.wait, this.next)
     def withWait(ch: Name, onCh: List[Proc]): MachineState =
