@@ -13,16 +13,16 @@ import java.io.InputStreamReader;
 parser code {:
     public Parser(Lexer lexer, ComplexSymbolFactory csf) { super(lexer, csf); }
 
-    public static Tuple3<Process, HashMap<String, Integer>, Integer>
+    public static Tuple3<Proc, HashMap<String, Integer>, Integer>
             parseStream(InputStream input) throws Exception {
 
         ComplexSymbolFactory csf = new ComplexSymbolFactory();
         Lexer lexer = new Lexer(new InputStreamReader(input), csf);
-        Process parsedTerm = (Process)
+        Proc parsedTerm = (Proc)
                 (new Parser(new ScannerBuffer(lexer), csf).parse().value);
         Tuple2<HashMap<String, Integer>, Integer> nameInfo =
                 lexer.getNameInfo();
-        return new Tuple3<Process, HashMap<String, Integer>, Integer>
+        return new Tuple3<Proc, HashMap<String, Integer>, Integer>
                 (parsedTerm, nameInfo._1, nameInfo._2);
     }
 :};
@@ -60,15 +60,16 @@ terminal Integer    CHAN    ,
                     IDENT   ,
                     INT     ;
 
-non terminal Process    p;
-non terminal Expression e;
-non terminal BinOp      o;
+non terminal Proc   p;
+non terminal Exp    e;
+non terminal BinOp  o;
 
 precedence left PLUS, DASH;
 precedence left STAR, FSLASH;
 precedence left PERC;
 precedence left AND, OR;
 precedence nonassoc EQEQ, NEQ, LESS, LESSEQ, GRTR, GRTREQ;
+precedence left BAR;
 
 start with p;
 

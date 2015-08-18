@@ -44,7 +44,7 @@ import java.util.HashMap;
      * @return the nameMap and nextAvailableName as a pair
      */
     public Tuple2<HashMap<String, Integer>, Integer> getNameInfo() {
-        return Tuple2<HashMap<String, Integer>, Integer>
+        return new Tuple2<HashMap<String, Integer>, Integer>
                 (this.nameMap, this.nextAvailableName);
     }
 
@@ -81,7 +81,7 @@ import java.util.HashMap;
         Location left = new Location(yyline + 1, yycolumn + 1, yychar);
         Location right = new Location(yyline + 1, yycolumn + yylength(),
                 yychar + yylength());
-        return Tuple2<Location, Location>(left, right);
+        return new Tuple2<Location, Location>(left, right);
     }
 
     /**

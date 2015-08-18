@@ -1,16 +1,16 @@
-package Interpreter
+package interpreter
 
-import Syntax._
+import syntax._
 
 object Evaluator {
 
   class MachineState(
-      run: List[Process],
-      wait: Map[Name, List[Process]],
+      run: List[Proc],
+      wait: Map[Name, List[Proc]],
       next: Name) {
-    def withRun(newRun: List[Process]): MachineState =
+    def withRun(newRun: List[Proc]): MachineState =
       new MachineState(newRun, this.wait, this.next)
-    def withWait(ch: Name, onCh: List[Process]): MachineState =
+    def withWait(ch: Name, onCh: List[Proc]): MachineState =
       new MachineState(this.run, this.wait.updated(ch, onCh), this.next)
     def withNext(newNext: Name): MachineState =
       new MachineState(this.run, this.wait, newNext)
@@ -22,8 +22,8 @@ object Evaluator {
       case Send(ch, msg, p) :: runTail => this.wait(ch) match {
 
         case Receive(repl, _, bind, q) :: moreRecs => {
-          val qSub: Process = substituteProc(q, bind, evalExp(msg))
-          val waitTail: List[Process] =
+          val qSub: Proc = substituteProc(q, bind, evalExp(msg))
+          val waitTail: List[Proc] =
             if (repl) List(Receive(true, ch, bind, q)) else Nil
           this.withRun(p :: (runTail :+ qSub))
               .withWait(ch, moreRecs ++ waitTail)
@@ -38,8 +38,8 @@ object Evaluator {
       case Receive(repl, ch, bind, p) :: runTail => this.wait(ch) match {
 
         case Send(_, msg, q) :: moreSends => {
-          val pSub: Process = substituteProc(p, bind, evalExp(msg))
-          val newRun: List[Process] =
+          val pSub: Proc = substituteProc(p, bind, evalExp(msg))
+          val newRun: List[Proc] =
             if (repl)
               Receive(true, ch, bind, p) :: (runTail :+ pSub :+ q)
             else
@@ -69,7 +69,7 @@ object Evaluator {
 
       case Restrict(name, p) :: runTail => {
         val nu: Name = this.next.next
-        val newP: Process = substituteProc(p, name, EEChan(nu))
+        val newP: Proc = substituteProc(p, name, EEChan(nu))
         this.withWait(nu, Nil).withRun(newP :: runTail).withNext(nu).someOf
       }
 
@@ -78,7 +78,7 @@ object Evaluator {
   }
 
   sealed abstract class EvalExp {
-    def unEvalExp: Expression = this match {
+    def unEvalExp: Exp = this match {
       case EEInt(value) => IntLiteral(value)
       case EEBool(value) => BoolLiteral(value)
       case EEChan(name) => ChanLiteral(name)
@@ -95,14 +95,12 @@ object Evaluator {
   case class EEBool(value: Boolean) extends EvalExp
   case class EEChan(name: Name) extends EvalExp
 
-  /** Substitute the Name 'to' for the Name 'from' within the Process act, and
-    *  obtain the resulting Process.
+  /** Substitute the Name 'to' for the Name 'from' within the Proc act, and
+    *  obtain the resulting Proc.
     */
-  def substituteProc(p: Process, from: Name, to: EvalExp): Process = {
-    val subP : Function[Process, Process] =
-      q => substituteProc(q, from, to)
-    val subE : Function[Expression, Expression] =
-      e => substituteExp(e, from, to)
+  def substituteProc(p: Proc, from: Name, to: EvalExp): Proc = {
+    val subP : Function[Proc, Proc] = q => substituteProc(q, from, to)
+    val subE : Function[Exp, Exp] = e => substituteExp(e, from, to)
     p match {
 
       case Send(ch, msg, q) => {
@@ -133,9 +131,8 @@ object Evaluator {
     }
   }
 
-  def substituteExp(exp: Expression, from: Name, to: EvalExp): Expression = {
-    val subE : Function[Expression, Expression] =
-      e => substituteExp(e, from, to)
+  def substituteExp(exp: Exp, from: Name, to: EvalExp): Exp = {
+    val subE : Function[Exp, Exp] = e => substituteExp(e, from, to)
     exp match {
       case Variable(n) if n == from => to.unEvalExp
       case Variable(n) if n != from => exp
@@ -147,7 +144,7 @@ object Evaluator {
     }
   }
 
-  def evalExp(exp: Expression): EvalExp = exp match {
+  def evalExp(exp: Exp): EvalExp = exp match {
     case Variable(n) =>
       throw new RuntimeException(s"Free variable error: '${n}'.")
     case IntLiteral(x) => EEInt(x)
