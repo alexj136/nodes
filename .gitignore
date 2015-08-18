@@ -1,2 +1,5 @@
 *.swp
 bin/
+src/Lexer.java
+src/Parser.java
+src/sym.java

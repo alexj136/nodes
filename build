@@ -1,4 +1,55 @@
-mkdir -p bin
-scalac src/syntax.scala -d bin/ -cp bin/
-scalac src/interpreter.scala -d bin/ -cp bin/
-scalac src/parser.scala -d bin/ -cp bin/
+#!/bin/sh
+
+# Run the build
+function doBuild() {
+    echo "Building..."
+
+    mkdir -p ./bin/
+
+    java -jar ./lib/jflex-1.6.0.jar -d ./src/ $1 --nobak \
+            ./src/lexer.flex
+    java -cp ./lib/ -jar ./lib/java-cup-11b.jar -expect 7 -destdir ./src/ \
+            -parser Parser ./src/parser.cup
+
+    scalac src/syntax.scala -d bin/ -cp bin/
+    scalac src/interpreter.scala -d bin/ -cp bin/
+
+    javac $2 -g -sourcepath ./src/ \
+            -cp ./lib/java-cup-11b-runtime.jar:.:$SCALA_HOME/lib/scala-runtime.jar \
+            -d ./bin/ ./src/*.java
+
+    echo "Done."
+}
+
+# Clean the build
+function doClean() {
+    echo "Cleaning build..."
+    rm ./src/{Lexer.java,Parser.java,sym.java}
+    rm -r ./bin/
+    echo "Done."
+}
+
+exit_status=0
+
+case $@ in
+
+    # Do the build operation if no arguments are supplied
+    "")         doBuild ;;
+
+    # Do the build operation, but tell javac to be verbose, if the argument
+    # "verbose" was supplied
+    "verbose")  doBuild -v -Xlint ;;
+
+    # Clean the build if the argument was "clean"
+    "clean")    doClean ;;
+
+    # If the arguments were anything else, print an error message and exit with
+    # error code 1
+    *)          echo "Invalid arguments"
+                exit_status=1 ;;
+
+esac
+
+unset -f doBuild
+unset -f doClean
+exit $exit_status
