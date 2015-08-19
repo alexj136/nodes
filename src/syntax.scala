@@ -8,9 +8,9 @@ class Name(id: Int) {
 sealed abstract class Proc {
   def pstr(names: Map[Name, String]): String = this match {
     case Send(ch, msg, p) =>
-      s"${names(ch)}![${msg.pstr(names)}].${p.pstr(names)}"
+      s"${ch.pstr(names)}![${msg.pstr(names)}].${p.pstr(names)}"
     case Receive(repl, ch, bind, p) =>
-      s"${names(ch)}?${if (repl) "*" else ""}[${names(bind)}].${p.pstr(names)}"
+      s"${ch.pstr(names)}?${if (repl) "*" else ""}[${names(bind)}].${p.pstr(names)}"
     case LetIn(bind, exp, p) =>
       s"let ${names(bind)} = ${exp.pstr(names)}.${p.pstr(names)}"
     case IfThenElse(exp, tP, fP) =>
@@ -20,8 +20,8 @@ sealed abstract class Proc {
     case End => "end"
   }
 }
-case class Send(ch: Name, msg: Exp, p: Proc) extends Proc
-case class Receive(repl: Boolean, ch: Name, bind: Name, p: Proc) extends Proc
+case class Send(ch: Exp, msg: Exp, p: Proc) extends Proc
+case class Receive(repl: Boolean, ch: Exp, bind: Name, p: Proc) extends Proc
 case class LetIn(name: Name, exp: Exp, p: Proc) extends Proc
 case class IfThenElse(exp: Exp, tP: Proc, fP: Proc) extends Proc
 case class Parallel(p: Proc, q: Proc) extends Proc

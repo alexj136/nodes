@@ -5,7 +5,8 @@ import syntax._
 object Evaluator {
 
   class MachineState(run: List[Proc], wait: Map[Name, List[Proc]], next: Name) {
-    def toProc: Process = this.run.fold(End){ (p, q) => Parallel(p, q) }
+    def toProc: Proc = (this.run :: this.wait.toList.map(_._2)).flatten
+      .fold(End){ (p, q) => Parallel(p, q) }
     def withRun(newRun: List[Proc]): MachineState =
       new MachineState(newRun, this.wait, this.next)
     def withWait(ch: Name, onCh: List[Proc]): MachineState =
@@ -17,29 +18,32 @@ object Evaluator {
     def step: Option[MachineState] = this.run match {
       case Nil => None
 
-      case Send(ch, msg, p) :: runTail => this.wait(ch) match {
+      case Send(ChanLiteral(ch), msg, p) :: runTail => this.wait(ch) match {
 
-        case Receive(repl, _, bind, q) :: moreRecs => {
+        case Receive(repl, ChanLiteral(_), bind, q) :: moreRecs => {
           val qSub: Proc = substituteProc(q, bind, evalExp(msg))
           val waitTail: List[Proc] =
-            if (repl) List(Receive(true, ch, bind, q)) else Nil
+            if (repl) List(Receive(true, ChanLiteral(ch), bind, q)) else Nil
           this.withRun(p :: (runTail :+ qSub))
               .withWait(ch, moreRecs ++ waitTail)
               .someOf
         }
         case nilOrSends =>
           this.withRun(runTail)
-              .withWait(ch, nilOrSends :+ Send(ch, msg, p))
+              .withWait(ch, nilOrSends :+ Send(ChanLiteral(ch), msg, p))
               .someOf
       }
 
-      case Receive(repl, ch, bind, p) :: runTail => this.wait(ch) match {
+      case Send(_, _, _) :: _ =>
+        throw new RuntimeException("Error: unreduced channel expression");
 
-        case Send(_, msg, q) :: moreSends => {
+      case Receive(repl, ChanLiteral(ch), bind, p) :: runTail => this.wait(ch) match {
+
+        case Send(ChanLiteral(_), msg, q) :: moreSends => {
           val pSub: Proc = substituteProc(p, bind, evalExp(msg))
           val newRun: List[Proc] =
             if (repl)
-              Receive(true, ch, bind, p) :: (runTail :+ pSub :+ q)
+              Receive(true, ChanLiteral(ch), bind, p) :: (runTail :+ pSub :+ q)
             else
               pSub :: (runTail :+ q)
           this.withRun(newRun)
@@ -48,9 +52,12 @@ object Evaluator {
         }
         case nilOrReceives =>
           this.withRun(runTail)
-              .withWait(ch, nilOrReceives :+ Receive(false, ch, bind, p))
+              .withWait(ch, nilOrReceives :+ Receive(false, ChanLiteral(ch), bind, p))
               .someOf
       }
+
+      case Receive(_, _, _, _) :: _ =>
+        throw new RuntimeException("Error: unreduced channel expression");
 
       case LetIn(name, exp, p) :: runTail =>
         this.withRun(substituteProc(p, name, evalExp(exp)) :: runTail).someOf
@@ -101,15 +108,11 @@ object Evaluator {
     val subE : Function[Exp, Exp] = e => substituteExp(e, from, to)
     p match {
 
-      case Send(ch, msg, q) => {
-        val newCh = if (ch == from) to.channelName else ch
-        Send(newCh, subE(msg), subP(q))
-      }
+      case Send(ch, msg, q) => Send(subE(ch), subE(msg), subP(q))
 
       case Receive(repl, ch, bind, q) => {
-        val newCh = if (ch == from) to.channelName else ch
         val newQ = if (bind == from) q else subP(q)
-        Receive(repl, newCh, bind, newQ)
+        Receive(repl, subE(ch), bind, newQ)
       }
 
       case LetIn(name, exp, q) => {

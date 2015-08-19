@@ -46,6 +46,8 @@ terminal            BANG    ,
                     END     ,
                     LPAREN  ,
                     RPAREN  ,
+                    LCURLY  ,
+                    RCURLY  ,
                     TRUE    ,
                     FALSE   ,
                     PLUS    ,
@@ -80,19 +82,25 @@ precedence nonassoc DOT;
 start with p;
 
 p ::= CHAN:ch BANG LSQUAR e:msg RSQUAR DOT p:proc
-        {: RESULT = new Send(ch, msg, proc);            :}
+        {: RESULT = new Send(new ChanLiteral(ch), msg, proc);               :}
     | CHAN:ch QMARK LSQUAR IDENT:bind RSQUAR DOT p:proc
-        {: RESULT = new Receive(false, ch, bind, proc); :}
+        {: RESULT = new Receive(false, new ChanLiteral(ch), bind, proc);    :}
     | CHAN:ch QMARK STAR LSQUAR IDENT:bind RSQUAR DOT p:proc
-        {: RESULT = new Receive(true, ch, bind, proc);  :}
+        {: RESULT = new Receive(true, new ChanLiteral(ch), bind, proc);     :}
+    | LCURLY e:ch RCURLY BANG LSQUAR e:msg RSQUAR DOT p:proc
+        {: RESULT = new Send(ch, msg, proc);                                :}
+    | LCURLY e:ch RCURLY QMARK LSQUAR IDENT:bind RSQUAR DOT p:proc
+        {: RESULT = new Receive(false, ch, bind, proc);                     :}
+    | LCURLY e:ch RCURLY QMARK STAR LSQUAR IDENT:bind RSQUAR DOT p:proc
+        {: RESULT = new Receive(true, ch, bind, proc);                      :}
     | LET IDENT:bind EQUAL e:value DOT p:proc
-        {: RESULT = new LetIn(bind, value, proc);       :}
+        {: RESULT = new LetIn(bind, value, proc);                           :}
     | IF e:cond THEN p:proct ELSE p:procf
-        {: RESULT = new IfThenElse(cond, proct, procf); :}
+        {: RESULT = new IfThenElse(cond, proct, procf);                     :}
     | p:proc1 BAR p:proc2
-        {: RESULT = new Parallel(proc1, proc2);         :}
+        {: RESULT = new Parallel(proc1, proc2);                             :}
     | NEW IDENT:bind DOT p:proc
-        {: RESULT = new Restrict(bind, proc);           :}
+        {: RESULT = new Restrict(bind, proc);                               :}
     | END                   {: RESULT = End$.MODULE$;   :}
     | LPAREN p:proc RPAREN  {: RESULT = proc;           :}
     ;
