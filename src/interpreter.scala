@@ -37,24 +37,27 @@ object Evaluator {
       case Send(_, _, _) :: _ =>
         throw new RuntimeException("Error: unreduced channel expression");
 
-      case Receive(repl, ChanLiteral(ch), bind, p) :: runTail => this.wait(ch) match {
+      case Receive(repl, ChanLiteral(ch), bind, p) :: runTail =>
+        this.wait(ch) match {
 
-        case Send(ChanLiteral(_), msg, q) :: moreSends => {
-          val pSub: Proc = substituteProc(p, bind, evalExp(msg))
-          val newRun: List[Proc] =
-            if (repl)
-              Receive(true, ChanLiteral(ch), bind, p) :: (runTail :+ pSub :+ q)
-            else
-              pSub :: (runTail :+ q)
-          this.withRun(newRun)
-              .withWait(ch, moreSends)
-              .someOf
+          case Send(ChanLiteral(_), msg, q) :: moreSends => {
+            val pSub: Proc = substituteProc(p, bind, evalExp(msg))
+            val newRun: List[Proc] =
+              if (repl)
+                Receive(true, ChanLiteral(ch), bind, p) ::
+                  (runTail :+ pSub :+ q)
+              else
+                pSub :: (runTail :+ q)
+            this.withRun(newRun)
+                .withWait(ch, moreSends)
+                .someOf
+          }
+          case nilOrReceives =>
+            this.withRun(runTail)
+                .withWait(ch,
+                  nilOrReceives :+ Receive(false, ChanLiteral(ch), bind, p))
+                .someOf
         }
-        case nilOrReceives =>
-          this.withRun(runTail)
-              .withWait(ch, nilOrReceives :+ Receive(false, ChanLiteral(ch), bind, p))
-              .someOf
-      }
 
       case Receive(_, _, _, _) :: _ =>
         throw new RuntimeException("Error: unreduced channel expression");

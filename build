@@ -6,8 +6,7 @@ function doBuild() {
 
     mkdir -p ./bin/
 
-    java -jar ./lib/jflex-1.6.0.jar -d ./src/ $1 --nobak \
-            ./src/lexer.flex
+    java -jar ./lib/jflex-1.6.0.jar -d ./src/ $1 --nobak ./src/lexer.flex
     java -cp ./lib/ -jar ./lib/java-cup-11b.jar -destdir ./src/ \
             -parser Parser ./src/parser.cup
 
