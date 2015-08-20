@@ -15,12 +15,12 @@ object Main extends App {
   val names: Map[Name, String] = revNames.map(_.swap).toMap
   stream.close()
   var state: MachineState =
-    new MachineState(List(proc), names.map(
-      {case (id, str) => (id, List(): List[Proc])}), nextName)
+    new MachineState(proc.listify, names map
+      {case (id, str) => (id, List(): List[Proc])}, nextName)
   var stepState: Option[MachineState] = state.step
   while (stepState != None) {
     state = stepState.get
     stepState = state.step
   }
-  println(state.toProc.pstr(names))
+  println(state.toProc pstr names)
 }

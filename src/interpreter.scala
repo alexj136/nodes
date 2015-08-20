@@ -55,7 +55,7 @@ object Evaluator {
           case nilOrReceives =>
             this.withRun(runTail)
                 .withWait(ch,
-                  nilOrReceives :+ Receive(false, ChanLiteral(ch), bind, p))
+                  nilOrReceives :+ Receive(repl, ChanLiteral(ch), bind, p))
                 .someOf
         }
 

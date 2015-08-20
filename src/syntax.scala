@@ -7,20 +7,27 @@ class Name(id: Int) {
 sealed abstract class Proc {
   def pstr(names: Map[Name, String]): String = this match {
     case Send       ( ch    , msg , p        ) =>
-      s"${ch.pstr(names)}![${msg.pstr(names)}].${p.pstr(names)}"
+      s"${ch pstr names}![${msg pstr names}].${p pstr names}"
     case Receive    ( true  , ch  , bind , p ) =>
-      s"${ch.pstr(names)}?*[${names(bind)}].${p.pstr(names)}"
+      s"${ch pstr names}?*[${names(bind)}].${p pstr names}"
     case Receive    ( false , ch  , bind , p ) =>
-      s"${ch.pstr(names)}?[${names(bind)}].${p.pstr(names)}"
+      s"${ch pstr names}?[${names(bind)}].${p pstr names}"
     case LetIn      ( bind  , exp , p        ) =>
-      s"let ${names(bind)} = ${exp.pstr(names)}.${p.pstr(names)}"
+      s"let ${names(bind)} = ${exp.pstr(names)}.${p pstr names}"
     case IfThenElse ( exp   , tP  , fP       ) =>
-      s"if ${exp.pstr(names)} then ${tP.pstr(names)} else ${fP.pstr(names)}"
+      s"if ${exp pstr names} then ${tP pstr names} else ${fP pstr names}"
     case Parallel   ( p     , q              ) =>
-      s"${p.pstr(names)} | ${q.pstr(names)}"
+      s"${p pstr names} | ${q pstr names}"
     case Restrict   ( name  , p              ) =>
-      s"new ${names(name)}.${p.pstr(names)}"
+      s"new ${names(name)}.${p pstr names}"
     case End                                   => "end"
+  }
+
+  /** Decompose top-level parallel compositions into a list of processes.
+   */
+  def listify: List[Proc] = this match {
+    case Parallel ( p , q ) => p.listify ++ q.listify
+    case _                  => List(this)
   }
 
   /** Alpha-equivalence for processes.
@@ -71,9 +78,9 @@ sealed abstract class Exp {
     case ChanLiteral ( name         ) =>
       names(name)
     case BinExp      ( ty   , l , r ) =>
-      s"${l.pstr(names)} ${ty.toString} ${r.pstr(names)}"
+      s"${l pstr names} ${ty.toString} ${r pstr names}"
     case Not         ( of           ) =>
-      s"!${of.pstr(names)}"
+      s"!${of pstr names}"
   }
 
   /** Alpha-equivalence for expressions
