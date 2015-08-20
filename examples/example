@@ -1,0 +1,12 @@
+    $f ?* [ a ] .
+    if a > 0 then
+        $f ! [ a - 1 ] .
+        end
+    else
+        $g ! [ 0 ] .
+        end
+
+|
+
+    $f ! [ 10 ] .
+    end

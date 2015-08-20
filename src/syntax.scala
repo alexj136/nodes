@@ -22,6 +22,27 @@ sealed abstract class Proc {
       s"new ${names(name)}.${p.pstr(names)}"
     case End                                   => "end"
   }
+
+  /** Alpha-equivalence for processes.
+   */
+  def %=(q: Proc): Boolean = (this, q) match {
+    case ( Send       ( _ , _ , _     ) , Send       ( _ , _ , _     ) ) =>
+      ???
+    case ( Receive    ( _ , _ , _ , _ ) , Receive    ( _ , _ , _ , _ ) ) =>
+      ???
+    case ( LetIn      ( _ , _ , _     ) , LetIn      ( _ , _ , _     ) ) =>
+      ???
+    case ( IfThenElse ( a , p , r     ) , IfThenElse ( b , q , s     ) ) =>
+      (a %= b) && (p %= q) && (r %= s)
+    case ( Parallel   ( p , r         ) , Parallel   ( q , s         ) ) =>
+      (p %= q) && (r %= s)
+    case ( Restrict   ( _ , _         ) , Restrict   ( _ , _         ) ) =>
+      ???
+    case ( End                          , End                          ) =>
+      true
+    case ( _                            , _                            ) =>
+      false
+  }
 }
 
 case class  Send      ( ch:   Exp     , msg: Exp  , p:    Proc           )
@@ -53,6 +74,19 @@ sealed abstract class Exp {
       s"${l.pstr(names)} ${ty.toString} ${r.pstr(names)}"
     case Not         ( of           ) =>
       s"!${of.pstr(names)}"
+  }
+
+  /** Alpha-equivalence for expressions
+   */
+  def %=(y: Exp): Boolean = (this, y) match {
+    case ( Variable    ( _         ) , Variable    ( _         ) ) => ???
+    case ( IntLiteral  ( a         ) , IntLiteral  ( b         ) ) => a == b
+    case ( BoolLiteral ( a         ) , BoolLiteral ( b         ) ) => a == b
+    case ( ChanLiteral ( _         ) , ChanLiteral ( _         ) ) => ???
+    case ( BinExp      ( a , c , e ) , BinExp      ( b , d , f ) ) =>
+      (a == b) && (c %= d) && (e %= f)
+    case ( Not         ( a         ) , Not         ( b         ) ) => a %= b
+    case ( _                         , _                         ) => false
   }
 }
 case class Variable    ( name:      Name                          ) extends Exp
