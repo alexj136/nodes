@@ -6,9 +6,7 @@ import java_cup.runtime.ComplexSymbolFactory.ComplexSymbol;
 import syntax.*;
 import scala.Tuple2;
 import scala.Tuple3;
-import scala.collection.Map;
-import scala.collection.JavaConversions;
-import java.util.HashMap;
+import scala.collection.immutable.Map;
 import java.io.InputStream;
 import java.io.ByteArrayInputStream;
 import java.io.InputStreamReader;
@@ -31,12 +29,10 @@ parser code {:
         Lexer lexer = new Lexer(new InputStreamReader(input), csf);
         Proc parsedTerm = (Proc)
                 (new Parser(new ScannerBuffer(lexer), csf).parse().value);
-        Tuple2<HashMap<String, Name>, Name> nameInfo =
+        Tuple2<Map<String, Name>, Name> nameInfo =
                 lexer.getNameInfo();
-        Map<String, Name> scalaNameMap =
-                JavaConversions.mapAsScalaMap(nameInfo._1);
         return new Tuple3<Proc, Map<String, Name>, Name>
-                (parsedTerm, scalaNameMap, nameInfo._2);
+                (parsedTerm, nameInfo._1, nameInfo._2);
     }
 :};
 
@@ -107,12 +103,10 @@ p ::= CHAN:ch BANG LSQUAR e:msg RSQUAR DOT p:proc
         {: RESULT = new LetIn(bind, value, proc);                           :}
     | IF e:cond THEN p:proct ELSE p:procf ENDIF
         {: RESULT = new IfThenElse(cond, proct, procf);                     :}
-    | p:proc1 BAR p:proc2
-        {: RESULT = new Parallel(proc1, proc2);                             :}
-    | NEW IDENT:bind DOT p:proc
-        {: RESULT = new Restrict(bind, proc);                               :}
-    | END                   {: RESULT = End$.MODULE$;   :}
-    | LPAREN p:proc RPAREN  {: RESULT = proc;           :}
+    | p:proc1 BAR p:proc2       {: RESULT = new Parallel(proc1, proc2); :}
+    | NEW IDENT:bind DOT p:proc {: RESULT = new New(bind, proc);        :}
+    | END                       {: RESULT = End$.MODULE$;               :}
+    | LPAREN p:proc RPAREN      {: RESULT = proc;                       :}
     ;
 
 e ::= IDENT:name            {: RESULT = new Variable(name);     :}

@@ -12,20 +12,20 @@ abstract class Test {
       "FAILED"}: \'${this.description}\'."
 }
 
-class ParserTest(desc: String, testCode: String, testProc: Proc) extends Test {
-  override def description: String = desc
-  val code: String = testCode
-  val proc: Proc = testProc
-  override def assertion: Boolean =
-    Parser.parseString(this.code)._1 %= this.proc
+object ParserParAssociativityTest extends Test {
+  override def description: String = {
+    val a: String = "Test that the parser parses parallel"
+    s"${a} composition with correct associativity"
+  }
+  override def assertion: Boolean = {
+    val parse = Parser.parseString("end|end|end")
+    Parallel(Parallel(End, End), End)
+      .syntaxEquiv(Map.empty, parse._1, parse._2.map(_.swap))
+  }
 }
 
 object RunTests {
-  val testList: List[Test] = List(
-    new ParserTest(
-      "associativity of |",
-      "end|end|end",
-      Parallel(Parallel(End, End), End)))
+  val testList: List[Test] = List(ParserParAssociativityTest)
 
   def main(args: Array[String]): Unit = {
     testList.foreach{ println }

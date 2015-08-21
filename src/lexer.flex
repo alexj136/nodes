@@ -2,11 +2,12 @@ package parser;
 
 import syntax.Name;
 import scala.Tuple2;
+import scala.collection.immutable.Map;
+import scala.collection.immutable.Map$;
 import java_cup.runtime.Symbol;
 import java_cup.runtime.ComplexSymbolFactory;
 import java_cup.runtime.ComplexSymbolFactory.Location;
 import java.io.InputStreamReader;
-import java.util.HashMap;
 
 %%
 
@@ -25,7 +26,7 @@ import java.util.HashMap;
     private ComplexSymbolFactory csf;
 
     // Used in converting identifier strings to integers
-    private HashMap<String, Name> nameMap;
+    private Map<String, Name> nameMap;
     private Name nextAvailableName;
 
     /**
@@ -36,7 +37,7 @@ import java.util.HashMap;
     public Lexer(InputStreamReader input, ComplexSymbolFactory csf) {
         this(input);
         this.csf = csf;
-        this.nameMap = new HashMap<String, Name>();
+        this.nameMap = Map$.MODULE$.<String, Name>empty();
         this.nextAvailableName = new Name(0);
     }
 
@@ -44,8 +45,8 @@ import java.util.HashMap;
      * Access the nameMap and nextAvailableName for subsequent usage.
      * @return the nameMap and nextAvailableName as a pair
      */
-    public Tuple2<HashMap<String, Name>, Name> getNameInfo() {
-        return new Tuple2<HashMap<String, Name>, Name>
+    public Tuple2<Map<String, Name>, Name> getNameInfo() {
+        return new Tuple2<Map<String, Name>, Name>
                 (this.nameMap, this.nextAvailableName);
     }
 
@@ -94,13 +95,13 @@ import java.util.HashMap;
      * @return an int that corresponds to the given String name
      */
     public Name lease(String strName) {
-        if(this.nameMap.containsKey(strName)) {
-            return this.nameMap.get(strName);
+        if(this.nameMap.contains(strName)) {
+            return this.nameMap.apply(strName);
         }
         else {
             Name toLease = nextAvailableName;
             nextAvailableName = toLease.next();
-            this.nameMap.put(strName, toLease);
+            this.nameMap = this.nameMap.updated(strName, toLease);
             return toLease;
         }
     }

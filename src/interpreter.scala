@@ -75,7 +75,7 @@ object Evaluator {
       case Parallel(p, q) :: runTail =>
         this.withRun(p :: (runTail :+ q)).someOf
 
-      case Restrict(name, p) :: runTail => {
+      case New(name, p) :: runTail => {
         val nu: Name = this.next.next
         val newP: Proc = substituteProc(p, name, EEChan(nu))
         this.withWait(nu, Nil).withRun(newP :: runTail).withNext(nu).someOf
@@ -128,8 +128,8 @@ object Evaluator {
 
       case Parallel(q, r) => Parallel(subP(q), subP(r))
 
-      case Restrict(name, q) =>
-        Restrict(name, if(name == from) q else subP(q))
+      case New(name, q) =>
+        New(name, if(name == from) q else subP(q))
 
       case End => End
     }

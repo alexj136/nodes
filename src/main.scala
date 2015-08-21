@@ -9,10 +9,9 @@ import java.io.FileInputStream
 object Main extends App {
   val file: File = new File(args(0))
   var stream: FileInputStream = new FileInputStream(file)
-  val (proc, revNames, nextName):
-    (Proc, scala.collection.Map[String, Name], Name) =
+  val (proc, revNames, nextName): (Proc, Map[String, Name], Name) =
     Parser.parseStream(stream)
-  val names: Map[Name, String] = revNames.map(_.swap).toMap
+  val names: Map[Name, String] = revNames.map(_.swap)
   stream.close()
   var state: MachineState =
     new MachineState(proc.listify, names map

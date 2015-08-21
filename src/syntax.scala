@@ -18,7 +18,7 @@ sealed abstract class Proc {
       s"if ${exp pstr names} then ${tP pstr names} else ${fP pstr names}"
     case Parallel   ( p     , q              ) =>
       s"(${p pstr names} | ${q pstr names})"
-    case Restrict   ( name  , p              ) =>
+    case New        ( name  , p              ) =>
       s"new ${names(name)}.${p pstr names}"
     case End                                   => "end"
   }
@@ -30,28 +30,32 @@ sealed abstract class Proc {
     case _                  => List(this)
   }
 
-  /** Alpha-equivalence for processes.
+  /** Syntax-equivalence for processes.
    */
-  def %=(q: Proc): Boolean = this.alphaWithEquivMap(q, Map.empty)
-
-  def alphaWithEquivMap(q: Proc, equivs: Map[Name, Name]): Boolean =
+  def syntaxEquiv(thisNames: Map[Name, String],
+      q: Proc, qNames: Map[Name, String]): Boolean =
     (this, q) match {
       case ( Send       ( c , e , p     ) , Send       ( d , f , q     ) ) =>
-        c.alphaWithEquivMap(d, equivs) && e.alphaWithEquivMap(f, equivs) &&
-          p.alphaWithEquivMap(q, equivs)
+        c.syntaxEquiv(thisNames, d, qNames) &&
+          e.syntaxEquiv(thisNames, f, qNames) &&
+          p.syntaxEquiv(thisNames, q, qNames)
       case ( Receive    ( r , c , e , p ) , Receive    ( s , d , f , q ) ) =>
-        (r == s) && c.alphaWithEquivMap(d, equivs) &&
-          p.alphaWithEquivMap(q, equivs + (e -> f))
+        (r == s) && c.syntaxEquiv(thisNames, d, qNames) &&
+          (thisNames(e) == qNames(f)) &&
+          p.syntaxEquiv(thisNames, q, qNames)
       case ( LetIn      ( n , x , p     ) , LetIn      ( m , y , q     ) ) =>
-        x.alphaWithEquivMap(y, equivs) &&
-          p.alphaWithEquivMap(q, equivs + (n -> m))
+        (thisNames(n) == qNames(m)) &&
+          x.syntaxEquiv(thisNames, y, qNames) &&
+          p.syntaxEquiv(thisNames, q, qNames)
       case ( IfThenElse ( a , p , r     ) , IfThenElse ( b , q , s     ) ) =>
-        a.alphaWithEquivMap(b, equivs) && p.alphaWithEquivMap(q, equivs) &&
-          r.alphaWithEquivMap(s, equivs)
+        a.syntaxEquiv(thisNames, b, qNames) &&
+          p.syntaxEquiv(thisNames, q, qNames) &&
+          r.syntaxEquiv(thisNames, s, qNames)
       case ( Parallel   ( p , r         ) , Parallel   ( q , s         ) ) =>
-        p.alphaWithEquivMap(q, equivs) && r.alphaWithEquivMap(s, equivs)
-      case ( Restrict   ( n , p         ) , Restrict   ( m , q         ) ) =>
-        p.alphaWithEquivMap(q, equivs + (n -> m))
+        p.syntaxEquiv(thisNames, q, qNames) &&
+          r.syntaxEquiv(thisNames, s, qNames)
+      case ( New        ( n , p         ) , New        ( m , q         ) ) =>
+        p.syntaxEquiv(thisNames, q, qNames) && (thisNames(n) == qNames(m))
       case ( End                          , End                          ) =>
         true
       case ( _                            , _                            ) =>
@@ -69,7 +73,7 @@ case class  IfThenElse( exp:  Exp     , tP:  Proc , fP:   Proc           )
   extends Proc
 case class  Parallel  ( p:    Proc    , q:   Proc                        )
   extends Proc
-case class  Restrict  ( name: Name    , p:   Proc                        )
+case class  New       ( name: Name    , p:   Proc                        )
   extends Proc
 case object End
   extends Proc
@@ -90,25 +94,24 @@ sealed abstract class Exp {
       s"!${of pstr names}"
   }
 
-  /** Alpha-equivalence for expressions
+  /** Syntax-equivalence for expressions
    */
-  def %=(y: Exp): Boolean = this.alphaWithEquivMap(y, Map.empty)
-
-  def alphaWithEquivMap(y: Exp, equivs: Map[Name, Name]): Boolean =
+  def syntaxEquiv(thisNames: Map[Name, String],
+      y: Exp, yNames: Map[Name, String]): Boolean =
     (this, y) match {
       case ( Variable    ( n         ) , Variable    ( m         ) ) =>
-        equivs(n) == m
+        thisNames(n) == yNames(m)
       case ( IntLiteral  ( a         ) , IntLiteral  ( b         ) ) =>
         a == b
       case ( BoolLiteral ( a         ) , BoolLiteral ( b         ) ) =>
         a == b
       case ( ChanLiteral ( n         ) , ChanLiteral ( m         ) ) =>
-        equivs(n) == m
+        thisNames(n) == yNames(m)
       case ( BinExp      ( a , c , e ) , BinExp      ( b , d , f ) ) =>
-        (a == b) && c.alphaWithEquivMap(d, equivs) &&
-          e.alphaWithEquivMap(f, equivs)
+        (a == b) && c.syntaxEquiv(thisNames, d, yNames) &&
+          e.syntaxEquiv(thisNames, f, yNames)
       case ( Not         ( a         ) , Not         ( b         ) ) =>
-        a.alphaWithEquivMap(b, equivs)
+        a.syntaxEquiv(thisNames, b, yNames)
       case ( _                         , _                         ) => false
     }
 }
