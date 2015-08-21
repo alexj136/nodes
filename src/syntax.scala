@@ -17,7 +17,7 @@ sealed abstract class Proc {
     case IfThenElse ( exp   , tP  , fP       ) =>
       s"if ${exp pstr names} then ${tP pstr names} else ${fP pstr names}"
     case Parallel   ( p     , q              ) =>
-      s"${p pstr names} | ${q pstr names}"
+      s"(${p pstr names} | ${q pstr names})"
     case Restrict   ( name  , p              ) =>
       s"new ${names(name)}.${p pstr names}"
     case End                                   => "end"
@@ -32,24 +32,31 @@ sealed abstract class Proc {
 
   /** Alpha-equivalence for processes.
    */
-  def %=(q: Proc): Boolean = (this, q) match {
-    case ( Send       ( _ , _ , _     ) , Send       ( _ , _ , _     ) ) =>
-      ???
-    case ( Receive    ( _ , _ , _ , _ ) , Receive    ( _ , _ , _ , _ ) ) =>
-      ???
-    case ( LetIn      ( _ , _ , _     ) , LetIn      ( _ , _ , _     ) ) =>
-      ???
-    case ( IfThenElse ( a , p , r     ) , IfThenElse ( b , q , s     ) ) =>
-      (a %= b) && (p %= q) && (r %= s)
-    case ( Parallel   ( p , r         ) , Parallel   ( q , s         ) ) =>
-      (p %= q) && (r %= s)
-    case ( Restrict   ( _ , _         ) , Restrict   ( _ , _         ) ) =>
-      ???
-    case ( End                          , End                          ) =>
-      true
-    case ( _                            , _                            ) =>
-      false
-  }
+  def %=(q: Proc): Boolean = this.alphaWithEquivMap(q, Map.empty)
+
+  def alphaWithEquivMap(q: Proc, equivs: Map[Name, Name]): Boolean =
+    (this, q) match {
+      case ( Send       ( c , e , p     ) , Send       ( d , f , q     ) ) =>
+        c.alphaWithEquivMap(d, equivs) && e.alphaWithEquivMap(f, equivs) &&
+          p.alphaWithEquivMap(q, equivs)
+      case ( Receive    ( r , c , e , p ) , Receive    ( s , d , f , q ) ) =>
+        (r == s) && c.alphaWithEquivMap(d, equivs) &&
+          p.alphaWithEquivMap(q, equivs + (e -> f))
+      case ( LetIn      ( n , x , p     ) , LetIn      ( m , y , q     ) ) =>
+        x.alphaWithEquivMap(y, equivs) &&
+          p.alphaWithEquivMap(q, equivs + (n -> m))
+      case ( IfThenElse ( a , p , r     ) , IfThenElse ( b , q , s     ) ) =>
+        a.alphaWithEquivMap(b, equivs) && p.alphaWithEquivMap(q, equivs) &&
+          r.alphaWithEquivMap(s, equivs)
+      case ( Parallel   ( p , r         ) , Parallel   ( q , s         ) ) =>
+        p.alphaWithEquivMap(q, equivs) && r.alphaWithEquivMap(s, equivs)
+      case ( Restrict   ( n , p         ) , Restrict   ( m , q         ) ) =>
+        p.alphaWithEquivMap(q, equivs + (n -> m))
+      case ( End                          , End                          ) =>
+        true
+      case ( _                            , _                            ) =>
+        false
+    }
 }
 
 case class  Send      ( ch:   Exp     , msg: Exp  , p:    Proc           )
@@ -85,16 +92,25 @@ sealed abstract class Exp {
 
   /** Alpha-equivalence for expressions
    */
-  def %=(y: Exp): Boolean = (this, y) match {
-    case ( Variable    ( _         ) , Variable    ( _         ) ) => ???
-    case ( IntLiteral  ( a         ) , IntLiteral  ( b         ) ) => a == b
-    case ( BoolLiteral ( a         ) , BoolLiteral ( b         ) ) => a == b
-    case ( ChanLiteral ( _         ) , ChanLiteral ( _         ) ) => ???
-    case ( BinExp      ( a , c , e ) , BinExp      ( b , d , f ) ) =>
-      (a == b) && (c %= d) && (e %= f)
-    case ( Not         ( a         ) , Not         ( b         ) ) => a %= b
-    case ( _                         , _                         ) => false
-  }
+  def %=(y: Exp): Boolean = this.alphaWithEquivMap(y, Map.empty)
+
+  def alphaWithEquivMap(y: Exp, equivs: Map[Name, Name]): Boolean =
+    (this, y) match {
+      case ( Variable    ( n         ) , Variable    ( m         ) ) =>
+        equivs(n) == m
+      case ( IntLiteral  ( a         ) , IntLiteral  ( b         ) ) =>
+        a == b
+      case ( BoolLiteral ( a         ) , BoolLiteral ( b         ) ) =>
+        a == b
+      case ( ChanLiteral ( n         ) , ChanLiteral ( m         ) ) =>
+        equivs(n) == m
+      case ( BinExp      ( a , c , e ) , BinExp      ( b , d , f ) ) =>
+        (a == b) && c.alphaWithEquivMap(d, equivs) &&
+          e.alphaWithEquivMap(f, equivs)
+      case ( Not         ( a         ) , Not         ( b         ) ) =>
+        a.alphaWithEquivMap(b, equivs)
+      case ( _                         , _                         ) => false
+    }
 }
 case class Variable    ( name:      Name                          ) extends Exp
 case class IntLiteral  ( value:     Int                           ) extends Exp

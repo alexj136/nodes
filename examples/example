@@ -5,6 +5,7 @@
     else
         $g ! [ 0 ] .
         end
+    endif
 
 |
 

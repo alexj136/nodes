@@ -51,6 +51,7 @@ terminal            BANG    ,
                     IF      ,
                     THEN    ,
                     ELSE    ,
+                    ENDIF   ,
                     BAR     ,
                     END     ,
                     LPAREN  ,
@@ -104,7 +105,7 @@ p ::= CHAN:ch BANG LSQUAR e:msg RSQUAR DOT p:proc
         {: RESULT = new Receive(true, ch, bind, proc);                      :}
     | LET IDENT:bind EQUAL e:value DOT p:proc
         {: RESULT = new LetIn(bind, value, proc);                           :}
-    | IF e:cond THEN p:proct ELSE p:procf
+    | IF e:cond THEN p:proct ELSE p:procf ENDIF
         {: RESULT = new IfThenElse(cond, proct, procf);                     :}
     | p:proc1 BAR p:proc2
         {: RESULT = new Parallel(proc1, proc2);                             :}

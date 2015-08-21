@@ -128,6 +128,7 @@ Comment = "//"[^\r\n]* {NewLine}?
     "if"      { return symbol(sym.IF);     }
     "then"    { return symbol(sym.THEN);   }
     "else"    { return symbol(sym.ELSE);   }
+    "endif"   { return symbol(sym.ENDIF);  }
     "|"       { return symbol(sym.BAR);    }
     "end"     { return symbol(sym.END);    }
     "("       { return symbol(sym.LPAREN); }
