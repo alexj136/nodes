@@ -17,15 +17,17 @@ JAVA_CLASSPATH=$(SCALA_LIB):$(CUP_RUNTIME):$(BIN_DIR)
 ./bin/interpreter: ./src/interpreter.scala ./bin/syntax
 	scalac ./src/interpreter.scala -d ./bin/ -cp ./bin/
 
-./bin/parser: ./bin/syntax ./src/Lexer.java ./src/Parser.java
+./bin/parser: ./bin/syntax ./gen/Lexer.java ./gen/Parser.java
 	javac -sourcepath ./src/ -cp $(JAVA_CLASSPATH) \
-    		-d ./bin/ ./src/Lexer.java ./src/Parser.java ./src/sym.java
+    		-d ./bin/ ./gen/Lexer.java ./gen/Parser.java ./gen/sym.java
 
-./src/Lexer.java: ./src/lexer.flex
-	java -jar ./lib/jflex-1.6.0.jar -d ./src/ --nobak ./src/lexer.flex
+./gen/Lexer.java: ./src/lexer.flex
+	@mkdir -p ./gen/
+	java -jar ./lib/jflex-1.6.0.jar -d ./gen/ --nobak ./src/lexer.flex
 
-./src/Parser.java: ./src/parser.cup
-	java -cp ./lib/ -jar ./lib/java-cup-11b.jar -destdir ./src/ \
+./gen/Parser.java: ./src/parser.cup
+	@mkdir -p ./gen/
+	java -cp ./lib/ -jar ./lib/java-cup-11b.jar -destdir ./gen/ \
             -parser Parser ./src/parser.cup
 
 all: ./bin/main
@@ -35,6 +37,5 @@ test: ./bin/test
 
 clean:
 	@echo "Cleaning build..."
-	@rm ./src/{Lexer.java,Parser.java,sym.java}
-	@rm -r ./bin/
+	@rm -r ./bin/ ./gen/
 	@echo "Done"
