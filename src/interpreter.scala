@@ -84,21 +84,22 @@ object Evaluator {
 
   sealed abstract class EvalExp {
     def unEvalExp: Exp = this match {
-      case EEInt(value) => IntLiteral(value)
-      case EEBool(value) => BoolLiteral(value)
-      case EEChan(name) => ChanLiteral(name)
+      case EEInt  ( value  ) => IntLiteral  ( value                     )
+      case EEBool ( value  ) => BoolLiteral ( value                     )
+      case EEChan ( name   ) => ChanLiteral ( name                      )
+      case EEPair ( l , r  ) => Pair        ( l.unEvalExp , r.unEvalExp )
     }
     def channelName: Name = this match {
-      case EEInt(value) =>
-        throw new RuntimeException("Type error: an int is not a channel")
-      case EEBool(value) =>
-        throw new RuntimeException("Type error: a bool is not a channel")
-      case EEChan(name) => name
+      case EEInt  (value  ) => throw TypeError("integer")
+      case EEBool (value  ) => throw TypeError("boolean")
+      case EEChan (name   ) => name
+      case EEPair ( _ , _ ) => throw TypeError("pair")
     }
   }
-  case class EEInt(value: Int) extends EvalExp
-  case class EEBool(value: Boolean) extends EvalExp
-  case class EEChan(name: Name) extends EvalExp
+  case class EEInt  ( value: Int                    ) extends EvalExp
+  case class EEBool ( value: Boolean                ) extends EvalExp
+  case class EEChan ( name:  Name                   ) extends EvalExp
+  case class EEPair ( lhs:   EvalExp , rhs: EvalExp ) extends EvalExp
 
   /** Substitute the Name 'to' for the Name 'from' within the Proc act, and
     *  obtain the resulting Proc.
@@ -140,8 +141,9 @@ object Evaluator {
       case IntLiteral  ( x )              => exp
       case BoolLiteral ( x )              => exp
       case ChanLiteral ( c )              => exp
-      case BinExp      ( ty , lhs , rhs ) => BinExp(ty, subE(lhs), subE(rhs))
+      case Pair        ( l  , r         ) => Pair(subE(l), subE(r))
       case UnExp       ( ty , e         ) => UnExp(ty, subE(e))
+      case BinExp      ( ty , lhs , rhs ) => BinExp(ty, subE(lhs), subE(rhs))
     }
   }
 
@@ -150,10 +152,17 @@ object Evaluator {
     case IntLiteral  ( x     ) => EEInt(x)
     case BoolLiteral ( x     ) => EEBool(x)
     case ChanLiteral ( c     ) => EEChan(c)
-    case UnExp       ( ty, e ) => (ty, evalExp(e)) match {
+    case Pair        ( l , r ) => EEPair(evalExp(l), evalExp(r))
+    case UnExp ( ty, e ) => (ty, evalExp(e)) match {
 
       case (Not, EEBool(b)) => EEBool(!b)
       case (Not, _) => throw TypeError("!")
+
+      case (PLeft, EEPair(l, _)) => l
+      case (PLeft, _           ) => throw TypeError("<-")
+
+      case (PRight, EEPair(_, r)) => r
+      case (PRight, _           ) => throw TypeError("->")
     }
     case BinExp ( ty , lhs , rhs ) => (ty, evalExp(lhs), evalExp(rhs)) match {
 

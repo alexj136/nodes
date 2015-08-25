@@ -134,6 +134,11 @@ Comment = "//"[^\r\n]* {NewLine}?
     "end"     { return symbol(sym.END);     }
     "("       { return symbol(sym.LPAREN);  }
     ")"       { return symbol(sym.RPAREN);  }
+    "{"       { return symbol(sym.LCURLY);  }
+    "}"       { return symbol(sym.RCURLY);  }
+    ","       { return symbol(sym.COMMA);   }
+    "<-"      { return symbol(sym.LARROW);  }
+    "->"      { return symbol(sym.RARROW);  }
     "true"    { return symbol(sym.TRUE);    }
     "false"   { return symbol(sym.FALSE);   }
     "+"       { return symbol(sym.PLUS);    }

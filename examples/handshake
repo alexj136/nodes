@@ -1,13 +1,13 @@
-    ! receive $addone : n .
-    new rch .
-    send $getrch : rch .
+    ! receive $addone : n_rch .
+    let n   = <- n_rch .
+    let rch = -> n_rch .
     send rch : n + 1 .
     end
 
 |
 
-    send $addone : 10 .
-    receive $getrch : x .
-    receive x : nn .
-    send $endresultis : nn .
+    new rch .
+    send $addone : { 10 , rch } .
+    receive rch : n .
+    send $resultis : n .
     end

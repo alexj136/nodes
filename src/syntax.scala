@@ -88,10 +88,12 @@ sealed abstract class Exp {
       value.toString
     case ChanLiteral ( name          ) =>
       names getOrElse (name, s"$$<new ${name.id}>")
-    case BinExp      ( ty   , l  , r ) =>
-      s"${l pstr names} ${ty.toString} ${r pstr names}"
+    case Pair        ( l    , r      ) =>
+      s"{ ${l pstr names} , ${r pstr names} }"
     case UnExp       ( ty   , of     ) =>
       s"${ty.toString} ${of pstr names}"
+    case BinExp      ( ty   , l  , r ) =>
+      s"${l pstr names} ${ty.toString} ${r pstr names}"
   }
 
   /** Syntax-equivalence for expressions
@@ -107,11 +109,14 @@ sealed abstract class Exp {
         a == b
       case ( ChanLiteral ( n         ) , ChanLiteral ( m         ) ) =>
         thisNames(n) == yNames(m)
+      case ( Pair        ( a , c     ) , Pair        ( b , d     ) ) =>
+        a.syntaxEquiv(thisNames, b, yNames) &&
+          c.syntaxEquiv(thisNames, d, yNames)
+      case ( UnExp       ( a , c     ) , UnExp       ( b , d     ) ) =>
+        (a == b) && c.syntaxEquiv(thisNames, d, yNames)
       case ( BinExp      ( a , c , e ) , BinExp      ( b , d , f ) ) =>
         (a == b) && c.syntaxEquiv(thisNames, d, yNames) &&
           e.syntaxEquiv(thisNames, f, yNames)
-      case ( UnExp       ( a , c     ) , UnExp       ( b , d     ) ) =>
-        (a == b) && c.syntaxEquiv(thisNames, d, yNames)
       case ( _                         , _                         ) => false
     }
 }
@@ -119,9 +124,9 @@ case class Variable    ( name:      Name                          ) extends Exp
 case class IntLiteral  ( value:     Int                           ) extends Exp
 case class BoolLiteral ( value:     Boolean                       ) extends Exp
 case class ChanLiteral ( name:      Name                          ) extends Exp
-case class BinExp      ( binOpType: BinOp   , lhs: Exp , rhs: Exp ) extends Exp
+case class Pair        ( lhs:       Exp     , rhs: Exp            ) extends Exp
 case class UnExp       ( unOpType:  UnOp    , of:  Exp            ) extends Exp
-//case class Pair        ( lhs:       Exp     , rhs: Exp            ) extends Exp
+case class BinExp      ( binOpType: BinOp   , lhs: Exp , rhs: Exp ) extends Exp
 
 sealed abstract class BinOp {
   override def toString: String = this match {
@@ -157,7 +162,11 @@ case object Or        extends BinOp
 
 sealed abstract class UnOp {
   override def toString: String = this match {
-    case Not => "!"
+    case Not    => "!"
+    case PLeft  => "<-"
+    case PRight => "->"
   }
 }
-case object Not extends UnOp
+case object Not    extends UnOp
+case object PLeft  extends UnOp
+case object PRight extends UnOp
