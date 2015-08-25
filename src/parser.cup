@@ -36,11 +36,10 @@ parser code {:
     }
 :};
 
-terminal            BANG    ,
-                    QMARK   ,
-                    STAR    ,
-                    LSQUAR  ,
-                    RSQUAR  ,
+terminal            SEND    ,
+                    RECEIVE ,
+                    BANG    ,
+                    COLON   ,
                     DOT     ,
                     LET     ,
                     NEW     ,
@@ -52,12 +51,11 @@ terminal            BANG    ,
                     END     ,
                     LPAREN  ,
                     RPAREN  ,
-                    LCURLY  ,
-                    RCURLY  ,
                     TRUE    ,
                     FALSE   ,
                     PLUS    ,
                     DASH    ,
+                    STAR    ,
                     FSLASH  ,
                     PERC    ,
                     EQUAL   ,
@@ -87,17 +85,11 @@ precedence nonassoc DOT;
 
 start with p;
 
-p ::= CHAN:ch BANG LSQUAR e:msg RSQUAR DOT p:proc
-        {: RESULT = new Send(new ChanLiteral(ch), msg, proc);               :}
-    | CHAN:ch QMARK LSQUAR IDENT:bind RSQUAR DOT p:proc
-        {: RESULT = new Receive(false, new ChanLiteral(ch), bind, proc);    :}
-    | CHAN:ch QMARK STAR LSQUAR IDENT:bind RSQUAR DOT p:proc
-        {: RESULT = new Receive(true, new ChanLiteral(ch), bind, proc);     :}
-    | LCURLY e:ch RCURLY BANG LSQUAR e:msg RSQUAR DOT p:proc
+p ::= SEND e:ch COLON e:msg DOT p:proc
         {: RESULT = new Send(ch, msg, proc);                                :}
-    | LCURLY e:ch RCURLY QMARK LSQUAR IDENT:bind RSQUAR DOT p:proc
+    | RECEIVE e:ch COLON IDENT:bind DOT p:proc
         {: RESULT = new Receive(false, ch, bind, proc);                     :}
-    | LCURLY e:ch RCURLY QMARK STAR LSQUAR IDENT:bind RSQUAR DOT p:proc
+    | BANG RECEIVE e:ch COLON IDENT:bind DOT p:proc
         {: RESULT = new Receive(true, ch, bind, proc);                      :}
     | LET IDENT:bind EQUAL e:value DOT p:proc
         {: RESULT = new LetIn(bind, value, proc);                           :}

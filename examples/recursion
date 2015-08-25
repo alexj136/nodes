@@ -1,0 +1,13 @@
+    ! receive $f : a .
+    if a > 0 then
+        send $f : a - 1 .
+        end
+    else
+        send $g : 0 .
+        end
+    endif
+
+|
+
+    send $f : 10 .
+    end

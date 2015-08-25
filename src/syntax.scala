@@ -1,17 +1,17 @@
 package syntax
 
-class Name(id: Int) {
+class Name(val id: Int) {
   def next: Name = new Name(this.id + 1)
 }
 
 sealed abstract class Proc {
   def pstr(names: Map[Name, String]): String = this match {
     case Send       ( ch    , msg , p        ) =>
-      s"${ch pstr names}![${msg pstr names}].${p pstr names}"
+      s"send ${ch pstr names} : ${msg pstr names} . ${p pstr names}"
     case Receive    ( true  , ch  , bind , p ) =>
-      s"${ch pstr names}?*[${names(bind)}].${p pstr names}"
+      s"! receive ${ch pstr names} : ${names(bind)} . ${p pstr names}"
     case Receive    ( false , ch  , bind , p ) =>
-      s"${ch pstr names}?[${names(bind)}].${p pstr names}"
+      s"receive ${ch pstr names} : ${names(bind)} . ${p pstr names}"
     case LetIn      ( bind  , exp , p        ) =>
       s"let ${names(bind)} = ${exp.pstr(names)}.${p pstr names}"
     case IfThenElse ( exp   , tP  , fP       ) =>
@@ -81,13 +81,13 @@ case object End
 sealed abstract class Exp {
   def pstr(names: Map[Name, String]): String = this match {
     case Variable    ( name         ) =>
-      names(name)
+      names getOrElse (name, s"$$<new ${{name.id}}>")
     case IntLiteral  ( value        ) =>
       value.toString
     case BoolLiteral ( value        ) =>
       value.toString
     case ChanLiteral ( name         ) =>
-      names(name)
+      names getOrElse (name, s"$$<new ${name.id}>")
     case BinExp      ( ty   , l , r ) =>
       s"${l pstr names} ${ty.toString} ${r pstr names}"
     case Not         ( of           ) =>

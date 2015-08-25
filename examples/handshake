@@ -1,0 +1,13 @@
+    ! receive $addone : n .
+    new rch .
+    send $getrch : rch .
+    send rch : n + 1 .
+    end
+
+|
+
+    send $addone : 10 .
+    receive $getrch : x .
+    receive x : nn .
+    send $endresultis : nn .
+    end

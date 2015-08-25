@@ -34,8 +34,7 @@ object Evaluator {
               .someOf
       }
 
-      case Send(_, _, _) :: _ =>
-        throw new RuntimeException("Error: unreduced channel expression");
+      case Send(_, _, _) :: _ => throw FreeVariableError
 
       case Receive(repl, ChanLiteral(ch), bind, p) :: runTail =>
         this.wait(ch) match {
@@ -59,8 +58,7 @@ object Evaluator {
                 .someOf
         }
 
-      case Receive(_, _, _, _) :: _ =>
-        throw new RuntimeException("Error: unreduced channel expression");
+      case Receive(_, _, _, _) :: _ => throw FreeVariableError
 
       case LetIn(name, exp, p) :: runTail =>
         this.withRun(substituteProc(p, name, evalExp(exp)) :: runTail).someOf
@@ -68,8 +66,7 @@ object Evaluator {
       case IfThenElse(exp, tP, fP) :: runTail => evalExp(exp) match {
         case EEBool(true) => this.withRun(tP :: runTail).someOf
         case EEBool(false) => this.withRun(fP :: runTail).someOf
-        case _ =>
-          throw new RuntimeException("Type error: condition was not boolean")
+        case _ => throw TypeError("if")
       }
 
       case Parallel(p, q) :: runTail =>
@@ -138,87 +135,77 @@ object Evaluator {
   def substituteExp(exp: Exp, from: Name, to: EvalExp): Exp = {
     val subE : Function[Exp, Exp] = e => substituteExp(e, from, to)
     exp match {
-      case Variable(n) if n == from => to.unEvalExp
-      case Variable(n) if n != from => exp
-      case IntLiteral(x) => exp
-      case BoolLiteral(x) => exp
-      case ChanLiteral(c) => exp
-      case Not(e) => Not(subE(e))
-      case BinExp(ty, lhs, rhs) => BinExp(ty, subE(lhs), subE(rhs))
+      case Variable    ( n ) if n == from => to.unEvalExp
+      case Variable    ( n ) if n != from => exp
+      case IntLiteral  ( x )              => exp
+      case BoolLiteral ( x )              => exp
+      case ChanLiteral ( c )              => exp
+      case Not         ( e )              => Not(subE(e))
+      case BinExp      ( ty , lhs , rhs ) => BinExp(ty, subE(lhs), subE(rhs))
     }
   }
 
   def evalExp(exp: Exp): EvalExp = exp match {
-    case Variable(n) =>
-      throw new RuntimeException(s"Free variable error: '${n}'.")
-    case IntLiteral(x) => EEInt(x)
-    case BoolLiteral(x) => EEBool(x)
-    case ChanLiteral(c) => EEChan(c)
-    case Not(e) => evalExp(e) match {
+    case Variable    ( n ) => throw FreeVariableError
+    case IntLiteral  ( x ) => EEInt(x)
+    case BoolLiteral ( x ) => EEBool(x)
+    case ChanLiteral ( c ) => EEChan(c)
+    case Not         ( e ) => evalExp(e) match {
       case EEBool(b) => EEBool(!b)
-      case _ => throw new RuntimeException("Type error in negation")
+      case _ => throw TypeError("!")
     }
     case BinExp(ty, lhs, rhs) => (ty, evalExp(lhs), evalExp(rhs)) match {
 
       // Int -> Int -> Int
       case(Add, EEInt(l), EEInt(r)) => EEInt(l + r)
-      case(Add, _, _) =>
-        throw new RuntimeException("Type error in +")
+      case(Add, _, _) => throw TypeError("+")
 
       case(Sub, EEInt(l), EEInt(r)) => EEInt(l - r)
-      case(Sub, _, _) =>
-        throw new RuntimeException("Type error in -")
+      case(Sub, _, _) => throw TypeError("-")
 
       case(Mul, EEInt(l), EEInt(r)) => EEInt(l * r)
-      case(Mul, _, _) =>
-        throw new RuntimeException("Type error in *")
+      case(Mul, _, _) => throw TypeError("*")
 
       case(Div, EEInt(l), EEInt(r)) => EEInt(l / r)
-      case(Div, _, _) =>
-        throw new RuntimeException("Type error in /")
+      case(Div, _, _) => throw TypeError("/")
 
       case(Mod, EEInt(l), EEInt(r)) => EEInt(l % r)
-      case(Mod, _, _) =>
-        throw new RuntimeException("Type error in %")
+      case(Mod, _, _) => throw TypeError("%")
 
       // A -> A -> Bool
       case(Equal, EEInt(l), EEInt(r)) => EEBool(l == r)
       case(Equal, EEBool(l), EEBool(r)) => EEBool(l == r)
       case(Equal, EEChan(l), EEChan(r)) => EEBool(l == r)
-      case(Equal, _, _) =>
-        throw new RuntimeException("Type error in ==")
+      case(Equal, _, _) => throw TypeError("==")
 
       case(NotEqual, EEInt(l), EEInt(r)) => EEBool(l != r)
       case(NotEqual, EEBool(l), EEBool(r)) => EEBool(l != r)
       case(NotEqual, EEChan(l), EEChan(r)) => EEBool(l != r)
-      case(NotEqual, _, _) =>
-        throw new RuntimeException("Type error in !=")
+      case(NotEqual, _, _) => throw TypeError("!=")
 
       // Int -> Int -> Bool
       case(Less, EEInt(l), EEInt(r)) => EEBool(l < r)
-      case(Less, _, _) =>
-        throw new RuntimeException("Type error in <")
+      case(Less, _, _) => throw TypeError("<")
 
       case(LessEq, EEInt(l), EEInt(r)) => EEBool(l <= r)
-      case(LessEq, _, _) =>
-        throw new RuntimeException("Type error in <=")
+      case(LessEq, _, _) => throw TypeError("<=")
 
       case(Greater, EEInt(l), EEInt(r)) => EEBool(l > r)
-      case(Greater, _, _) =>
-        throw new RuntimeException("Type error in >")
+      case(Greater, _, _) => throw TypeError(">")
 
       case(GreaterEq, EEInt(l), EEInt(r)) => EEBool(l >= r)
-      case(GreaterEq, _, _) =>
-        throw new RuntimeException("Type error in >=")
+      case(GreaterEq, _, _) => throw TypeError(">=")
 
       // Bool -> Bool -> Bool
       case(And, EEBool(l), EEBool(r)) => EEBool(l && r)
-      case(And, _, _) =>
-        throw new RuntimeException("Type error in >")
+      case(And, _, _) => throw TypeError(">")
 
       case(Or, EEBool(l), EEBool(r)) => EEBool(l || r)
-      case(Or, _, _) =>
-        throw new RuntimeException("Type error in >=")
+      case(Or, _, _) => throw TypeError(">=")
     }
   }
+
+  sealed abstract class EvaluationException extends Exception
+  case class TypeError(message: String) extends EvaluationException
+  case object FreeVariableError extends EvaluationException
 }

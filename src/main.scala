@@ -17,9 +17,15 @@ object Main extends App {
     new MachineState(proc.listify, names map
       {case (id, str) => (id, List(): List[Proc])}, nextName)
   var stepState: Option[MachineState] = state.step
-  while (stepState != None) {
-    state = stepState.get
-    stepState = state.step
+  try {
+    while (stepState != None) {
+      state = stepState.get
+      stepState = state.step
+    }
+    println(state.toProc pstr names)
   }
-  println(state.toProc pstr names)
+  catch {
+    case TypeError         ( s ) => println(s"Type error in \'$s\'")
+    case FreeVariableError       => println("Unbound variable error")
+  }
 }
