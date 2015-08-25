@@ -73,7 +73,8 @@ terminal int        INT     ;
 
 non terminal Proc   p;
 non terminal Exp    e;
-non terminal BinOp  o;
+non terminal BinOp  b;
+non terminal UnOp   u;
 
 precedence left PLUS, DASH;
 precedence left STAR, FSLASH;
@@ -106,12 +107,12 @@ e ::= IDENT:name            {: RESULT = new Variable(name);     :}
     | INT:x                 {: RESULT = new IntLiteral(x);      :}
     | TRUE                  {: RESULT = new BoolLiteral(true);  :}
     | FALSE                 {: RESULT = new BoolLiteral(false); :}
-    | e:l o:op e:r          {: RESULT = new BinExp(op, l, r);   :}
-    | BANG e:exp            {: RESULT = new Not(exp);           :}
+    | e:l b:op e:r          {: RESULT = new BinExp(op, l, r);   :}
+    | u:op e:exp            {: RESULT = new UnExp(op, exp);      :}
     | LPAREN e:exp RPAREN   {: RESULT = exp;                    :}
     ;
 
-o ::= PLUS          {: RESULT = Add$.MODULE$;       :}
+b ::= PLUS          {: RESULT = Add$.MODULE$;       :}
     | DASH          {: RESULT = Sub$.MODULE$;       :}
     | STAR          {: RESULT = Mul$.MODULE$;       :}
     | FSLASH        {: RESULT = Div$.MODULE$;       :}
@@ -124,4 +125,7 @@ o ::= PLUS          {: RESULT = Add$.MODULE$;       :}
     | GRTREQ        {: RESULT = GreaterEq$.MODULE$; :}
     | AND           {: RESULT = And$.MODULE$;       :}
     | OR            {: RESULT = Or$.MODULE$;        :}
+    ;
+
+u ::= BANG          {: RESULT = Not$.MODULE$;       :}
     ;

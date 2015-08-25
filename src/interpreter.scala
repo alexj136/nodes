@@ -140,21 +140,22 @@ object Evaluator {
       case IntLiteral  ( x )              => exp
       case BoolLiteral ( x )              => exp
       case ChanLiteral ( c )              => exp
-      case Not         ( e )              => Not(subE(e))
       case BinExp      ( ty , lhs , rhs ) => BinExp(ty, subE(lhs), subE(rhs))
+      case UnExp       ( ty , e         ) => UnExp(ty, subE(e))
     }
   }
 
   def evalExp(exp: Exp): EvalExp = exp match {
-    case Variable    ( n ) => throw FreeVariableError
-    case IntLiteral  ( x ) => EEInt(x)
-    case BoolLiteral ( x ) => EEBool(x)
-    case ChanLiteral ( c ) => EEChan(c)
-    case Not         ( e ) => evalExp(e) match {
-      case EEBool(b) => EEBool(!b)
-      case _ => throw TypeError("!")
+    case Variable    ( n     ) => throw FreeVariableError
+    case IntLiteral  ( x     ) => EEInt(x)
+    case BoolLiteral ( x     ) => EEBool(x)
+    case ChanLiteral ( c     ) => EEChan(c)
+    case UnExp       ( ty, e ) => (ty, evalExp(e)) match {
+
+      case (Not, EEBool(b)) => EEBool(!b)
+      case (Not, _) => throw TypeError("!")
     }
-    case BinExp(ty, lhs, rhs) => (ty, evalExp(lhs), evalExp(rhs)) match {
+    case BinExp ( ty , lhs , rhs ) => (ty, evalExp(lhs), evalExp(rhs)) match {
 
       // Int -> Int -> Int
       case(Add, EEInt(l), EEInt(r)) => EEInt(l + r)
