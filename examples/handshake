@@ -1,11 +1,24 @@
-    ! receive $addone : n_rch .
-    send -> n_rch : ( <- n_rch ) + 1 .
+    ! receive $double : n_rch .
+    let n   = <- n_rch .
+    let rch = -> n_rch .
+    send rch : n * 2 .
+    end
+
+|
+
+    ! receive $addone_then_double : n_rch .
+    let n   = <- n_rch .
+    let rch = -> n_rch .
+    new rch_d .
+    send $double : { n + 1 , rch_d } .
+    receive rch_d : res .
+    send rch : res .
     end
 
 |
 
     new rch .
-    send $addone : { 10 , rch } .
+    send $addone_then_double : { 10 , rch } .
     receive rch : n .
-    send $resultis : n .
+    send $print : n .
     end

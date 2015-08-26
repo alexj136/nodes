@@ -15,14 +15,13 @@ object Main extends App {
   stream.close()
   var state: MachineState =
     new MachineState(proc.listify, names map
-      {case (id, str) => (id, List(): List[Proc])}, nextName)
+      {case (id, str) => (id, List(): List[Proc])}, names, nextName)
   var stepState: Option[MachineState] = state.step
   try {
     while (stepState != None) {
       state = stepState.get
       stepState = state.step
     }
-    println(state.toProc pstr names)
   }
   catch {
     case TypeError         ( s ) => println(s"Type error in \'$s\'")

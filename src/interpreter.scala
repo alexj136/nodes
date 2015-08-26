@@ -4,19 +4,35 @@ import syntax._
 
 object Evaluator {
 
-  class MachineState(run: List[Proc], wait: Map[Name, List[Proc]], next: Name) {
+  class MachineState(
+      run:   List[Proc], 
+      wait:  Map[Name, List[Proc]],
+      names: Map[Name, String],
+      next:  Name) {
+
     def toProc: Proc = (this.run :: this.wait.toList.map(_._2)).flatten
       .fold(End){ (p, q) => Parallel(p, q) }
+
     def withRun(newRun: List[Proc]): MachineState =
-      new MachineState(newRun, this.wait, this.next)
+      new MachineState(newRun, this.wait, this.names, this.next)
+
     def withWait(ch: Name, onCh: List[Proc]): MachineState =
-      new MachineState(this.run, this.wait.updated(ch, onCh), this.next)
+      new MachineState(
+        this.run, this.wait.updated(ch, onCh), this.names, this.next)
+
     def withNext(newNext: Name): MachineState =
-      new MachineState(this.run, this.wait, newNext)
+      new MachineState(this.run, this.wait, this.names, newNext)
+
     def someOf: Option[MachineState] = Some(this)
 
     def step: Option[MachineState] = this.run match {
       case Nil => None
+
+      case Send(ChanLiteral(ch), msg, p) :: runTail
+        if this.names.get(ch) == Some("$print") => {
+          println(evalExp(msg).unEvalExp pstr this.names)
+          this.withRun(p :: runTail).someOf
+        }
 
       case Send(ChanLiteral(ch), msg, p) :: runTail => this.wait(ch) match {
 
