@@ -1,7 +1,5 @@
     ! receive $addone : n_rch .
-    let n   = <- n_rch .
-    let rch = -> n_rch .
-    send rch : n + 1 .
+    send -> n_rch : ( <- n_rch ) + 1 .
     end
 
 |

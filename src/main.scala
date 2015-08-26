@@ -26,6 +26,7 @@ object Main extends App {
   }
   catch {
     case TypeError         ( s ) => println(s"Type error in \'$s\'")
-    case FreeVariableError       => println("Unbound variable error")
+    case FreeVariableError ( s ) =>
+      println(s"Unbound variable error: '${s pstr names}'")
   }
 }

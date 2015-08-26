@@ -34,7 +34,11 @@ object Evaluator {
               .someOf
       }
 
-      case Send(_, _, _) :: _ => throw FreeVariableError
+      case Send(chExp, msg, p) :: runTail => evalExp(chExp) match {
+        case EEChan(ch) =>
+          this.withRun(Send(ChanLiteral(ch), msg, p) :: runTail).someOf
+        case _          => throw FreeVariableError(Send(chExp, msg, p))
+      }
 
       case Receive(repl, ChanLiteral(ch), bind, p) :: runTail =>
         this.wait(ch) match {
@@ -58,7 +62,11 @@ object Evaluator {
                 .someOf
         }
 
-      case Receive(_, _, _, _) :: _ => throw FreeVariableError
+      case Receive(rep, chExp, bind, p) :: runTail => evalExp(chExp) match {
+        case EEChan(ch) =>
+          this.withRun(Receive(rep, ChanLiteral(ch), bind, p) :: runTail).someOf
+        case _          => throw FreeVariableError(Receive(rep, chExp, bind, p))
+      }
 
       case LetIn(name, exp, p) :: runTail =>
         this.withRun(substituteProc(p, name, evalExp(exp)) :: runTail).someOf
@@ -148,7 +156,7 @@ object Evaluator {
   }
 
   def evalExp(exp: Exp): EvalExp = exp match {
-    case Variable    ( n     ) => throw FreeVariableError
+    case Variable    ( n     ) => throw FreeVariableError(Variable(n))
     case IntLiteral  ( x     ) => EEInt(x)
     case BoolLiteral ( x     ) => EEBool(x)
     case ChanLiteral ( c     ) => EEChan(c)
@@ -217,5 +225,5 @@ object Evaluator {
 
   sealed abstract class EvaluationException extends Exception
   case class TypeError(message: String) extends EvaluationException
-  case object FreeVariableError extends EvaluationException
+  case class FreeVariableError(in: SyntaxElement) extends EvaluationException
 }

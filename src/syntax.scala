@@ -1,10 +1,14 @@
 package syntax
 
+sealed trait SyntaxElement {
+  def pstr(names: Map[Name, String]): String
+}
+
 class Name(val id: Int) {
   def next: Name = new Name(this.id + 1)
 }
 
-sealed abstract class Proc {
+sealed abstract class Proc extends SyntaxElement {
   def pstr(names: Map[Name, String]): String = this match {
     case Send       ( ch    , msg , p        ) =>
       s"send ${ch pstr names} : ${msg pstr names} . ${p pstr names}"
@@ -78,7 +82,7 @@ case class  New       ( name: Name    , p:   Proc                        )
 case object End
   extends Proc
 
-sealed abstract class Exp {
+sealed abstract class Exp extends SyntaxElement {
   def pstr(names: Map[Name, String]): String = this match {
     case Variable    ( name          ) =>
       names getOrElse (name, s"$$<new ${{name.id}}>")
