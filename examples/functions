@@ -1,16 +1,16 @@
-    ! receive $double : n_rch .
+    ! receive $subten : n_rch .
     let n   = <- n_rch .
     let rch = -> n_rch .
-    send rch : n * 2 .
+    send rch : n - 10 .
     end
 
 |
 
-    ! receive $addone_double : n_rch .
+    ! receive $double_subten : n_rch .
     let n   = <- n_rch .
     let rch = -> n_rch .
     new rch_d .
-    send $double : { n + 1 , rch_d } .
+    send $subten : { n * 2 , rch_d } .
     receive rch_d : res .
     send rch : res .
     end
@@ -21,9 +21,9 @@
     let n   = <- n_rch .
     let rch = -> n_rch .
     new rch_d .
-    send $addone_double : { n , rch_d } .
+    send $double_subten : { n + 1 , rch_d } .
     receive rch_d : res .
-    send rch : res - 10 .
+    send rch : res .
     end
 
 |
