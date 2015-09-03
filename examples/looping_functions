@@ -1,0 +1,47 @@
+    ! receive $subten : n_rch .
+    let n   = <- n_rch .
+    let rch = -> n_rch .
+    send rch : n - 10 .
+    end
+
+|
+
+    ! receive $double_subten : n_rch .
+    let n   = <- n_rch .
+    let rch = -> n_rch .
+    new rch_d .
+    send $subten : { n * 2 , rch_d } .
+    receive rch_d : res .
+    send rch : res .
+    end
+
+|
+
+    ! receive $addone_double_subten : n_rch .
+    let n   = <- n_rch .
+    let rch = -> n_rch .
+    new rch_d .
+    send $double_subten : { n + 1 , rch_d } .
+    receive rch_d : res .
+    send rch : res .
+    end
+
+|
+
+    ! receive $loop : x .
+    if x < 1000000000 then
+        send $print : { $looping_with , x } .
+        new rch .
+        send $addone_double_subten : { x , rch } .
+        receive rch : n .
+        send $loop : n .
+        end
+    else
+        send $print : { $loop_finished_with , x } .
+        end
+    endif
+
+|
+
+    send $loop : 9 .
+    end
