@@ -3,6 +3,7 @@ package main
 import syntax._
 import interpreter.Evaluator._
 import parser._
+import tracing_interpreter.TracingInterpreter._
 import java.io.File
 import java.io.FileInputStream
 
@@ -14,7 +15,7 @@ object Main extends App {
   val names: Map[Name, String] = revNames.map(_.swap)
   stream.close()
   var state: MachineState =
-    new MachineState(proc.listify, names map
+    new TracingMachineState(proc.listify, names map
       {case (id, str) => (id, List(): List[Proc])}, names, nextName)
   var stepState: Option[MachineState] = state.step
   try {
