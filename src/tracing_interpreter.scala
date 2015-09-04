@@ -5,13 +5,6 @@ import interpreter.Evaluator._
 
 object TracingInterpreter {
 
-  // What information needs to be recorded in a trace?
-  // The code and the state are the same thing so what do we trace?
-  //   I suppose we trace the actions of the persistent things
-  //     i.e. replicating processes
-  //   Need a notion of a hot process
-  //     a replicating process that copies itself a lot
-  //   Perhaps look for patterns in the processes that are copied
   class TracingMachineState(
       run: List[Proc],
       wait: Map[Name, List[Proc]],
