@@ -5,16 +5,27 @@ import interpreter.Evaluator._
 
 object TracingInterpreter {
 
+  sealed abstract class ProcQueue
+  case class SendQueue(elems: List[(Exp, Proc)]) extends ProcQueue {
+    def this(elems: List[(Exp, Proc)]): SendQueue = {
+      if (elems.length == 0) throw new RuntimeException("Empty SendQueue")
+      this(elems)
+    }
+  }
+  case class ReceiveQueue(elems: List[(Option[Int], Name, Proc)])
+    extends ProcQueue
+  case object EmptyQueue extends ProcQueue
+
   class TracingMachineState(
       run: List[Proc],
-      wait: Map[Name, List[Proc]],
+      wait: Map[Name, ProcQueue],
       names: Map[Name, String],
       next: Name) extends MachineState(run, wait, names, next) {
 
     override def withRun(newRun: List[Proc]): MachineState =
       new TracingMachineState(newRun, this.wait, this.names, this.next)
 
-    override def withWait(ch: Name, onCh: List[Proc]): MachineState =
+    override def withWait(ch: Name, onCh: ProcQueue): MachineState =
       new TracingMachineState(
         this.run, this.wait.updated(ch, onCh), this.names, this.next)
 
