@@ -1,9 +1,10 @@
 package main
 
 import syntax._
-import interpreter.Evaluator._
 import parser._
-import tracing_interpreter.TracingInterpreter._
+import interpreter_common._
+import interpreter_common.Functions._
+import tracing_interpreter._
 import java.io.File
 import java.io.FileInputStream
 
@@ -15,8 +16,8 @@ object Main extends App {
   val names: Map[Name, String] = revNames.map(_.swap)
   stream.close()
   var state: MachineState =
-    new TracingMachineState(proc.listify, names map
-      {case (id, str) => (id, List(): List[Proc])}, names, nextName)
+    new TracingMachineState(proc.listify map {p => Left(p)}, names map
+      {case (id, str) => (id, EmptyQueue)}, names, nextName)
   var stepState: Option[MachineState] = state.step
   try {
     while (stepState != None) {

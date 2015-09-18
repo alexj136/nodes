@@ -57,7 +57,7 @@ import java.io.InputStreamReader;
      * @return a new Symbol with type information
      */
     public Symbol symbol(int type) {
-        Tuple2<Location, Location> loc = this.getLocation();
+        Tuple2<Location, Location> loc = this.getLexerLocation();
         return csf.newSymbol(sym.terminalNames[type], type, loc._1, loc._2);
     }
 
@@ -70,7 +70,7 @@ import java.io.InputStreamReader;
      * actual String value.
      */
     public Symbol symbol(int type, String text) {
-        Tuple2<Location, Location> loc = this.getLocation();
+        Tuple2<Location, Location> loc = this.getLexerLocation();
         return csf.newSymbol(sym.terminalNames[type], type, loc._1, loc._2,
                 type == sym.INT ? Integer.parseInt(text) : this.lease(text));
     }
@@ -79,7 +79,7 @@ import java.io.InputStreamReader;
      * Obtain the start and end locations of the current token.
      * @return the start and end locations of the current token
      */
-    public Tuple2<Location, Location> getLocation() {
+    public Tuple2<Location, Location> getLexerLocation() {
         Location left = new Location(yyline + 1, yycolumn + 1, yychar);
         Location right = new Location(yyline + 1, yycolumn + yylength(),
                 yychar + yylength());

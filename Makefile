@@ -4,8 +4,8 @@ SCALA_LIB=$(SCALA_HOME)/lib/scala-library.jar
 SCALA_CLASSPATH=$(CUP_RUNTIME):$(BIN_DIR)
 JAVA_CLASSPATH=$(SCALA_LIB):$(CUP_RUNTIME):$(BIN_DIR)
 
-./bin/main: ./src/main.scala ./bin/syntax ./bin/interpreter ./bin/parser \
-	./bin/tracing_interpreter
+./bin/main: ./src/main.scala ./bin/syntax ./bin/interpreter_common \
+	./bin/parser ./bin/turner_interpreter ./bin/tracing_interpreter
 	scalac src/main.scala -d bin/ -cp $(SCALA_CLASSPATH)
 
 ./bin/test: ./src/test.scala ./bin/main
@@ -15,11 +15,15 @@ JAVA_CLASSPATH=$(SCALA_LIB):$(CUP_RUNTIME):$(BIN_DIR)
 	@mkdir -p ./bin/
 	scalac ./src/syntax.scala -d ./bin/ -cp ./bin/
 
-./bin/interpreter: ./src/interpreter.scala ./bin/syntax
-	scalac ./src/interpreter.scala -d ./bin/ -cp ./bin/
+./bin/interpreter_common: ./src/interpreter_common.scala ./bin/syntax
+	scalac ./src/interpreter_common.scala -d ./bin/ -cp ./bin/
+
+./bin/turner_interpreter: ./src/turner_interpreter.scala ./bin/syntax \
+	./bin/interpreter_common
+	scalac ./src/turner_interpreter.scala -d ./bin/ -cp ./bin/
 
 ./bin/tracing_interpreter: ./src/tracing_interpreter.scala ./bin/syntax \
-	./bin/interpreter
+	./bin/interpreter_common
 	scalac ./src/tracing_interpreter.scala -d ./bin/ -cp ./bin/
 
 ./bin/parser: ./bin/syntax ./gen/Lexer.java ./gen/Parser.java

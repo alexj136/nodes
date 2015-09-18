@@ -1,6 +1,7 @@
 package syntax
 
 sealed trait SyntaxElement {
+  var info: Info = NoInfo
   def pstr(names: Map[Name, String]): String
 }
 
@@ -8,7 +9,12 @@ class Name(val id: Int) {
   def next: Name = new Name(this.id + 1)
 }
 
+abstract class Info
+case class SrcPosInfo(pos: (Int, Int, Int, Int)) extends Info
+case object NoInfo extends Info
+
 sealed abstract class Proc extends SyntaxElement {
+
   def pstr(names: Map[Name, String]): String = this match {
     case Send       ( ch    , msg , p        ) =>
       s"send ${ch pstr names} : ${msg pstr names} . ${p pstr names}"
