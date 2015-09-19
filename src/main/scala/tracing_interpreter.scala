@@ -139,15 +139,15 @@ class TracingMachineState(
       }
       else this.withRun(runTail)
         .withWait(ch,
-          this.wait(ch) append Right(if (repl) Some(0) else None, bind, p))
+          this.wait(ch) append Right((None, bind, p)))
         .someOf
 
     case Left(Receive(false, chExp, bind, p)) :: runTail =>
       evalExp(chExp) match {
         case EEChan(ch) =>
-          this.withRun(Left(Receive(rep, ChanLiteral(ch), bind, p)) :: runTail)
+          this.withRun(Left(Receive(false, ChanLiteral(ch), bind, p)) :: runTail)
             .someOf
-        case _          => throw FreeVariableError(Receive(rep, chExp, bind, p))
+        case _          => throw FreeVariableError(Receive(false, chExp, bind, p))
       }
 
     case Right((copies, chExp, bind, p)) :: runTail => ???

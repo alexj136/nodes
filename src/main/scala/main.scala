@@ -5,6 +5,7 @@ import parser._
 import interpreter_common._
 import interpreter_common.Functions._
 import tracing_interpreter._
+import turner_interpreter._
 import java.io.File
 import java.io.FileInputStream
 
@@ -16,8 +17,8 @@ object Main extends App {
   val names: Map[Name, String] = revNames.map(_.swap)
   stream.close()
   var state: MachineState =
-    new TracingMachineState(proc.listify map {p => Left(p)}, names map
-      {case (id, str) => (id, EmptyQueue)}, names, nextName)
+    new /*Tracing*/TurnerMachineState(proc.listify /*map {p => Left(p)}*/, names map
+      {case (id, str) => (id, Nil/*EmptyQueue*/)}, names, nextName)
   var stepState: Option[MachineState] = state.step
   try {
     while (stepState != None) {
