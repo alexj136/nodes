@@ -1,0 +1,60 @@
+The proposed metalanguage for a JIT optimising pi implementation is a
+higher-order pi calculus where messages are restricted to first-order pi terms.
+We also add useful features like pattern matching to the higher order calculus,
+and a simple expression language to both calculi.
+
+The grammar of the metalanguage can be given as follows:
+
+M, N ::= match P { case M => Q case N => R }
+       | send x : E . M
+       | receive x : y . M
+       | server x : y . M
+       | M | N
+       | new x . M
+       | 0
+
+P, Q ::= send x : F . P
+       | receive x : y . P
+       | server x : y . P
+       | P | Q
+       | new x . P
+       | 0
+
+E ::= P | F
+
+F ::= (a simple expression language, with e.g. integers, booleans and tuples)
+
+Below is the definition of a simple forwarder-optimising abstract machine in the
+metalanguage:
+
+server run: P.
+    match P {
+        case new r. send b: {e,r'}. receive r'': y. send s: y'. Q
+            if y == y' && r == r' && r == r'' => send run: send b: {e,s}. P. 0
+        case 0               => 0
+        case Q | R           =>
+            send runQueuePrepend: Q. send runQueueAppend: R. 0
+        case receive x: y. Q => send handleReceiver: {x,y,Q}. 0
+        case send x: e. Q    => send handleSender: {x,e,Q}. 0
+        ...
+    }
+|
+server handleSender: {ch,msg,P}.
+    new r. send receiversWait: {ch,r}. receive r: willReact. match willReact {
+        case true => new r. send getNextReceiver: {ch,r}.
+            receive r: {bind,Q,isServer}.
+            send runQueuePrepend: P.
+            send runQueueAppend: Q[msg/bind].
+            match isServer {
+                case true  => send waitQueueAppendReceiver: {ch,bind,Q,true}. 0
+                case false => 0
+            }
+        case false => waitQueueAppendSender: {ch,msg,P}. 0
+    }
+|
+server handleReceiver: {ch,bind,P}.
+    new r. send sendersWait: {ch,r}. receive r: willReact. match willReact {
+        case true => new r. send getNextSender: {ch,r}. receive r: {msg,Q}.
+            send runQueuePrepend: P[msg/bind]. send runQueueAppend: Q. 0
+        case false => send waitQueueAppendReceiver: {ch,bind,P,false}. 0
+    }
