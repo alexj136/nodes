@@ -24,8 +24,8 @@ E ::= P | F
 
 F ::= (a simple expression language, with e.g. integers, booleans and tuples)
 
-Below is the definition of a simple forwarder-optimising abstract machine in the
-metalanguage:
+Below is the definition of a simple forwarder-optimising pi interpreter in the
+metalanguage, in turner-machine style:
 
 server run: P.
     match P {
@@ -85,4 +85,54 @@ server handleReceiver: {ch,bind,P,isServer}.
                     send runQueueAppend: Q. 0
             }
         case false => send waitQueueAppendReceiver: {ch,bind,P,isServer}. 0
+    }
+
+Below is a forwarder-optimising distributed pi interpreter in the metalanguage:
+
+server runPi: program.
+    match program {
+        case new r.
+            send b: { e , r' }.
+            receive r'': y.
+            send s: y'. Q
+                if y == y'
+                && r == r'
+                && r == r'' =>
+                    send runPi: (send b: {e,s}. P). 0
+        case 0 => 0
+        case P | Q =>
+            send runPi: P.
+            send runPi: Q. 0
+        case new x. P =>
+            new y.
+            new r.
+            send doSubstitute: { P , y , x }.
+            receive r: P'.
+            send runPi: P'. 0
+        case if E then P else Q =>
+            new r.
+            send runExp: { E, r }.
+            receive r: E'.
+            match E' {
+                case true  => send runPi: P. 0
+                case false => send runPi: Q. 0
+            }
+        case send c: e. P =>
+            new r.
+            send runExp: { e , r }.
+            receive r: e'.
+            send c: e'.
+            send runPi: P. 0
+        case receive c: x. P =>
+            receive c: y.
+            new r.
+            send doSubstitute: { P , y , x }.
+            receive r: P'.
+            send runPi: P'. 0
+        case server c: x. P =>
+            server c: x.
+            new r.
+            send doSubstitute: { P , y , x }.
+            receive r: P'.
+            send runPi: P'. 0
     }
