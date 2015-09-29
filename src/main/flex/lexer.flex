@@ -130,6 +130,7 @@ Comment = "//"[^\r\n]* {NewLine}?
     "endif"   { return symbol(sym.ENDIF);   }
     "send"    { return symbol(sym.SEND);    }
     "receive" { return symbol(sym.RECEIVE); }
+    "server"  { return symbol(sym.SERVER);  }
     "|"       { return symbol(sym.BAR);     }
     "end"     { return symbol(sym.END);     }
     "("       { return symbol(sym.LPAREN);  }

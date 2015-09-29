@@ -29,19 +29,33 @@ metalanguage:
 
 server run: P.
     match P {
-        case new r. send b: {e,r'}. receive r'': y. send s: y'. Q
-            if y == y' && r == r' && r == r'' => send run: send b: {e,s}. P. 0
-        case 0               => 0
-        case Q | R           =>
-            send runQueuePrepend: Q. send runQueueAppend: R. 0
-        case receive x: y. Q => send handleReceiver: {x,y,Q}. 0
-        case send x: e. Q    => send handleSender: {x,e,Q}. 0
+        case new r.
+            send b: {e,r'}.
+            receive r'': y.
+            send s: y'. Q
+                if y == y'
+                && r == r'
+                && r == r'' =>
+                    send run: (send b: {e,s}. P). 0
+        case 0 => 0
+        case Q | R =>
+            send runQueuePrepend: Q.
+            send runQueueAppend: R. 0
+        case receive x: y. Q =>
+            send handleReceiver: {x,y,Q}. 0
+        case send x: e. Q    =>
+            send handleSender: {x,e,Q}. 0
         ...
     }
 |
 server handleSender: {ch,msg,P}.
-    new r. send receiversWait: {ch,r}. receive r: willReact. match willReact {
-        case true => new r. send getNextReceiver: {ch,r}.
+    new r.
+    send receiversWait: {ch,r}.
+    receive r: willReact.
+    match willReact {
+        case true =>
+            new r.
+            send getNextReceiver: {ch,r}.
             receive r: {bind,Q,isServer}.
             send runQueuePrepend: P.
             send runQueueAppend: Q[msg/bind].
@@ -52,9 +66,23 @@ server handleSender: {ch,msg,P}.
         case false => waitQueueAppendSender: {ch,msg,P}. 0
     }
 |
-server handleReceiver: {ch,bind,P}.
-    new r. send sendersWait: {ch,r}. receive r: willReact. match willReact {
-        case true => new r. send getNextSender: {ch,r}. receive r: {msg,Q}.
-            send runQueuePrepend: P[msg/bind]. send runQueueAppend: Q. 0
-        case false => send waitQueueAppendReceiver: {ch,bind,P,false}. 0
+server handleReceiver: {ch,bind,P,isServer}.
+    new r.
+    send sendersWait: {ch,r}.
+    receive r: willReact.
+    match willReact {
+        case true =>
+            new r.
+            send getNextSender: {ch,r}.
+            receive r: {msg,Q}.
+            match isServer {
+                case true  => 
+                    send runQueuePrepend: (server ch: bind. P).
+                    send runQueueAppend: P[msg/bind].
+                    send runQueueAppend: Q. 0
+                case false =>
+                    send runQueuePrepend: P[msg/bind].
+                    send runQueueAppend: Q. 0
+            }
+        case false => send waitQueueAppendReceiver: {ch,bind,P,isServer}. 0
     }

@@ -1,4 +1,4 @@
-    ! receive $subten : n_rch .
+    server $subten : n_rch .
     let n   = <- n_rch .
     let rch = -> n_rch .
     send rch : n - 10 .
@@ -6,7 +6,7 @@
 
 |
 
-    ! receive $double_subten : n_rch .
+    server $double_subten : n_rch .
     let n   = <- n_rch .
     let rch = -> n_rch .
     new rch_d .
@@ -17,7 +17,7 @@
 
 |
 
-    ! receive $addone_double_subten : n_rch .
+    server $addone_double_subten : n_rch .
     let n   = <- n_rch .
     let rch = -> n_rch .
     new rch_d .
@@ -28,7 +28,7 @@
 
 |
 
-    ! receive $loop : x .
+    server $loop : x .
     if x < 1000000000 then
         send $print : { $looping_with , x } .
         new rch .

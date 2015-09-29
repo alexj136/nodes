@@ -38,6 +38,7 @@ parser code {:
 
 terminal            SEND    ,
                     RECEIVE ,
+                    SERVER  ,
                     BANG    ,
                     COLON   ,
                     DOT     ,
@@ -95,7 +96,7 @@ p ::= SEND e:ch COLON e:msg DOT p:proc
         {: RESULT = new Send(ch, msg, proc);                                :}
     | RECEIVE e:ch COLON IDENT:bind DOT p:proc
         {: RESULT = new Receive(false, ch, bind, proc);                     :}
-    | BANG RECEIVE e:ch COLON IDENT:bind DOT p:proc
+    | SERVER e:ch COLON IDENT:bind DOT p:proc
         {: RESULT = new Receive(true, ch, bind, proc);                      :}
     | LET IDENT:bind EQUAL e:value DOT p:proc
         {: RESULT = new LetIn(bind, value, proc);                           :}
