@@ -16,90 +16,143 @@ class TurnerMachineState(
   def withRun(newRun: List[Proc]): TurnerMachineState =
     new TurnerMachineState(newRun, this.wait, this.names, this.next)
 
+  def runPrepend(newProc: Proc): TurnerMachineState =
+    this.withRun(newProc :: this.run)
+
+  def runAppend(newProc: Proc): TurnerMachineState =
+    this.withRun(this.run :+ newProc)
+
   def withWait(ch: Name, onCh: List[Proc]): TurnerMachineState =
     new TurnerMachineState(
       this.run, this.wait.updated(ch, onCh), this.names, this.next)
 
+  def splitWait(ch: Name): (Option[Proc], TurnerMachineState) =
+    (this.wait(ch).headOption, this.withWait(ch, this.wait(ch) drop 1))
+
+  def waitPrepend(ch: Name, proc: Proc): TurnerMachineState =
+    this.withWait(ch, proc :: this.wait(ch))
+
+  def waitAppend(ch: Name, proc: Proc): TurnerMachineState =
+    this.withWait(ch, this.wait(ch) :+ proc)
+
   def withNext(newNext: Name): TurnerMachineState =
     new TurnerMachineState(this.run, this.wait, this.names, newNext)
+
+  def makeName: (Name, TurnerMachineState) =
+    (this.next.next, this.withNext(this.next.next))
 
   override def step: Option[MachineState] = this.run match {
     case Nil => None
 
-    case Send(ChanLiteral(ch), msg, p) :: runTail
-      if this.names.get(ch) == Some("$print") => {
-        println(evalExp(msg).unEvalExp pstr this.names)
-        this.withRun(p :: runTail).someOf
-      }
+    case Send(chExp, msg, p) :: runTail =>
+      this.withRun(runTail).handleSend(Send(chExp, msg, p))
 
-    case Send(ChanLiteral(ch), msg, p) :: runTail => this.wait(ch) match {
-
-      case Receive(repl, ChanLiteral(_), bind, q) :: moreRecs => {
-        val qSub: Proc = substituteProc(q, bind, evalExp(msg))
-        val waitTail: List[Proc] =
-          if (repl) List(Receive(true, ChanLiteral(ch), bind, q)) else Nil
-        this.withRun(p :: (runTail :+ qSub))
-            .withWait(ch, moreRecs ++ waitTail)
-            .someOf
-      }
-      case nilOrSends =>
-        this.withRun(runTail)
-            .withWait(ch, nilOrSends :+ Send(ChanLiteral(ch), msg, p))
-            .someOf
-    }
-
-    case Send(chExp, msg, p) :: runTail => evalExp(chExp) match {
-      case EEChan(ch) =>
-        this.withRun(Send(ChanLiteral(ch), msg, p) :: runTail).someOf
-      case _          => throw FreeVariableError(Send(chExp, msg, p))
-    }
-
-    case Receive(repl, ChanLiteral(ch), bind, p) :: runTail =>
-      this.wait(ch) match {
-
-        case Send(ChanLiteral(_), msg, q) :: moreSends => {
-          val pSub: Proc = substituteProc(p, bind, evalExp(msg))
-          val newRun: List[Proc] =
-            if (repl)
-              Receive(true, ChanLiteral(ch), bind, p) ::
-                (runTail :+ pSub :+ q)
-            else
-              pSub :: (runTail :+ q)
-          this.withRun(newRun)
-              .withWait(ch, moreSends)
-              .someOf
-        }
-        case nilOrReceives =>
-          this.withRun(runTail)
-              .withWait(ch,
-                nilOrReceives :+ Receive(repl, ChanLiteral(ch), bind, p))
-              .someOf
-      }
-
-    case Receive(repl, chExp, bind, p) :: runTail => evalExp(chExp) match {
-      case EEChan(ch) =>
-        this.withRun(Receive(repl, ChanLiteral(ch), bind, p) :: runTail).someOf
-      case _          => throw FreeVariableError(Receive(repl, chExp, bind, p))
-    }
+    case Receive(repl, chExp, bind, p) :: runTail =>
+      this.withRun(runTail).handleReceive(Receive(repl, chExp, bind, p))
 
     case LetIn(name, exp, p) :: runTail =>
-      this.withRun(substituteProc(p, name, evalExp(exp)) :: runTail).someOf
+      this.withRun(runTail).handleLetIn(LetIn(name, exp, p))
 
-    case IfThenElse(exp, tP, fP) :: runTail => evalExp(exp) match {
-      case EEBool(true) => this.withRun(tP :: runTail).someOf
-      case EEBool(false) => this.withRun(fP :: runTail).someOf
-      case _ => throw TypeError("if")
-    }
+    case IfThenElse(exp, tP, fP) :: runTail =>
+      this.withRun(runTail).handleIfThenElse(IfThenElse(exp, tP, fP))
 
     case Parallel(p, q) :: runTail =>
-      this.withRun(p :: (runTail :+ q)).someOf
+      this.withRun(runTail).handleParallel(Parallel(p, q))
 
-    case New(name, p) :: runTail => {
-      val nu: Name = this.next.next
-      val newP: Proc = substituteProc(p, name, EEChan(nu))
-      this.withWait(nu, Nil).withRun(newP :: runTail).withNext(nu).someOf
-    }
+    case New(name, p) :: runTail =>
+      this.withRun(runTail).handleNew(New(name, p))
 
     case End :: runTail => this.withRun(runTail).someOf
+  }
+
+  def handleSend(send: Send): Option[MachineState] = send match {
+    case Send(ChanLiteral(ch), msg, p)
+      if this.names.get(ch) == Some("$print") => {
+        println(evalExp(msg).unEvalExp pstr this.names)
+        this.runPrepend(p).someOf
+      }
+
+    case Send(ChanLiteral(ch), msg, p) =>
+      val (nextWait, thisWithoutNextWait): (Option[Proc], TurnerMachineState) =
+        this.splitWait(ch)
+      nextWait match {
+
+      case Some(Receive(repl, ChanLiteral(_), bind, q)) => {
+        val qSub: Proc = substituteProc(q, bind, evalExp(msg))
+        if (repl)
+          thisWithoutNextWait
+            .runPrepend(p)
+            .runAppend(qSub)
+            .waitAppend(ch, Receive(true, ChanLiteral(ch), bind, q))
+            .someOf
+        else
+          thisWithoutNextWait
+            .runPrepend(p)
+            .runAppend(qSub)
+            .someOf
+      }
+      case _ => this.waitAppend(ch, send).someOf
+    }
+
+    case Send(chExp, msg, p) => evalExp(chExp) match {
+      case EEChan(ch) => this.runPrepend(Send(ChanLiteral(ch), msg, p)).someOf
+      case _          => throw FreeVariableError(send)
+    }
+  }
+
+  def handleReceive(receive: Receive): Option[MachineState] = receive match {
+    case Receive(repl, ChanLiteral(ch), bind, p) =>
+      val (nextWait, thisWithoutNextWait): (Option[Proc], TurnerMachineState) =
+        this.splitWait(ch)
+      nextWait match {
+
+        case Some(Send(ChanLiteral(_), msg, q)) => {
+          val pSub: Proc = substituteProc(p, bind, evalExp(msg))
+          if (repl)
+            thisWithoutNextWait
+              .runPrepend(receive)
+              .runAppend(pSub)
+              .runAppend(q)
+              .someOf
+          else
+            thisWithoutNextWait
+              .runPrepend(pSub)
+              .runAppend(q)
+              .someOf
+        }
+        case _ => this.waitAppend(ch, receive).someOf
+      }
+
+    case Receive(repl, chExp, bind, p) => evalExp(chExp) match {
+      case EEChan(ch) =>
+        this.runPrepend(Receive(repl, ChanLiteral(ch), bind, p)).someOf
+      case _          => throw FreeVariableError(receive)
+    }
+  }
+
+  def handleLetIn(letIn: LetIn): Option[MachineState] = letIn match {
+    case LetIn(name, exp, p) =>
+      this.runPrepend(substituteProc(p, name, evalExp(exp))).someOf
+  }
+
+  def handleIfThenElse(iTE: IfThenElse): Option[MachineState] = iTE match {
+    case IfThenElse(exp, tP, fP) => evalExp(exp) match {
+      case EEBool(bool)  => this.runPrepend(if (bool) tP else fP).someOf
+      case _             => throw TypeError("if")
+    }
+  }
+
+  def handleParallel(par: Parallel): Option[MachineState] = par match {
+    case Parallel(p, q) => this.runPrepend(p).runAppend(q).someOf
+  }
+
+  def handleNew(nu: New): Option[MachineState] = nu match {
+    case New(name, p) => {
+      val (nuV, thisWithNewName): (Name, TurnerMachineState) = this.makeName
+      thisWithNewName
+        .withWait(nuV, Nil)
+        .runPrepend(substituteProc(p, name, EEChan(nuV)))
+        .someOf
+    }
   }
 }

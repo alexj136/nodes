@@ -19,7 +19,7 @@ sealed abstract class Proc extends SyntaxElement {
     case Send       ( ch    , msg , p        ) =>
       s"send ${ch pstr names} : ${msg pstr names} . ${p pstr names}"
     case Receive    ( true  , ch  , bind , p ) =>
-      s"! receive ${ch pstr names} : ${names(bind)} . ${p pstr names}"
+      s"server ${ch pstr names} : ${names(bind)} . ${p pstr names}"
     case Receive    ( false , ch  , bind , p ) =>
       s"receive ${ch pstr names} : ${names(bind)} . ${p pstr names}"
     case LetIn      ( bind  , exp , p        ) =>
