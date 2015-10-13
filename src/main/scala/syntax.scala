@@ -3,6 +3,7 @@ package syntax
 sealed trait SyntaxElement {
   var info: Info = NoInfo
   def pstr(names: Map[Name, String]): String
+  def free: Set[Name]
 }
 
 class Name(val id: Int) {
@@ -33,10 +34,21 @@ sealed abstract class Proc extends SyntaxElement {
     case End                                   => "end"
   }
 
+  def free: Set[Name] = this match {
+    case Send       ( e , m , p     ) => e.free union m.free union p.free
+    case Receive    ( _ , e , n , p ) => e.free union (p.free - n)
+    case LetIn      ( n , e , p     ) => e.free union (p.free - n)
+    case IfThenElse ( e , p , q     ) => e.free union p.free union q.free
+    case Parallel   ( p , q         ) => p.free union q.free
+    case New        ( n , p         ) => p.free - n
+    case End                          => Set.empty
+  }
+
   /** Decompose top-level parallel compositions into a list of processes.
    */
   def listify: List[Proc] = this match {
     case Parallel ( p , q ) => p.listify ++ q.listify
+    case End                => Nil
     case _                  => List(this)
   }
 
@@ -88,7 +100,26 @@ case class  New       ( name: Name    , p:   Proc                        )
 case object End
   extends Proc
 
+object Proc {
+  def fromList(ps: List[Proc]): Proc = ps match {
+    case      Nil => End
+    case p :: Nil => p
+    case p :: qs  => Parallel(p, fromList(qs))
+  }
+}
+
 sealed abstract class Exp extends SyntaxElement {
+
+  def free: Set[Name] = this match {
+    case Variable    ( n         ) => Set(n)
+    case IntLiteral  ( _         ) => Set.empty
+    case BoolLiteral ( _         ) => Set.empty
+    case ChanLiteral ( _         ) => Set.empty
+    case Pair        ( l , r     ) => l.free union r.free
+    case UnExp       ( _ , e     ) => e.free
+    case BinExp      ( _ , l , r ) => l.free union r.free
+  }
+
   def pstr(names: Map[Name, String]): String = this match {
     case Variable    ( name          ) =>
       names getOrElse (name, s"$$<new ${{name.id}}>")

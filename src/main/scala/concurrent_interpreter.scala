@@ -96,6 +96,7 @@ abstract class AbstractImplActor(val procManager: ActorRef) extends Actor {
 // Runs a process
 class ProcRunner(
   var chanMap: Map[Name, ActorRef],
+  var varMap: Map[Name, EvalExp],
   var proc: Proc,
   procManager: ActorRef) extends AbstractImplActor(procManager) {
 
@@ -104,7 +105,9 @@ class ProcRunner(
   def receive = ({
     case ProcGo => this.proc match {
       case Send(chExp, msg, p) => {
-        this.chanMap(chExp) ! MsgSenderToChan(this.chanMap(msg))
+        val evalChExp: EvalExp = evalExp(chExp)
+        val evalMsg: EvalExp = evalExp(msg)
+        this.chanMap(evalChExp.channelName) ! MsgSenderToChan(evalMsg)
         this.proc = p
         context.become(({ case MsgConfirmToSender => {
           context.unbecome()
@@ -112,13 +115,14 @@ class ProcRunner(
         }}: Receive) orElse forceReportStop)
       }
       case Receive(repl, chExp, bind, p) => {
-        this.chanMap(chExp) ! MsgRequestFromReceiver
+        val evalChExp: EvalExp = evalExp(chExp)
+        this.chanMap(evalChExp.channelName) ! MsgRequestFromReceiver
         if(repl) {
           this.procManager ! MakeRunner(this.chanMap, this.proc)
         }
         this.proc = p
-        context.become(({ case MsgChanToReceiver(channel) => {
-          this.chanMap = this.chanMap.updated(bind, channel)
+        context.become(({ case MsgChanToReceiver(evalMsg) => {
+          this.varMap = this.varMap.updated(bind, evalMsg)
           context.unbecome()
           self ! ProcGo
         }}: Receive) orElse forceReportStop)
@@ -147,9 +151,9 @@ class ProcRunner(
 // Implements the behaviour of channels in pi calculus
 class Channel(procManager: ActorRef) extends AbstractImplActor(procManager) {
 
-  def deliver(sndr: ActorRef, rcvr: ActorRef, msg: ActorRef): Unit = {
+  def deliver(sndr: ActorRef, rcvr: ActorRef, evalMsg: EvalExp): Unit = {
         procManager ! SendOccurred
-        rcvr ! MsgChanToReceiver(msg)
+        rcvr ! MsgChanToReceiver(evalMsg)
         sndr ! MsgConfirmToSender
   }
 
@@ -157,18 +161,18 @@ class Channel(procManager: ActorRef) extends AbstractImplActor(procManager) {
     // If the receiver request comes before the sender delivery
     case MsgRequestFromReceiver => {
       val msgReceiver: ActorRef = sender
-      context.become(({ case MsgSenderToChan(msg) => {
+      context.become(({ case MsgSenderToChan(evalMsg) => {
         val msgSender: ActorRef = sender
-        this.deliver(msgSender, msgReceiver, msg)
+        this.deliver(msgSender, msgReceiver, evalMsg)
         context.unbecome()
       }}: Receive) orElse forceReportStop)
     }
     // If the sender delivery comes before the receiver request
-    case MsgSenderToChan(msg) => {
+    case MsgSenderToChan(evalMsg) => {
       val msgSender: ActorRef = sender
       context.become(({ case MsgRequestFromReceiver => {
         val msgReceiver: ActorRef = sender
-        this.deliver(msgSender, msgReceiver, msg)
+        this.deliver(msgSender, msgReceiver, evalMsg)
         context.unbecome()
       }}: Receive) orElse forceReportStop)
     }
@@ -182,7 +186,7 @@ sealed abstract class ImplMessage
 sealed abstract class ChanQuery extends ImplMessage
 
 // Precursor to a MsgConfirmToSender ChanQueryResponse
-case class  MsgSenderToChan(channel: ActorRef) extends ChanQuery
+case class  MsgSenderToChan(msg: EvalExp) extends ChanQuery
 
 // Precursor to a MsgChanToReceiver ChanQueryResponse
 case object MsgRequestFromReceiver             extends ChanQuery
@@ -194,7 +198,7 @@ sealed abstract class ChanQueryResponse extends ImplMessage
 case object MsgConfirmToSender                   extends ChanQueryResponse
 
 // Complements a MsgRequestFromReceiver ChanQuery
-case class  MsgChanToReceiver(channel: ActorRef) extends ChanQueryResponse
+case class  MsgChanToReceiver(msg: EvalExp) extends ChanQueryResponse
 
 // Used to tell the procManager to create a new process or channel
 sealed abstract class CreationRequest extends ImplMessage

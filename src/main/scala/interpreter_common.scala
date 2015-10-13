@@ -21,6 +21,7 @@ sealed abstract class EvalExp {
     case EEChan (name   ) => name
     case EEPair ( _ , _ ) => throw TypeError("pair")
   }
+  def isEEChan: Boolean = this match { case EEChan(_) => true; case _ => false }
 }
 case class EEInt  ( value: Int                    ) extends EvalExp
 case class EEBool ( value: Boolean                ) extends EvalExp
