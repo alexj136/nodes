@@ -32,3 +32,5 @@ object Main extends App {
       println(s"Unbound variable error: '${s pstr names}'")
   }
 }
+
+class Args(val useConcurrency: Boolean = true, val inputFileName: String)

@@ -1,5 +1,13 @@
 name := "nodes"
 
+scalaVersion := "2.10.4"
+
+resolvers += "Typesafe Repository" at "http://repo.typesafe.com/typesafe/releases/"
+
+libraryDependencies += "com.typesafe.akka" % "akka-actor_2.10" % "2.3.9"
+
+scalacOptions ++= Seq("-feature", "-deprecation", "unchecked")
+
 sourceGenerators in Compile <+= sourceManaged in Compile map { dir =>
   val lexerFile = dir / "Lexer.java"
   scala.sys.process.Process(
