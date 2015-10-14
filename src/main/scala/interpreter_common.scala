@@ -21,6 +21,12 @@ sealed abstract class EvalExp {
     case EEChan (name   ) => name
     case EEPair ( _ , _ ) => throw TypeError("pair")
   }
+  def channelNames: Set[Name] = this match {
+    case EEInt  (value  ) => Set.empty
+    case EEBool (value  ) => Set.empty
+    case EEChan (name   ) => Set(name)
+    case EEPair ( l , r ) => l.channelNames union r.channelNames
+  }
   def isEEChan: Boolean = this match { case EEChan(_) => true; case _ => false }
 }
 case class EEInt  ( value: Int                    ) extends EvalExp

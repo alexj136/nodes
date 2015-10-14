@@ -6,8 +6,20 @@ import interpreter_common._
 import interpreter_common.Functions._
 import tracing_interpreter._
 import turner_interpreter._
+import concurrent_interpreter._
 import java.io.File
 import java.io.FileInputStream
+
+object MainConcurrent extends App {
+  val file: File = new File(args(0))
+  var stream: FileInputStream = new FileInputStream(file)
+  val (proc, revNames, nextName): (Proc, Map[String, Name], Name) =
+    Parser.parseStream(stream)
+  val printName = revNames("$print")
+  val names: Map[Name, String] = revNames.map(_.swap)
+  stream.close()
+  new Launcher(proc, printName, nextName, names, { case _ => {} })
+}
 
 object Main extends App {
   val file: File = new File(args(0))

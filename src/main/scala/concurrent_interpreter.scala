@@ -9,38 +9,78 @@ import syntax._
 import interpreter_common._
 import interpreter_common.Functions._
 
-class Launcher(p: Proc, onCompletion: Function1[Proc, Unit]) {
+/**
+ * This module gives an interpreted concurrent implementation of the nodes
+ * language using the akka library. There are 4 major classes used in this
+ * implementation. These are:
+ *    - Launcher: responsible for initiating the interpreter and interfacing
+ *      with the outside. One instance per invocation.
+ *    - ProcManager: a one-per-invocation actor that manages and keeps track of
+ *      all other actors in the system. Creates new ProcRunners and Channels
+ *      when required, when requested to do so by a ProcRunner, either because
+ *      a new channel has been created, or because a fork (parallel composition
+ *      under an input or output) has been executed.
+ *    - ProcRunner: One per source-level process. Responsible for 'executing'
+ *      the process it contains, communicating with other ProcRunners via
+ *      Channels to exchange messages. A ProcRunner keeps a mapping between
+ *      ChanLiteral Names and the ActorRefs that represent those channels at
+ *      runtime. Every time a ProcRunner sends a message, it must also send any
+ *      mappings required for any ChanLiterals present in the sent message.
+ *    - Channel: Represents a pi calculus channel. At the implementation level,
+ *      it is a sort of latch - it waits for a sender and a receiver to tell it
+ *      that they each want to send and receive a message respectively, on this
+ *      channel. When this occurs, the messgage (and required channel mappings)
+ *      are taken from the sender and given to the receiver.
+ */
+
+class Launcher(
+    p: Proc,
+    printName: Name,
+    nextName: Name,
+    names: Map[Name, String],
+    onCompletion: Function1[Proc, Unit]) {
+
+  var result: Option[Proc] = None
 
   val (system: ActorSystem, procManager: ActorRef) = {
 
     val sys: ActorSystem = ActorSystem("Launcher")
+
     sys.registerOnTermination(new Runnable {
       def run: Unit = onCompletion(result.get)
     })
+
     val procManager: ActorRef =
-      sys.actorOf(Props(classOf[ProcManager], this), "ProcManager")
-    val initChanMap: Map[Name, ActorRef] = (p.free map { case n =>
-      (n, sys.actorOf(Props(classOf[Channel], procManager),
-        s"ChannelI${n.id}")) }).toMap
+      sys.actorOf(Props(classOf[ProcManager], this, nextName), "ProcManager")
+
+    val initChanMap: Map[Name, ActorRef] = (p.chanLiterals map {
+
+      case n if (n == printName) => (n, sys.actorOf(
+        Props(classOf[PrintingChannel], names, procManager), s"LIT$$print"))
+
+      case n if (n != printName) => (n, sys.actorOf(
+        Props(classOf[Channel], procManager), s"LIT${names(n)}"))
+
+    }).toMap
+
     procManager ! SetLiveActors(initChanMap.values.toSet)
+
     procManager ! MakeRunner(initChanMap, p)
+
     sys.scheduler.schedule(3.seconds, 3.seconds, procManager,
       CheckFinished)(sys.dispatcher)
 
     (sys, procManager)
   }
-
-  var result: Option[Proc] = None
 }
 
 // Serves as parent actor for other actors. Keeps track of channels and runners.
 // Can be queried for deadlock detection.
-class ProcManager(launcher: Launcher) extends Actor {
+class ProcManager(launcher: Launcher, var nextName: Name) extends Actor {
 
   var liveActors: Set[ActorRef] = Set.empty
   var result: List[Proc] = Nil
   var sendSinceTimerReset: Boolean = false
-  var reportTo: Option[ActorRef] = None
 
   def receive: Receive = setLiveActors
 
@@ -48,7 +88,6 @@ class ProcManager(launcher: Launcher) extends Actor {
     case SetLiveActors(set) => {
       this.liveActors = set
       context.become(mainReceive)
-      this.reportTo = Some(sender)
     }
   }
 
@@ -68,16 +107,18 @@ class ProcManager(launcher: Launcher) extends Actor {
       }
     }
     case MakeChannel => {
+      this.nextName = this.nextName.next
       val newChannel: ActorRef = context.actorOf(Props(classOf[Channel],
-        self), s"Channel${this.liveActors.size}")
-      sender ! MakeChannelResponse(newChannel)
+        self), s"NEW${this.nextName.id}")
       this.liveActors = this.liveActors + newChannel
+      sender ! MakeChannelResponse(this.nextName, newChannel)
     }
     case MakeRunner(chanMap, p) => {
+      this.nextName = this.nextName.next
       val newRunner: ActorRef = context.actorOf(Props(classOf[ProcRunner],
-        chanMap, p, self), s"ProcRunner${this.liveActors.size}")
-      newRunner ! ProcGo
+        chanMap, p, self), s"ProcRunner${this.nextName.id}")
       this.liveActors = this.liveActors + newRunner
+      newRunner ! ProcGo
     }
   }
 }
@@ -95,10 +136,10 @@ abstract class AbstractImplActor(val procManager: ActorRef) extends Actor {
 
 // Runs a process
 class ProcRunner(
-  var chanMap: Map[Name, ActorRef],
-  var varMap: Map[Name, EvalExp],
-  var proc: Proc,
-  procManager: ActorRef) extends AbstractImplActor(procManager) {
+    var chanMap: Map[Name, ActorRef],
+    var proc: Proc,
+    procManager: ActorRef)
+  extends AbstractImplActor(procManager) {
 
   override def reportValue: Option[Proc] = Some(this.proc)
 
@@ -107,9 +148,10 @@ class ProcRunner(
       case Send(chExp, msg, p) => {
         val evalChExp: EvalExp = evalExp(chExp)
         val evalMsg: EvalExp = evalExp(msg)
-        this.chanMap(evalChExp.channelName) ! MsgSenderToChan(evalMsg)
-        this.proc = p
+        this.chanMap(evalChExp.channelName) ! MsgSenderToChan(evalMsg,
+          this.chanMap.filterKeys(evalMsg.channelNames.contains(_)))
         context.become(({ case MsgConfirmToSender => {
+          this.proc = p
           context.unbecome()
           self ! ProcGo
         }}: Receive) orElse forceReportStop)
@@ -117,18 +159,26 @@ class ProcRunner(
       case Receive(repl, chExp, bind, p) => {
         val evalChExp: EvalExp = evalExp(chExp)
         this.chanMap(evalChExp.channelName) ! MsgRequestFromReceiver
-        if(repl) {
-          this.procManager ! MakeRunner(this.chanMap, this.proc)
-        }
-        this.proc = p
-        context.become(({ case MsgChanToReceiver(evalMsg) => {
-          this.varMap = this.varMap.updated(bind, evalMsg)
+        context.become(({ case MsgChanToReceiver(evalMsg, newMappings) => {
+          if(repl) { this.procManager ! MakeRunner(this.chanMap, this.proc) }
+          this.proc = substituteProc(p, bind, evalMsg)
+          this.chanMap = this.chanMap ++ newMappings
           context.unbecome()
           self ! ProcGo
         }}: Receive) orElse forceReportStop)
       }
-      case LetIn(bind, exp, p) => ???
-      case IfThenElse(exp, p, q) => ???
+      case LetIn(bind, exp, p) => {
+        this.proc = substituteProc(p, bind, evalExp(exp))
+        self ! ProcGo
+      }
+      case IfThenElse(exp, p, q) => {
+        evalExp(exp) match {
+          case EEBool(true ) => this.proc = p
+          case EEBool(false) => this.proc = q
+          case _ => ???
+        }
+        self ! ProcGo
+      }
       case Parallel(p, q) => {
         this.procManager ! MakeRunner(this.chanMap, q)
         this.proc = p
@@ -136,14 +186,14 @@ class ProcRunner(
       }
       case New(name, p) => {
         this.procManager ! MakeChannel
-        context.become(({ case MakeChannelResponse(channel) => {
-          this.chanMap = this.chanMap.updated(name, channel)
-          this.proc = p
+        context.become(({ case MakeChannelResponse(id, channel) => {
+          this.chanMap = this.chanMap.updated(id, channel)
+          this.proc = substituteProc(p, name, EEChan(id))
           context.unbecome()
           self ! ProcGo
         }}: Receive) orElse forceReportStop)
       }
-      case End             => this.procManager ! ReportStop(None)
+      case End => this.procManager ! ReportStop(None)
     }
   }: Receive) orElse forceReportStop
 }
@@ -151,32 +201,52 @@ class ProcRunner(
 // Implements the behaviour of channels in pi calculus
 class Channel(procManager: ActorRef) extends AbstractImplActor(procManager) {
 
-  def deliver(sndr: ActorRef, rcvr: ActorRef, evalMsg: EvalExp): Unit = {
-        procManager ! SendOccurred
-        rcvr ! MsgChanToReceiver(evalMsg)
-        sndr ! MsgConfirmToSender
+  def deliver(
+      sndr: ActorRef,
+      rcvr: ActorRef,
+      evalMsg: EvalExp,
+      newMappings: Map[Name, ActorRef])
+    : Unit = {
+
+    procManager ! SendOccurred
+    rcvr ! MsgChanToReceiver(evalMsg, newMappings)
+    sndr ! MsgConfirmToSender
   }
 
   def receive = ({
     // If the receiver request comes before the sender delivery
     case MsgRequestFromReceiver => {
       val msgReceiver: ActorRef = sender
-      context.become(({ case MsgSenderToChan(evalMsg) => {
+      context.become(({ case MsgSenderToChan(evalMsg, newMappings) => {
         val msgSender: ActorRef = sender
-        this.deliver(msgSender, msgReceiver, evalMsg)
+        this.deliver(msgSender, msgReceiver, evalMsg, newMappings)
         context.unbecome()
       }}: Receive) orElse forceReportStop)
     }
     // If the sender delivery comes before the receiver request
-    case MsgSenderToChan(evalMsg) => {
+    case MsgSenderToChan(evalMsg, newMappings) => {
       val msgSender: ActorRef = sender
       context.become(({ case MsgRequestFromReceiver => {
         val msgReceiver: ActorRef = sender
-        this.deliver(msgSender, msgReceiver, evalMsg)
+        this.deliver(msgSender, msgReceiver, evalMsg, newMappings)
         context.unbecome()
       }}: Receive) orElse forceReportStop)
     }
   }: Receive) orElse forceReportStop
+}
+
+class PrintingChannel(
+    names: Map[Name, String],
+    procManager: ActorRef)
+  extends AbstractImplActor(procManager) {
+
+  def receive: Receive = {
+    case MsgSenderToChan(evalMsg, _) => {
+      procManager ! SendOccurred
+      println(evalMsg.unEvalExp pstr this.names)
+      sender ! MsgConfirmToSender
+    }
+  }
 }
 
 // Top class for messages sent in this implementation
@@ -186,7 +256,10 @@ sealed abstract class ImplMessage
 sealed abstract class ChanQuery extends ImplMessage
 
 // Precursor to a MsgConfirmToSender ChanQueryResponse
-case class  MsgSenderToChan(msg: EvalExp) extends ChanQuery
+case class  MsgSenderToChan(
+    msg: EvalExp,
+    chans: Map[Name, ActorRef])
+  extends ChanQuery
 
 // Precursor to a MsgChanToReceiver ChanQueryResponse
 case object MsgRequestFromReceiver             extends ChanQuery
@@ -198,7 +271,10 @@ sealed abstract class ChanQueryResponse extends ImplMessage
 case object MsgConfirmToSender                   extends ChanQueryResponse
 
 // Complements a MsgRequestFromReceiver ChanQuery
-case class  MsgChanToReceiver(msg: EvalExp) extends ChanQueryResponse
+case class  MsgChanToReceiver(
+    msg: EvalExp,
+    chans: Map[Name, ActorRef])
+  extends ChanQueryResponse
 
 // Used to tell the procManager to create a new process or channel
 sealed abstract class CreationRequest extends ImplMessage
@@ -207,11 +283,16 @@ sealed abstract class CreationRequest extends ImplMessage
 case object MakeChannel extends CreationRequest
 
 // Requests a new process
-case class  MakeRunner(chanMap: Map[Name, ActorRef], p: Proc)
+case class  MakeRunner(
+    chanMap: Map[Name, ActorRef],
+    p: Proc)
   extends CreationRequest
 
 // Signals that a channel has been created to a process that requested a new one
-case class MakeChannelResponse(channel: ActorRef) extends ImplMessage
+case class MakeChannelResponse(
+    chanLiteralID: Name,
+    channel: ActorRef)
+  extends ImplMessage
 
 // Signalling object sent to ProcRunners to tell them to do a computation step
 case object ProcGo extends ImplMessage

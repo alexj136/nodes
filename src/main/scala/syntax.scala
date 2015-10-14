@@ -34,6 +34,18 @@ sealed abstract class Proc extends SyntaxElement {
     case End                                   => "end"
   }
 
+  def chanLiterals: Set[Name] = this match {
+    case Send       ( e , m , p     ) =>
+      e.chanLiterals union m.chanLiterals union p.chanLiterals
+    case IfThenElse ( e , p , q     ) =>
+      e.chanLiterals union p.chanLiterals union q.chanLiterals
+    case Receive    ( _ , e , _ , p ) => e.chanLiterals union p.chanLiterals
+    case LetIn      ( _ , e , p     ) => e.chanLiterals union p.chanLiterals
+    case Parallel   ( p , q         ) => p.chanLiterals union q.chanLiterals
+    case New        ( n , p         ) => p.chanLiterals
+    case End                          => Set.empty
+  }
+
   def free: Set[Name] = this match {
     case Send       ( e , m , p     ) => e.free union m.free union p.free
     case Receive    ( _ , e , n , p ) => e.free union (p.free - n)
@@ -109,6 +121,16 @@ object Proc {
 }
 
 sealed abstract class Exp extends SyntaxElement {
+
+  def chanLiterals: Set[Name] = this match {
+    case Variable    ( _         ) => Set.empty
+    case IntLiteral  ( _         ) => Set.empty
+    case BoolLiteral ( _         ) => Set.empty
+    case ChanLiteral ( n         ) => Set(n)
+    case Pair        ( l , r     ) => l.chanLiterals union r.chanLiterals
+    case UnExp       ( _ , e     ) => e.free
+    case BinExp      ( _ , l , r ) => l.chanLiterals union r.chanLiterals
+  }
 
   def free: Set[Name] = this match {
     case Variable    ( n         ) => Set(n)
