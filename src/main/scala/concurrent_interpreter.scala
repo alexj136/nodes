@@ -143,56 +143,80 @@ class ProcRunner(
 
   override def reportValue: Option[Proc] = Some(this.proc)
 
+  def handleSend(chExp: Exp, msg: Exp, p: Proc): Unit = {
+    val evalChExp: EvalExp = evalExp(chExp)
+    val evalMsg: EvalExp = evalExp(msg)
+    this.chanMap(evalChExp.channelName) ! MsgSenderToChan(evalMsg,
+      this.chanMap.filterKeys(evalMsg.channelNames.contains(_)))
+    context.become(({ case MsgConfirmToSender => {
+      this.proc = p
+      context.unbecome()
+      self ! ProcGo
+    }}: Receive) orElse forceReportStop)
+  }
+
+  def handleReceive(repl: Boolean, chExp: Exp, bind: Name, p: Proc): Unit = {
+    val evalChExp: EvalExp = evalExp(chExp)
+    this.chanMap(evalChExp.channelName) ! MsgRequestFromReceiver
+    context.become(({ case MsgChanToReceiver(evalMsg, newMappings) => {
+      val newProc: Proc = substituteProc(p, bind, evalMsg)
+      val newChanMap: Map[Name, ActorRef] = this.chanMap ++ newMappings
+      if(repl) {
+        this.procManager ! MakeRunner(newChanMap, newProc)
+      }
+      else {
+        this.proc = newProc
+        this.chanMap = newChanMap
+      }
+      context.unbecome()
+      self ! ProcGo
+    }}: Receive) orElse forceReportStop)
+  }
+
+  def handleLetIn(bind: Name, exp: Exp, p: Proc): Unit = {
+    this.proc = substituteProc(p, bind, evalExp(exp))
+    self ! ProcGo
+  }
+
+  def handleIfThenElse(exp: Exp, p: Proc, q: Proc): Unit = {
+    evalExp(exp) match {
+      case EEBool(true ) => this.proc = p
+      case EEBool(false) => this.proc = q
+      case _ => ???
+    }
+    self ! ProcGo
+  }
+
+  def handleParallel(p: Proc, q: Proc): Unit = {
+    this.procManager ! MakeRunner(this.chanMap, q)
+    this.proc = p
+    self ! ProcGo
+  }
+
+  def handleNew(name: Name, p: Proc): Unit = {
+    this.procManager ! MakeChannel
+    context.become(({ case MakeChannelResponse(id, channel) => {
+      this.chanMap = this.chanMap.updated(id, channel)
+      this.proc = substituteProc(p, name, EEChan(id))
+      context.unbecome()
+      self ! ProcGo
+    }}: Receive) orElse forceReportStop)
+  }
+
   def receive = ({
     case ProcGo => this.proc match {
-      case Send(chExp, msg, p) => {
-        val evalChExp: EvalExp = evalExp(chExp)
-        val evalMsg: EvalExp = evalExp(msg)
-        this.chanMap(evalChExp.channelName) ! MsgSenderToChan(evalMsg,
-          this.chanMap.filterKeys(evalMsg.channelNames.contains(_)))
-        context.become(({ case MsgConfirmToSender => {
-          this.proc = p
-          context.unbecome()
-          self ! ProcGo
-        }}: Receive) orElse forceReportStop)
-      }
-      case Receive(repl, chExp, bind, p) => {
-        val evalChExp: EvalExp = evalExp(chExp)
-        this.chanMap(evalChExp.channelName) ! MsgRequestFromReceiver
-        context.become(({ case MsgChanToReceiver(evalMsg, newMappings) => {
-          if(repl) { this.procManager ! MakeRunner(this.chanMap, this.proc) }
-          this.proc = substituteProc(p, bind, evalMsg)
-          this.chanMap = this.chanMap ++ newMappings
-          context.unbecome()
-          self ! ProcGo
-        }}: Receive) orElse forceReportStop)
-      }
-      case LetIn(bind, exp, p) => {
-        this.proc = substituteProc(p, bind, evalExp(exp))
-        self ! ProcGo
-      }
-      case IfThenElse(exp, p, q) => {
-        evalExp(exp) match {
-          case EEBool(true ) => this.proc = p
-          case EEBool(false) => this.proc = q
-          case _ => ???
-        }
-        self ! ProcGo
-      }
-      case Parallel(p, q) => {
-        this.procManager ! MakeRunner(this.chanMap, q)
-        this.proc = p
-        self ! ProcGo
-      }
-      case New(name, p) => {
-        this.procManager ! MakeChannel
-        context.become(({ case MakeChannelResponse(id, channel) => {
-          this.chanMap = this.chanMap.updated(id, channel)
-          this.proc = substituteProc(p, name, EEChan(id))
-          context.unbecome()
-          self ! ProcGo
-        }}: Receive) orElse forceReportStop)
-      }
+      case Send       ( chExp , msg   , p        ) =>
+     handleSend       ( chExp , msg   , p        )
+      case Receive    ( repl  , chExp , bind , p ) =>
+     handleReceive    ( repl  , chExp , bind , p )
+      case LetIn      ( bind  , exp   , p        ) =>
+     handleLetIn      ( bind  , exp   , p        )
+      case IfThenElse ( exp   , p     , q        ) =>
+     handleIfThenElse ( exp   , p     , q        )
+      case Parallel   ( p     , q                ) =>
+     handleParallel   ( p     , q                )
+      case New        ( name  , p                ) =>
+     handleNew        ( name  , p                )
       case End => this.procManager ! ReportStop(None)
     }
   }: Receive) orElse forceReportStop
