@@ -38,7 +38,8 @@ class Launcher(
     printName: Name,
     nextName: Name,
     names: Map[Name, String],
-    onCompletion: Function1[Proc, Unit]) {
+    onCompletion: Function1[Proc, Unit],
+    procManagerClass: Class[_ <: ProcManager] = classOf[ProcManager]) {
 
   var result: Option[Proc] = None
 
@@ -51,7 +52,7 @@ class Launcher(
     })
 
     val procManager: ActorRef =
-      sys.actorOf(Props(classOf[ProcManager], this, nextName), "ProcManager")
+      sys.actorOf(Props(procManagerClass, this, nextName), "ProcManager")
 
     val initChanMap: Map[Name, ActorRef] = (p.chanLiterals map {
 
@@ -84,6 +85,22 @@ class ProcManager(launcher: Launcher, var nextName: Name) extends Actor {
 
   def receive: Receive = setLiveActors
 
+  def makeChannel: (Name, ActorRef) = {
+    this.nextName = this.nextName.next
+    val newChannel: ActorRef = context.actorOf(Props(classOf[Channel],
+      self), s"NEW${this.nextName.id}")
+    this.liveActors = this.liveActors + newChannel
+    (this.nextName, newChannel)
+  }
+
+  def makeRunner(chanMap: Map[Name, ActorRef], p: Proc): Unit = {
+    this.nextName = this.nextName.next
+    val newRunner: ActorRef = context.actorOf(Props(classOf[ProcRunner],
+      chanMap, p, self), s"ProcRunner${this.nextName.id}")
+    this.liveActors = this.liveActors + newRunner
+    newRunner ! ProcGo
+  }
+
   def setLiveActors: Receive = {
     case SetLiveActors(set) => {
       this.liveActors = set
@@ -107,19 +124,10 @@ class ProcManager(launcher: Launcher, var nextName: Name) extends Actor {
       }
     }
     case MakeChannel => {
-      this.nextName = this.nextName.next
-      val newChannel: ActorRef = context.actorOf(Props(classOf[Channel],
-        self), s"NEW${this.nextName.id}")
-      this.liveActors = this.liveActors + newChannel
-      sender ! MakeChannelResponse(this.nextName, newChannel)
+      val (name, chan): (Name, ActorRef) = this.makeChannel
+      sender ! MakeChannelResponse(name, chan)
     }
-    case MakeRunner(chanMap, p) => {
-      this.nextName = this.nextName.next
-      val newRunner: ActorRef = context.actorOf(Props(classOf[ProcRunner],
-        chanMap, p, self), s"ProcRunner${this.nextName.id}")
-      this.liveActors = this.liveActors + newRunner
-      newRunner ! ProcGo
-    }
+    case MakeRunner(chanMap, p) => this.makeRunner(chanMap, p)
   }
 }
 
