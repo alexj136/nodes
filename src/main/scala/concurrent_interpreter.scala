@@ -78,7 +78,7 @@ class Launcher(
 // Serves as parent actor for other actors. Keeps track of channels and runners.
 // Can be queried for deadlock detection.
 class ProcManager(launcher: Launcher, var nextName: Name) extends Actor {
-
+  
   var liveActors: Set[ActorRef] = Set.empty
   var result: List[Proc] = Nil
   var sendSinceTimerReset: Boolean = false
@@ -163,19 +163,26 @@ class ProcRunner(
     }}: Receive) orElse forceReportStop)
   }
 
-  def handleReceive(repl: Boolean, chExp: Exp, bind: Name, p: Proc): Unit = {
+  def handleReceive(chExp: Exp, bind: Name, p: Proc): Unit = {
     val evalChExp: EvalExp = evalExp(chExp)
     this.chanMap(evalChExp.channelName) ! MsgRequestFromReceiver
     context.become(({ case MsgChanToReceiver(evalMsg, newMappings) => {
       val newProc: Proc = substituteProc(p, bind, evalMsg)
       val newChanMap: Map[Name, ActorRef] = this.chanMap ++ newMappings
-      if(repl) {
-        this.procManager ! MakeRunner(newChanMap, newProc)
-      }
-      else {
-        this.proc = newProc
-        this.chanMap = newChanMap
-      }
+      this.proc = newProc
+      this.chanMap = newChanMap
+      context.unbecome()
+      self ! ProcGo
+    }}: Receive) orElse forceReportStop)
+  }
+
+  def handleServer(chExp: Exp, bind: Name, p: Proc): Unit = {
+    val evalChExp: EvalExp = evalExp(chExp)
+    this.chanMap(evalChExp.channelName) ! MsgRequestFromReceiver
+    context.become(({ case MsgChanToReceiver(evalMsg, newMappings) => {
+      val newProc: Proc = substituteProc(p, bind, evalMsg)
+      val newChanMap: Map[Name, ActorRef] = this.chanMap ++ newMappings
+      this.procManager ! MakeRunner(newChanMap, newProc)
       context.unbecome()
       self ! ProcGo
     }}: Receive) orElse forceReportStop)
@@ -215,8 +222,10 @@ class ProcRunner(
     case ProcGo => this.proc match {
       case Send       ( chExp , msg   , p        ) =>
      handleSend       ( chExp , msg   , p        )
-      case Receive    ( repl  , chExp , bind , p ) =>
-     handleReceive    ( repl  , chExp , bind , p )
+      case Receive    ( false , chExp , bind , p ) =>
+     handleReceive    (         chExp , bind , p )
+      case Receive    ( true  , chExp , bind , p ) =>
+     handleServer     (         chExp , bind , p )
       case LetIn      ( bind  , exp   , p        ) =>
      handleLetIn      ( bind  , exp   , p        )
       case IfThenElse ( exp   , p     , q        ) =>
