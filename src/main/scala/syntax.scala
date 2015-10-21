@@ -142,6 +142,16 @@ sealed abstract class Exp extends SyntaxElement {
     case BinExp      ( _ , l , r ) => l.free union r.free
   }
 
+  def contains(n: Name): Boolean = this match {
+    case Variable    ( m         ) => n == m
+    case IntLiteral  ( _         ) => false
+    case BoolLiteral ( _         ) => false
+    case ChanLiteral ( _         ) => false
+    case Pair        ( l , r     ) => (l contains n) || (r contains n)
+    case UnExp       ( _ , e     ) => e contains n
+    case BinExp      ( _ , l , r ) => (l contains n) || (r contains n)
+  }
+
   def pstr(names: Map[Name, String]): String = this match {
     case Variable    ( name          ) =>
       names getOrElse (name, s"$$<new ${{name.id}}>")

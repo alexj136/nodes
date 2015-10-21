@@ -53,16 +53,17 @@ object fwdOptRewrite extends Function1[Proc, Proc] {
 
     case Parallel(p, q) => Parallel(fwdOptRewrite(p), fwdOptRewrite(q))
 
-    // need a function to determine if msg0 contains bind0 as part of the
-    //    message
-    // if msg0 contains bind0
-    // if chExp1 is bind0
-    // if msg1 is bind1
-    /*case New(bind0,
-          Send(chExp0, msg0,
-          Receive(false, chExp1, bind1,
-          Send(chExp2, msg1, p))))
-             => ???*/
+    case New(rch0,
+         Send(chExp0, msg0,
+         Receive(false, Variable(rch1), reply0,
+         Send(orch, Variable(reply1), p))))
+           if ((msg0 contains rch0)
+           && (rch0 == rch1)
+           && (reply0 == reply1))
+             => {
+
+      ???
+    }
 
     case New(bind, p) => New(bind, fwdOptRewrite(p))
 
