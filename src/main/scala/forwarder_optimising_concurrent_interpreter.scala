@@ -62,11 +62,17 @@ object fwdOptRewrite extends Function1[Proc, Proc] {
            && (reply0 == reply1))
              => {
 
-      ???
+      if (p.free apply rch0)
+        Send(chExp0, substitute(msg0, rch0, orch), New(rch0, p))
+      else
+        Send(chExp0, substitute(msg0, rch0, orch), p)
     }
 
     case New(bind, p) => New(bind, fwdOptRewrite(p))
 
     case End => End
   }
+
+  // TODO Implement this
+  def substitute(in: Exp, from: Name, to: Exp) = ???
 }
