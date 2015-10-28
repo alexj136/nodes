@@ -76,6 +76,7 @@ terminal            SEND    ,
 terminal Name       CHAN    ,
                     IDENT   ;
 terminal int        INT     ;
+terminal String     ERROR   ;
 
 non terminal Proc   p;
 non terminal Exp    e;

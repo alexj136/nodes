@@ -118,51 +118,47 @@ Comment = "//"[^\r\n]* {NewLine}?
 
 <YYINITIAL>{
 
-    "!"       { return symbol(sym.BANG);    }
-    "*"       { return symbol(sym.STAR);    }
-    "."       { return symbol(sym.DOT);     }
-    ":"       { return symbol(sym.COLON);   }
-    "let"     { return symbol(sym.LET);     }
-    "new"     { return symbol(sym.NEW);     }
-    "if"      { return symbol(sym.IF);      }
-    "then"    { return symbol(sym.THEN);    }
-    "else"    { return symbol(sym.ELSE);    }
-    "endif"   { return symbol(sym.ENDIF);   }
-    "send"    { return symbol(sym.SEND);    }
-    "receive" { return symbol(sym.RECEIVE); }
-    "server"  { return symbol(sym.SERVER);  }
-    "|"       { return symbol(sym.BAR);     }
-    "end"     { return symbol(sym.END);     }
-    "("       { return symbol(sym.LPAREN);  }
-    ")"       { return symbol(sym.RPAREN);  }
-    "{"       { return symbol(sym.LCURLY);  }
-    "}"       { return symbol(sym.RCURLY);  }
-    ","       { return symbol(sym.COMMA);   }
-    "<-"      { return symbol(sym.LARROW);  }
-    "->"      { return symbol(sym.RARROW);  }
-    "true"    { return symbol(sym.TRUE);    }
-    "false"   { return symbol(sym.FALSE);   }
-    "+"       { return symbol(sym.PLUS);    }
-    "-"       { return symbol(sym.DASH);    }
-    "/"       { return symbol(sym.FSLASH);  }
-    "%"       { return symbol(sym.PERC);    }
-    "="       { return symbol(sym.EQUAL);   }
-    "=="      { return symbol(sym.EQEQ);    }
-    "!="      { return symbol(sym.NEQ);     }
-    "<"       { return symbol(sym.LESS);    }
-    "<="      { return symbol(sym.LESSEQ);  }
-    ">"       { return symbol(sym.GRTR);    }
-    ">="      { return symbol(sym.GRTREQ);  }
-    "&&"      { return symbol(sym.AND);     }
-    "||"      { return symbol(sym.OR);      }
-
-    {Ident}   { return symbol(sym.IDENT, yytext()); }
-    {Chan}    { return symbol(sym.CHAN,  yytext()); }
-    {Int}     { return symbol(sym.INT,   yytext()); }
-
-    {Space}   { /* ignore */ }
-
-    {Comment} { /* ignore */ }
-
-    [^]|\n    { throw new Error("Illegal text <" + yytext() + ">"); }
+    "!"       { return symbol ( sym.BANG             ); }
+    "*"       { return symbol ( sym.STAR             ); }
+    "."       { return symbol ( sym.DOT              ); }
+    ":"       { return symbol ( sym.COLON            ); }
+    "let"     { return symbol ( sym.LET              ); }
+    "new"     { return symbol ( sym.NEW              ); }
+    "if"      { return symbol ( sym.IF               ); }
+    "then"    { return symbol ( sym.THEN             ); }
+    "else"    { return symbol ( sym.ELSE             ); }
+    "endif"   { return symbol ( sym.ENDIF            ); }
+    "send"    { return symbol ( sym.SEND             ); }
+    "receive" { return symbol ( sym.RECEIVE          ); }
+    "server"  { return symbol ( sym.SERVER           ); }
+    "|"       { return symbol ( sym.BAR              ); }
+    "end"     { return symbol ( sym.END              ); }
+    "("       { return symbol ( sym.LPAREN           ); }
+    ")"       { return symbol ( sym.RPAREN           ); }
+    "{"       { return symbol ( sym.LCURLY           ); }
+    "}"       { return symbol ( sym.RCURLY           ); }
+    ","       { return symbol ( sym.COMMA            ); }
+    "<-"      { return symbol ( sym.LARROW           ); }
+    "->"      { return symbol ( sym.RARROW           ); }
+    "true"    { return symbol ( sym.TRUE             ); }
+    "false"   { return symbol ( sym.FALSE            ); }
+    "+"       { return symbol ( sym.PLUS             ); }
+    "-"       { return symbol ( sym.DASH             ); }
+    "/"       { return symbol ( sym.FSLASH           ); }
+    "%"       { return symbol ( sym.PERC             ); }
+    "="       { return symbol ( sym.EQUAL            ); }
+    "=="      { return symbol ( sym.EQEQ             ); }
+    "!="      { return symbol ( sym.NEQ              ); }
+    "<"       { return symbol ( sym.LESS             ); }
+    "<="      { return symbol ( sym.LESSEQ           ); }
+    ">"       { return symbol ( sym.GRTR             ); }
+    ">="      { return symbol ( sym.GRTREQ           ); }
+    "&&"      { return symbol ( sym.AND              ); }
+    "||"      { return symbol ( sym.OR               ); }
+    {Ident}   { return symbol ( sym.IDENT , yytext() ); }
+    {Chan}    { return symbol ( sym.CHAN  , yytext() ); }
+    {Int}     { return symbol ( sym.INT   , yytext() ); }
+    {Space}   { /* ignore */                            }
+    {Comment} { /* ignore */                            }
+    [^]|\n    { return symbol ( sym.ERROR , yytext() ); }
 }
