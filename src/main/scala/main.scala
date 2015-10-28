@@ -7,6 +7,7 @@ import interpreter_common.Functions._
 import turner_interpreter._
 import forwarder_optimising_turner_interpreter._
 import concurrent_interpreter._
+import forwarder_optimising_concurrent_interpreter._
 import java.io.File
 import java.io.FileInputStream
 
@@ -18,7 +19,8 @@ object MainConcurrent extends App {
   val printName = revNames("$print")
   val names: Map[Name, String] = revNames.map(_.swap)
   stream.close()
-  new Launcher(proc, printName, nextName, names, { case _ => {} })
+  new Launcher(proc, printName, nextName, names, { case _ => {} },
+    classOf[FwdOptProcManager])
 }
 
 object Main extends App {

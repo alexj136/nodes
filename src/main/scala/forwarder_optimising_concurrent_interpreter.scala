@@ -62,10 +62,25 @@ object fwdOptRewrite extends Function1[Proc, Proc] {
            && (reply0 == reply1))
              => {
 
+      def returnChanSub(exp: Exp, from: Name, to: Exp): Exp = {
+        val subE : Function[Exp, Exp] = e => returnChanSub(e, from, to)
+        exp match {
+          case Variable    ( n ) if n == from => to
+          case Variable    ( n ) if n != from => exp
+          case IntLiteral  ( x )              => exp
+          case BoolLiteral ( x )              => exp
+          case ChanLiteral ( c )              => exp
+          case Pair        ( l  , r         ) => Pair(subE(l), subE(r))
+          case UnExp       ( ty , e         ) => UnExp(ty, subE(e))
+          case BinExp      ( ty , lhs , rhs ) =>
+            BinExp(ty, subE(lhs), subE(rhs))
+        }
+      }
+
       if (p.free apply rch0)
-        Send(chExp0, substitute(msg0, rch0, orch), New(rch0, p))
+        Send(chExp0, returnChanSub(msg0, rch0, orch), New(rch0, p))
       else
-        Send(chExp0, substitute(msg0, rch0, orch), p)
+        Send(chExp0, returnChanSub(msg0, rch0, orch), p)
     }
 
     case New(bind, p) => New(bind, fwdOptRewrite(p))
