@@ -87,7 +87,4 @@ object fwdOptRewrite extends Function1[Proc, Proc] {
 
     case End => End
   }
-
-  // TODO Implement this
-  def substitute(in: Exp, from: Name, to: Exp) = ???
 }

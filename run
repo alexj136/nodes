@@ -1,2 +1,2 @@
 #!/bin/sh
-scala -cp ./bin/:./lib/java-cup-11b-runtime.jar main.Main $@
+sbt "run $@"

@@ -109,7 +109,9 @@ class ProcManager(launcher: Launcher, var nextName: Name) extends Actor {
   }
 
   def mainReceive: Receive = {
-    case SendOccurred => sendSinceTimerReset = true
+    case SendOccurred => {
+      sendSinceTimerReset = true
+    }
     case CheckFinished => {
       if (sendSinceTimerReset) sendSinceTimerReset = false
       else this.liveActors map { case p => p ! ForceReportStop }
