@@ -4,16 +4,24 @@ import java_cup.runtime.ScannerBuffer;
 import java_cup.runtime.ComplexSymbolFactory;
 import java_cup.runtime.ComplexSymbolFactory.ComplexSymbol;
 import syntax.*;
+import parser_util.*;
 import scala.Tuple2;
 import scala.Tuple3;
 import scala.collection.immutable.Map;
+import scala.collection.immutable.List;
 import java.io.InputStream;
 import java.io.ByteArrayInputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 
 parser code {:
-    public Parser(Lexer lexer, ComplexSymbolFactory csf) { super(lexer, csf); }
+
+    private List<SyntaxError> errors;
+
+    public Parser(Lexer lexer, ComplexSymbolFactory csf) {
+        super(lexer, csf);
+        this.errors = List.empty();
+    }
 
     public static Tuple3<Proc, Map<String, Name>, Name>
             parseString(String input) throws Exception {
