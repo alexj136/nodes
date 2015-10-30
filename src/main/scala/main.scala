@@ -32,11 +32,17 @@ object Main extends App {
   try {
 
     var stream: FileInputStream = new FileInputStream(file)
-    val (proc, revNames, nextName): (Proc, Map[String, Name], Name) =
-      Parser.parseStream(stream)
+    val parserResult: ParserResult = Parser.parseStream(stream)
     stream.close()
-    new Launcher(proc, revNames("$print"), nextName, revNames.map(_.swap),
-      { case _ => {} }, classOf[FwdOptProcManager])
+    parserResult match {
+      case ParserSuccess(proc, revNames, nextName) =>
+        new Launcher(proc, revNames("$print"), nextName, revNames.map(_.swap),
+          { case _ => {} }, classOf[FwdOptProcManager])
+      case ParserFailure(errors) => {
+        errors foreach { e => println(e) }
+        sys.exit(1)
+      }
+    }
 
   } catch {
 

@@ -4,11 +4,12 @@ import java_cup.runtime.ScannerBuffer;
 import java_cup.runtime.ComplexSymbolFactory;
 import java_cup.runtime.ComplexSymbolFactory.ComplexSymbol;
 import syntax.*;
-import parser_util.*;
 import scala.Tuple2;
 import scala.Tuple3;
 import scala.collection.immutable.Map;
 import scala.collection.immutable.List;
+import scala.collection.immutable.Nil$;
+import scala.collection.immutable.$colon$colon$;
 import java.io.InputStream;
 import java.io.ByteArrayInputStream;
 import java.io.InputStreamReader;
@@ -18,29 +19,36 @@ parser code {:
 
     private List<SyntaxError> errors;
 
-    public Parser(Lexer lexer, ComplexSymbolFactory csf) {
-        super(lexer, csf);
-        this.errors = List.empty();
+    public List<SyntaxError> errors() { return this.errors; }
+
+    public void logError(SyntaxError e) {
+        this.errors = $colon$colon$.MODULE$.apply(e, this.errors);
     }
 
-    public static Tuple3<Proc, Map<String, Name>, Name>
-            parseString(String input) throws Exception {
+    public Parser(Lexer lexer, ComplexSymbolFactory csf) {
+        super(lexer, csf);
+        this.errors = new List<SyntaxError>();
+    }
+
+    public static ParserResult parseString(String input) throws Exception {
 
         return parseStream(
             new ByteArrayInputStream(input.getBytes(StandardCharsets.UTF_8)));
     }
 
-    public static Tuple3<Proc, Map<String, Name>, Name>
-            parseStream(InputStream input) throws Exception {
-
+    public static ParserResult parseStream(InputStream input) throws Exception {
         ComplexSymbolFactory csf = new ComplexSymbolFactory();
         Lexer lexer = new Lexer(new InputStreamReader(input), csf);
-        Proc parsedTerm = (Proc)
-                (new Parser(new ScannerBuffer(lexer), csf).parse().value);
-        Tuple2<Map<String, Name>, Name> nameInfo =
-                lexer.getNameInfo();
-        return new Tuple3<Proc, Map<String, Name>, Name>
-                (parsedTerm, nameInfo._1, nameInfo._2);
+        Parser parser = new Parser(new ScannerBuffer(lexer), csf);
+        Proc parsedTerm = (Proc) (parser.parse().value);
+        System.out.println("---==="+parser.errors());
+        if(parser.errors().isEmpty()) {
+            Tuple2<Map<String, Name>, Name> nameInfo = lexer.getNameInfo();
+            return new ParserSuccess(parsedTerm, nameInfo._1, nameInfo._2);
+        }
+        else {
+            return new ParserFailure(parser.errors());
+        }
     }
 :};
 
@@ -102,19 +110,24 @@ precedence nonassoc DOT;
 start with p;
 
 p ::= SEND e:ch COLON e:msg DOT p:proc
-        {: RESULT = new Send(ch, msg, proc);                                :}
+        {: RESULT = new Send(ch, msg, proc);                            :}
     | RECEIVE e:ch COLON IDENT:bind DOT p:proc
-        {: RESULT = new Receive(false, ch, bind, proc);                     :}
+        {: RESULT = new Receive(false, ch, bind, proc);                 :}
     | SERVER e:ch COLON IDENT:bind DOT p:proc
-        {: RESULT = new Receive(true, ch, bind, proc);                      :}
+        {: RESULT = new Receive(true, ch, bind, proc);                  :}
     | LET IDENT:bind EQUAL e:value DOT p:proc
-        {: RESULT = new LetIn(bind, value, proc);                           :}
+        {: RESULT = new LetIn(bind, value, proc);                       :}
     | IF e:cond THEN p:proct ELSE p:procf ENDIF
-        {: RESULT = new IfThenElse(cond, proct, procf);                     :}
+        {: RESULT = new IfThenElse(cond, proct, procf);                 :}
     | p:proc1 BAR p:proc2       {: RESULT = new Parallel(proc1, proc2); :}
     | NEW IDENT:bind DOT p:proc {: RESULT = new New(bind, proc);        :}
     | END                       {: RESULT = End$.MODULE$;               :}
     | LPAREN p:proc RPAREN      {: RESULT = proc;                       :}
+    | error:err p:proc            
+        {:
+            logError(new SyntaxError(errxleft, errxright));
+            RESULT = proc;
+        :}
     ;
 
 e ::= IDENT:name                    {: RESULT = new Variable(name);     :}
@@ -126,6 +139,11 @@ e ::= IDENT:name                    {: RESULT = new Variable(name);     :}
     | u:op e:exp                    {: RESULT = new UnExp(op, exp);     :}
     | LPAREN e:exp RPAREN           {: RESULT = exp;                    :}
     | LCURLY e:l COMMA e:r RCURLY   {: RESULT = new Pair(l, r);         :}
+    | error:err e:exp            
+        {:
+            logError(new SyntaxError(errxleft, errxright));
+            RESULT = exp;
+        :}
     ;
 
 b ::= PLUS          {: RESULT = Add$.MODULE$;       :}
