@@ -8,8 +8,9 @@ import scala.Tuple2;
 import scala.Tuple3;
 import scala.collection.immutable.Map;
 import scala.collection.immutable.List;
+import scala.collection.immutable.List$;
 import scala.collection.immutable.Nil$;
-import scala.collection.immutable.$colon$colon$;
+import scala.collection.immutable.$colon$colon;
 import java.io.InputStream;
 import java.io.ByteArrayInputStream;
 import java.io.InputStreamReader;
@@ -17,23 +18,16 @@ import java.nio.charset.StandardCharsets;
 
 parser code {:
 
-    private List<SyntaxError> errors;
-
-    public List<SyntaxError> errors() { return this.errors; }
+    private List<SyntaxError> errors = List$.MODULE$.empty();
 
     public void logError(SyntaxError e) {
-        this.errors = $colon$colon$.MODULE$.apply(e, this.errors);
-    }
-
-    public Parser(Lexer lexer, ComplexSymbolFactory csf) {
-        super(lexer, csf);
-        this.errors = new List<SyntaxError>();
+        this.errors = this.errors.$colon$colon(e);
     }
 
     public static ParserResult parseString(String input) throws Exception {
 
-        return parseStream(
-            new ByteArrayInputStream(input.getBytes(StandardCharsets.UTF_8)));
+        return parseStream(new ByteArrayInputStream(
+                input.getBytes(StandardCharsets.UTF_8)));
     }
 
     public static ParserResult parseStream(InputStream input) throws Exception {
@@ -41,13 +35,12 @@ parser code {:
         Lexer lexer = new Lexer(new InputStreamReader(input), csf);
         Parser parser = new Parser(new ScannerBuffer(lexer), csf);
         Proc parsedTerm = (Proc) (parser.parse().value);
-        System.out.println("---==="+parser.errors());
-        if(parser.errors().isEmpty()) {
+        if(parser.errors.isEmpty()) {
             Tuple2<Map<String, Name>, Name> nameInfo = lexer.getNameInfo();
             return new ParserSuccess(parsedTerm, nameInfo._1, nameInfo._2);
         }
         else {
-            return new ParserFailure(parser.errors());
+            return new ParserFailure(parser.errors);
         }
     }
 :};
