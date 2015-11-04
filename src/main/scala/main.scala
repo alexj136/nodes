@@ -38,7 +38,7 @@ object Main extends App {
       case ParserSuccess(proc, revNames, nextName) =>
         new Launcher(proc, revNames("$print"), nextName, revNames.map(_.swap),
           { case _ => {} }, classOf[FwdOptProcManager])
-      case ParserFailure(errors) => {
+      case SyntaxErrors(errors) => {
         errors foreach { e => println(e) }
         sys.exit(1)
       }

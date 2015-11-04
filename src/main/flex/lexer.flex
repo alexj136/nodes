@@ -7,7 +7,7 @@ import scala.collection.immutable.Map$;
 import java_cup.runtime.Symbol;
 import java_cup.runtime.ComplexSymbolFactory;
 import java_cup.runtime.ComplexSymbolFactory.Location;
-import java.io.InputStreamReader;
+import java.io.Reader;
 
 %%
 
@@ -24,21 +24,25 @@ import java.io.InputStreamReader;
 %{
     // For symbol generation
     private ComplexSymbolFactory csf;
+    public ComplexSymbolFactory csf() { return this.csf; }
 
     // Used in converting identifier strings to integers
     private Map<String, Name> nameMap;
     private Name nextAvailableName;
 
-    /**
-     * Construct a new Lexer.
-     * @param input the InputStreamReader to take input from
-     * @param csf ComplexSymbolFactory for symbol generation
-     */
-    public Lexer(InputStreamReader input, ComplexSymbolFactory csf) {
+    private Lexer(Reader input, ComplexSymbolFactory csf) {
         this(input);
         this.csf = csf;
         this.nameMap = Map$.MODULE$.<String, Name>empty();
         this.nextAvailableName = new Name(0);
+    }
+
+    /**
+     * Build a Lexer.
+     * @param input the InputStreamReader to take input from
+     */
+    public static Lexer create(Reader input) {
+        return new Lexer(input, new ComplexSymbolFactory());
     }
 
     /**
@@ -160,5 +164,5 @@ Comment = "//"[^\r\n]* {NewLine}?
     {Int}     { return symbol ( sym.INT   , yytext() ); }
     {Space}   { /* ignore */                            }
     {Comment} { /* ignore */                            }
-    [^]|\n    { return symbol ( sym.ERROR , yytext() ); }
+    [^]|\n    { return symbol ( sym.ERROR            ); }
 }

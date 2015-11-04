@@ -11,17 +11,41 @@ import scala.collection.immutable.List;
 import scala.collection.immutable.List$;
 import scala.collection.immutable.Nil$;
 import scala.collection.immutable.$colon$colon;
+import java.io.File;
 import java.io.InputStream;
+import java.io.FileInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.InputStreamReader;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
 parser code {:
+
+    private List<String> fileText;
 
     private List<SyntaxError> errors = List$.MODULE$.empty();
 
     public void logError(SyntaxError e) {
         this.errors = this.errors.$colon$colon(e);
+    }
+
+    public static ParserResult parseFile(File file) {
+        if (!file.exists()) {
+            return new FileNotFound(file.getAbsolutePath());
+        }
+        else if (file.isDirectory()) {
+            return new FileIsDirectory(file.getAbsolutePath());
+        }
+        else try {
+            InputStream input = new FileInputStream(file);
+            throw new RuntimeException("not yet implemented");
+        }
+        catch(IOException ioe) {
+            return new FileIOError(file.getAbsolutePath());
+        }
+        catch(Exception e) {
+            return new UnknownError(file.getAbsolutePath(), e);
+        }
     }
 
     public static ParserResult parseString(String input) throws Exception {
@@ -31,16 +55,15 @@ parser code {:
     }
 
     public static ParserResult parseStream(InputStream input) throws Exception {
-        ComplexSymbolFactory csf = new ComplexSymbolFactory();
-        Lexer lexer = new Lexer(new InputStreamReader(input), csf);
-        Parser parser = new Parser(new ScannerBuffer(lexer), csf);
+        Lexer lexer = Lexer.create(new InputStreamReader(input));
+        Parser parser = new Parser(new ScannerBuffer(lexer), lexer.csf());
         Proc parsedTerm = (Proc) (parser.parse().value);
         if(parser.errors.isEmpty()) {
             Tuple2<Map<String, Name>, Name> nameInfo = lexer.getNameInfo();
             return new ParserSuccess(parsedTerm, nameInfo._1, nameInfo._2);
         }
         else {
-            return new ParserFailure(parser.errors);
+            return new SyntaxErrors(parser.errors);
         }
     }
 :};
@@ -81,11 +104,11 @@ terminal            SEND    ,
                     GRTR    ,
                     GRTREQ  ,
                     AND     ,
-                    OR      ;
+                    OR      ,
+                    ERROR   ;
 terminal Name       CHAN    ,
                     IDENT   ;
 terminal int        INT     ;
-terminal String     ERROR   ;
 
 non terminal Proc   p;
 non terminal Exp    e;
@@ -118,7 +141,8 @@ p ::= SEND e:ch COLON e:msg DOT p:proc
     | LPAREN p:proc RPAREN      {: RESULT = proc;                       :}
     | error:err p:proc            
         {:
-            logError(new SyntaxError(errxleft, errxright));
+            logError(new SyntaxError(errxleft, errxright,
+                List$.MODULE$.empty()));
             RESULT = proc;
         :}
     ;
@@ -134,7 +158,8 @@ e ::= IDENT:name                    {: RESULT = new Variable(name);     :}
     | LCURLY e:l COMMA e:r RCURLY   {: RESULT = new Pair(l, r);         :}
     | error:err e:exp            
         {:
-            logError(new SyntaxError(errxleft, errxright));
+            logError(new SyntaxError(errxleft, errxright,
+                List$.MODULE$.empty()));
             RESULT = exp;
         :}
     ;
