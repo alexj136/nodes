@@ -6,6 +6,7 @@ import java.util.Scanner
 import java.io.File
 import java.io.StringWriter
 import java.io.PrintWriter
+import scala.io.Source
 
 sealed abstract class ParserResult
 
@@ -16,7 +17,34 @@ case class ParserSuccess(
   extends ParserResult
 
 case class SyntaxErrors(errors: List[SyntaxError]) extends ParserResult {
-  def toStringWithText(file: File): String = ???
+
+
+  def toStringWithText(file: File): List[String] = {
+
+    def spacesAndUpArrows(
+        lineLength: Int,
+        startArrows: Int,
+        endArrows: Int)
+      : String =
+      ( (for (i <- List.range( 0           , startArrows )) yield ' ') ++
+        (for (i <- List.range( startArrows , endArrows   )) yield '^') ++
+        (for (i <- List.range( endArrows   , lineLength  )) yield ' ')
+      ).mkString
+
+    def textSpan(text: List[String], span: SyntaxError): List[String] = {
+      val spanLines: List[String] = text.slice(span.startRow, span.endRow)
+      spanLines match {
+        case         Nil => throw new RuntimeException("Bad location")
+        case line :: Nil => List(spacesAndUpArrows(text(span.startRow).length,
+                                                   span.startCol, span.endCol))
+        case line :: lns => ???
+      }
+    }
+
+    val source: Source = Source.fromFile(file)
+    val lines: List[String] = try source.getLines.toList finally source.close()
+    ???
+  }
 }
 
 class SyntaxError(
