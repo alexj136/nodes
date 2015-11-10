@@ -29,25 +29,6 @@ parser code {:
         this.errors = this.errors.$colon$colon(e);
     }
 
-    public static ParserResult parseFile(File file) {
-        if (!file.exists()) {
-            return new FileNotFound(file.getAbsolutePath());
-        }
-        else if (file.isDirectory()) {
-            return new FileIsDirectory(file.getAbsolutePath());
-        }
-        else try {
-            InputStream input = new FileInputStream(file);
-            throw new RuntimeException("not yet implemented");
-        }
-        catch(IOException ioe) {
-            return new FileIOError(file.getAbsolutePath());
-        }
-        catch(Exception e) {
-            return new UnknownError(file.getAbsolutePath(), e);
-        }
-    }
-
     public static ParserResult parseString(String input) throws Exception {
 
         return parseStream(new ByteArrayInputStream(
@@ -141,8 +122,7 @@ p ::= SEND e:ch COLON e:msg DOT p:proc
     | LPAREN p:proc RPAREN      {: RESULT = proc;                       :}
     | error:err p:proc            
         {:
-            logError(new SyntaxError(errxleft, errxright,
-                List$.MODULE$.empty()));
+            logError(new SyntaxError(errxleft, errxright));
             RESULT = proc;
         :}
     ;
@@ -158,8 +138,7 @@ e ::= IDENT:name                    {: RESULT = new Variable(name);     :}
     | LCURLY e:l COMMA e:r RCURLY   {: RESULT = new Pair(l, r);         :}
     | error:err e:exp            
         {:
-            logError(new SyntaxError(errxleft, errxright,
-                List$.MODULE$.empty()));
+            logError(new SyntaxError(errxleft, errxright));
             RESULT = exp;
         :}
     ;

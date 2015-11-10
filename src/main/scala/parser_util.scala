@@ -15,43 +15,25 @@ case class ParserSuccess(
     nextName: Name)
   extends ParserResult
 
-case class SyntaxErrors(errors: List[SyntaxError]) extends ParserResult
+case class SyntaxErrors(errors: List[SyntaxError]) extends ParserResult {
+  def toStringWithText(file: File): String = ???
+}
 
 class SyntaxError(
-    startRow: Int,
-    startCol: Int,
-    endRow: Int,
-    endCol: Int,
-    text: String) {
+    val startRow: Int,
+    val startCol: Int,
+    val endRow: Int,
+    val endCol: Int) {
 
-  def this(start: Location, end: Location, fileText: List[String]) =
-    this(start.getLine, start.getColumn, end.getLine, end.getColumn, ???)
+  def isBefore(other: SyntaxError): Boolean =
+    if (this.startRow == other.startRow)
+      this.startCol < other.endCol
+    else
+      this.startRow < other.startRow
+
+  def this(start: Location, end: Location) =
+    this(start.getLine, start.getColumn, end.getLine, end.getColumn)
 
   override def toString: String = "Syntax error spanning from line " ++
     s"$startRow, column $startCol to line $endRow, column $endCol"
-}
-
-case class FileNotFound    ( fileName: String ) extends ParserResult
-case class FileIsDirectory ( fileName: String ) extends ParserResult
-case class FileIOError     ( fileName: String ) extends ParserResult
-
-case class UnknownError(
-    fileName: String,
-    stackTrace: String)
-  extends ParserResult {
-
-    def this(fileName: String, exc: Exception) = this(fileName, {
-      val errors: StringWriter = new StringWriter
-      exc.printStackTrace(new PrintWriter(errors))
-      errors.toString
-    })
-}
-
-object readToList {
-  def apply(file: File): List[String] = {
-    val scanner: Scanner = new Scanner(file)
-    var lines: List[String] = Nil
-    while (scanner.hasNextLine) lines = scanner.nextLine :: lines
-    lines
-  }
 }
