@@ -7,6 +7,9 @@ implementation is based on the algorithm given in David N. Turner's PhD thesis,
 while the concurrent implementation is a true-to-semantics implementation using 
 Akka, scala's concurrency library. 
 
+## Dependencies
+Just SBT and a JRE8. SBT will download the required scala compiler.
+
 ## State
 At present, the project is in a pre-alpha state. A fairly solid lexer and parser
 have been built using JFlex and CUP, with nice error messages.
