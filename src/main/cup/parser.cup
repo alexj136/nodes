@@ -25,9 +25,24 @@ parser code {:
 
     private List<SyntaxError> errors = List$.MODULE$.empty();
 
-    public void logError(SyntaxError e) {
-        this.errors = this.errors.$colon$colon(e);
+    @Override
+    public void report_error(String message, Object info) {
+        if(info instanceof SyntaxError) {
+            this.errors = this.errors.$colon$colon((SyntaxError) info);
+        }
+        else {
+            System.out.println(message);
+        }
     }
+
+    @Override
+    public void report_fatal_error(String message, Object info) {
+        report_error(message, info);
+        done_parsing();
+    }
+
+    @Override
+    protected int error_sync_size() { return 100; }
 
     public static ParserResult parseString(String input) throws Exception {
 
@@ -122,7 +137,7 @@ p ::= SEND e:ch COLON e:msg DOT p:proc
     | LPAREN p:proc RPAREN      {: RESULT = proc;                       :}
     | error:err p:proc            
         {:
-            logError(new SyntaxError(errxleft, errxright));
+            report_error("", new SyntaxError(errxleft, errxright));
             RESULT = proc;
         :}
     ;
@@ -138,7 +153,7 @@ e ::= IDENT:name                    {: RESULT = new Variable(name);     :}
     | LCURLY e:l COMMA e:r RCURLY   {: RESULT = new Pair(l, r);         :}
     | error:err e:exp            
         {:
-            logError(new SyntaxError(errxleft, errxright));
+            report_error("", new SyntaxError(errxleft, errxright));
             RESULT = exp;
         :}
     ;

@@ -39,7 +39,7 @@ object Main extends App {
         new Launcher(proc, revNames("$print"), nextName, revNames.map(_.swap),
           { case _ => {} }, classOf[FwdOptProcManager])
       case SyntaxErrors(errors) => {
-        errors foreach { e => println(e) }
+        (SyntaxErrors(errors) toStringWithText file) foreach { e => println(e) }
         sys.exit(1)
       }
     }
@@ -52,7 +52,7 @@ object Main extends App {
     }
 
     case e: Exception => {
-      println("Unknown error:")
+      println(s"Unknown error: ${e.getClass.getName}")
       e.printStackTrace
       sys.exit(1)
     }

@@ -84,9 +84,8 @@ import java.io.Reader;
      * @return the start and end locations of the current token
      */
     public Tuple2<Location, Location> getLexerLocation() {
-        Location left = new Location(yyline + 1, yycolumn + 1, yychar);
-        Location right = new Location(yyline + 1, yycolumn + yylength(),
-                yychar + yylength());
+        Location left = new Location(yyline, yycolumn);
+        Location right = new Location(yyline, yycolumn + yylength());
         return new Tuple2<Location, Location>(left, right);
     }
 
