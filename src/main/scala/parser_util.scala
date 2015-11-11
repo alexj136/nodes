@@ -35,15 +35,15 @@ case class SyntaxErrors(errors: List[SyntaxError]) extends ParserResult {
       val spanLines: List[String] = text.slice(span.startRow, span.endRow)
       spanLines match {
         case         Nil => throw new RuntimeException("Bad location")
-        case line :: Nil => List(spacesAndUpArrows(text(span.startRow).length,
-                                                   span.startCol, span.endCol))
+        case line :: Nil => List(line, spacesAndUpArrows(
+          text(span.startRow).length, span.startCol, span.endCol))
         case line :: lns => ???
       }
     }
 
     val source: Source = Source.fromFile(file)
     val lines: List[String] = try source.getLines.toList finally source.close()
-    ???
+    (errors map (err => textSpan(lines, err))).flatten
   }
 }
 
