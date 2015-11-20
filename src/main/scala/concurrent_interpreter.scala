@@ -156,7 +156,7 @@ class ProcRunner(
   def handleSend(chExp: Exp, msg: Exp, p: Proc): Unit = {
     val evalChExp: EvalExp = evalExp(chExp)
     val evalMsg: EvalExp = evalExp(msg)
-    this.chanMap(evalChExp.channelName) ! MsgSenderToChan(evalMsg,
+    this.chanMap(evalChExp.channelName) ! MsgSenderToChan(evalMsg, NoInfo,
       this.chanMap.filterKeys(evalMsg.channelNames.contains(_)))
     context.become(({ case MsgConfirmToSender => {
       this.proc = p
@@ -168,7 +168,7 @@ class ProcRunner(
   def handleReceive(chExp: Exp, bind: Name, p: Proc): Unit = {
     val evalChExp: EvalExp = evalExp(chExp)
     this.chanMap(evalChExp.channelName) ! MsgRequestFromReceiver
-    context.become(({ case MsgChanToReceiver(evalMsg, newMappings) => {
+    context.become(({ case MsgChanToReceiver(evalMsg, _, newMappings) => {
       val newProc: Proc = substituteProc(p, bind, evalMsg)
       val newChanMap: Map[Name, ActorRef] = this.chanMap ++ newMappings
       this.proc = newProc
@@ -181,7 +181,7 @@ class ProcRunner(
   def handleServer(chExp: Exp, bind: Name, p: Proc): Unit = {
     val evalChExp: EvalExp = evalExp(chExp)
     this.chanMap(evalChExp.channelName) ! MsgRequestFromReceiver
-    context.become(({ case MsgChanToReceiver(evalMsg, newMappings) => {
+    context.become(({ case MsgChanToReceiver(evalMsg, _, newMappings) => {
       val newProc: Proc = substituteProc(p, bind, evalMsg)
       val newChanMap: Map[Name, ActorRef] = this.chanMap ++ newMappings
       this.procManager ! MakeRunner(newChanMap, newProc)
@@ -252,7 +252,7 @@ class Channel(procManager: ActorRef) extends AbstractImplActor(procManager) {
     : Unit = {
 
     procManager ! SendOccurred
-    rcvr ! MsgChanToReceiver(evalMsg, newMappings)
+    rcvr ! MsgChanToReceiver(evalMsg, NoInfo, newMappings)
     sndr ! MsgConfirmToSender
   }
 
@@ -260,14 +260,14 @@ class Channel(procManager: ActorRef) extends AbstractImplActor(procManager) {
     // If the receiver request comes before the sender delivery
     case MsgRequestFromReceiver => {
       val msgReceiver: ActorRef = sender
-      context.become(({ case MsgSenderToChan(evalMsg, newMappings) => {
+      context.become(({ case MsgSenderToChan(evalMsg, _, newMappings) => {
         val msgSender: ActorRef = sender
         this.deliver(msgSender, msgReceiver, evalMsg, newMappings)
         context.unbecome()
       }}: Receive) orElse forceReportStop)
     }
     // If the sender delivery comes before the receiver request
-    case MsgSenderToChan(evalMsg, newMappings) => {
+    case MsgSenderToChan(evalMsg, _, newMappings) => {
       val msgSender: ActorRef = sender
       context.become(({ case MsgRequestFromReceiver => {
         val msgReceiver: ActorRef = sender
@@ -284,7 +284,7 @@ class PrintingChannel(
   extends AbstractImplActor(procManager) {
 
   def receive: Receive = {
-    case MsgSenderToChan(evalMsg, _) => {
+    case MsgSenderToChan(evalMsg, _, _) => {
       procManager ! SendOccurred
       println(evalMsg.unEvalExp pstr this.names)
       sender ! MsgConfirmToSender
@@ -298,9 +298,17 @@ sealed abstract class ImplMessage
 // Queries sent by ProcRunners to Channels
 sealed abstract class ChanQuery extends ImplMessage
 
+// Top-level class for meta information
+abstract class MetaInfo
+
+// This implementation does not use any meta information, so we define here only
+// a single concrete MetaInfo class called NoInfo
+case object NoInfo extends MetaInfo
+
 // Precursor to a MsgConfirmToSender ChanQueryResponse
 case class  MsgSenderToChan(
     msg: EvalExp,
+    metaInfo: MetaInfo,
     chans: Map[Name, ActorRef])
   extends ChanQuery
 
@@ -316,6 +324,7 @@ case object MsgConfirmToSender                   extends ChanQueryResponse
 // Complements a MsgRequestFromReceiver ChanQuery
 case class  MsgChanToReceiver(
     msg: EvalExp,
+    metaInfo: MetaInfo,
     chans: Map[Name, ActorRef])
   extends ChanQueryResponse
 
