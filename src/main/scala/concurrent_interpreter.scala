@@ -156,7 +156,8 @@ class ProcRunner(
   def handleSend(chExp: Exp, msg: Exp, p: Proc): Unit = {
     val evalChExp: EvalExp = evalExp(chExp)
     val evalMsg: EvalExp = evalExp(msg)
-    this.chanMap(evalChExp.channelName) ! MsgSenderToChan(evalMsg, NoInfo,
+    this.chanMap(evalChExp.channelName) ! MsgSenderToChan(evalMsg,
+      this.computeMetaMessageToSend,
       this.chanMap.filterKeys(evalMsg.channelNames.contains(_)))
     context.become(({ case MsgConfirmToSender => {
       this.proc = p
@@ -168,26 +169,32 @@ class ProcRunner(
   def handleReceive(chExp: Exp, bind: Name, p: Proc): Unit = {
     val evalChExp: EvalExp = evalExp(chExp)
     this.chanMap(evalChExp.channelName) ! MsgRequestFromReceiver
-    context.become(({ case MsgChanToReceiver(evalMsg, _, newMappings) => {
-      val newProc: Proc = substituteProc(p, bind, evalMsg)
-      val newChanMap: Map[Name, ActorRef] = this.chanMap ++ newMappings
-      this.proc = newProc
-      this.chanMap = newChanMap
-      context.unbecome()
-      self ! ProcGo
-    }}: Receive) orElse forceReportStop)
+    context.become(({
+      case MsgChanToReceiver(evalMsg, metaInfo, newMappings) => {
+        val newProc: Proc = substituteProc(p, bind, evalMsg)
+        val newChanMap: Map[Name, ActorRef] = this.chanMap ++ newMappings
+        this.proc = newProc
+        this.chanMap = newChanMap
+        this.handleMetaMessageReceived(metaInfo)
+        context.unbecome()
+        self ! ProcGo
+      }
+    }: Receive) orElse forceReportStop)
   }
 
   def handleServer(chExp: Exp, bind: Name, p: Proc): Unit = {
     val evalChExp: EvalExp = evalExp(chExp)
     this.chanMap(evalChExp.channelName) ! MsgRequestFromReceiver
-    context.become(({ case MsgChanToReceiver(evalMsg, _, newMappings) => {
-      val newProc: Proc = substituteProc(p, bind, evalMsg)
-      val newChanMap: Map[Name, ActorRef] = this.chanMap ++ newMappings
-      this.procManager ! MakeRunner(newChanMap, newProc)
-      context.unbecome()
-      self ! ProcGo
-    }}: Receive) orElse forceReportStop)
+    context.become(({
+      case MsgChanToReceiver(evalMsg, metaInfo, newMappings) => {
+        val newProc: Proc = substituteProc(p, bind, evalMsg)
+        val newChanMap: Map[Name, ActorRef] = this.chanMap ++ newMappings
+        this.procManager ! MakeRunner(newChanMap, newProc)
+        this.handleMetaMessageReceived(metaInfo)
+        context.unbecome()
+        self ! ProcGo
+      }
+    }: Receive) orElse forceReportStop)
   }
 
   def handleLetIn(bind: Name, exp: Exp, p: Proc): Unit = {
@@ -220,25 +227,33 @@ class ProcRunner(
     }}: Receive) orElse forceReportStop)
   }
 
+  def handleCurrentProcess: Unit = this.proc match {
+    case    Send       ( chExp , msg   , p        ) =>
+      handleSend       ( chExp , msg   , p        )
+    case    Receive    ( false , chExp , bind , p ) =>
+      handleReceive    (         chExp , bind , p )
+    case    Receive    ( true  , chExp , bind , p ) =>
+      handleServer     (         chExp , bind , p )
+    case    LetIn      ( bind  , exp   , p        ) =>
+      handleLetIn      ( bind  , exp   , p        )
+    case    IfThenElse ( exp   , p     , q        ) =>
+      handleIfThenElse ( exp   , p     , q        )
+    case    Parallel   ( p     , q                ) =>
+      handleParallel   ( p     , q                )
+    case    New        ( name  , p                ) =>
+      handleNew        ( name  , p                )
+    case End => this.procManager ! ReportStop(None)
+  }
+
   def receive = ({
-    case ProcGo => this.proc match {
-      case Send       ( chExp , msg   , p        ) =>
-     handleSend       ( chExp , msg   , p        )
-      case Receive    ( false , chExp , bind , p ) =>
-     handleReceive    (         chExp , bind , p )
-      case Receive    ( true  , chExp , bind , p ) =>
-     handleServer     (         chExp , bind , p )
-      case LetIn      ( bind  , exp   , p        ) =>
-     handleLetIn      ( bind  , exp   , p        )
-      case IfThenElse ( exp   , p     , q        ) =>
-     handleIfThenElse ( exp   , p     , q        )
-      case Parallel   ( p     , q                ) =>
-     handleParallel   ( p     , q                )
-      case New        ( name  , p                ) =>
-     handleNew        ( name  , p                )
-      case End => this.procManager ! ReportStop(None)
-    }
+    case ProcGo => this.handleCurrentProcess
   }: Receive) orElse forceReportStop
+
+  def handleMetaMessageReceived(metaInfo: MetaInfo): Unit = metaInfo match {
+    case _ => Unit
+  }
+
+  def computeMetaMessageToSend: MetaInfo = NoInfo
 }
 
 // Implements the behaviour of channels in pi calculus
@@ -248,11 +263,12 @@ class Channel(procManager: ActorRef) extends AbstractImplActor(procManager) {
       sndr: ActorRef,
       rcvr: ActorRef,
       evalMsg: EvalExp,
+      metaInfo: MetaInfo,
       newMappings: Map[Name, ActorRef])
     : Unit = {
 
     procManager ! SendOccurred
-    rcvr ! MsgChanToReceiver(evalMsg, NoInfo, newMappings)
+    rcvr ! MsgChanToReceiver(evalMsg, metaInfo, newMappings)
     sndr ! MsgConfirmToSender
   }
 
@@ -260,20 +276,24 @@ class Channel(procManager: ActorRef) extends AbstractImplActor(procManager) {
     // If the receiver request comes before the sender delivery
     case MsgRequestFromReceiver => {
       val msgReceiver: ActorRef = sender
-      context.become(({ case MsgSenderToChan(evalMsg, _, newMappings) => {
-        val msgSender: ActorRef = sender
-        this.deliver(msgSender, msgReceiver, evalMsg, newMappings)
-        context.unbecome()
-      }}: Receive) orElse forceReportStop)
+      context.become(({
+        case MsgSenderToChan(evalMsg, metaInfo, newMappings) => {
+          val msgSender: ActorRef = sender
+          this.deliver(msgSender, msgReceiver, evalMsg, metaInfo, newMappings)
+          context.unbecome()
+        }
+      }: Receive) orElse forceReportStop)
     }
     // If the sender delivery comes before the receiver request
-    case MsgSenderToChan(evalMsg, _, newMappings) => {
+    case MsgSenderToChan(evalMsg, metaInfo, newMappings) => {
       val msgSender: ActorRef = sender
-      context.become(({ case MsgRequestFromReceiver => {
-        val msgReceiver: ActorRef = sender
-        this.deliver(msgSender, msgReceiver, evalMsg, newMappings)
-        context.unbecome()
-      }}: Receive) orElse forceReportStop)
+      context.become(({
+        case MsgRequestFromReceiver => {
+          val msgReceiver: ActorRef = sender
+          this.deliver(msgSender, msgReceiver, evalMsg, metaInfo, newMappings)
+          context.unbecome()
+        }
+      }: Receive) orElse forceReportStop)
     }
   }: Receive) orElse forceReportStop
 }
