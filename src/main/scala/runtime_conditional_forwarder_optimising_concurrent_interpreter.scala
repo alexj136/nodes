@@ -12,14 +12,10 @@ class RunTCondFwdOptProcRunner(
     procManager: ActorRef)
   extends ProcRunner(_chanMap, _proc, procManager) {
 
-  private var optimisationAttempted: Boolean = false
-
-  override def handleServer(chExp: Exp, bind: Name, p: Proc): Unit = {
-    if (this.optimisationAttempted) super.handleServer(chExp, bind, p)
-    else {
-      this.proc = ???
-      this.optimisationAttempted = true
-      self ! ProcGo
-    }
+  def isServer: Boolean = this.proc match {
+    case Receive(true, _, _, _) => true
+    case _                      => false
   }
+
+  override def handleServer(chExp: Exp, bind: Name, p: Proc): Unit = ???
 }
