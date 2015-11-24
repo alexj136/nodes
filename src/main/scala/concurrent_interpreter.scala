@@ -39,7 +39,7 @@ class Launcher(
     nextName: Name,
     names: Map[Name, String],
     onCompletion: Function1[Proc, Unit],
-    procManagerClass: Class[_ <: ProcManager] = classOf[ProcManager]) {
+    procRunnerClass: Class[_ <: ProcRunner] = classOf[ProcRunner]) {
 
   var result: Option[Proc] = None
 
@@ -51,8 +51,9 @@ class Launcher(
       def run: Unit = onCompletion(result.get)
     })
 
-    val procManager: ActorRef =
-      sys.actorOf(Props(procManagerClass, this, nextName), "ProcManager")
+    val procManager: ActorRef = sys.actorOf(
+      Props(classOf[ProcManager], this, nextName, procRunnerClass),
+      "ProcManager")
 
     val initChanMap: Map[Name, ActorRef] = (p.chanLiterals map {
 
@@ -77,7 +78,11 @@ class Launcher(
 
 // Serves as parent actor for other actors. Keeps track of channels and runners.
 // Can be queried for deadlock detection.
-class ProcManager(launcher: Launcher, var nextName: Name) extends Actor {
+class ProcManager(
+    launcher: Launcher,
+    var nextName: Name,
+    procRunnerClass: Class[_ <: ProcRunner])
+  extends Actor {
   
   var liveActors: Set[ActorRef] = Set.empty
   var result: List[Proc] = Nil
@@ -95,8 +100,8 @@ class ProcManager(launcher: Launcher, var nextName: Name) extends Actor {
 
   def makeRunner(chanMap: Map[Name, ActorRef], p: Proc): Unit = {
     this.nextName = this.nextName.next
-    val newRunner: ActorRef = context.actorOf(Props(classOf[ProcRunner],
-      chanMap, p, self), s"ProcRunner${this.nextName.id}")
+    val newRunner: ActorRef = context.actorOf(Props(procRunnerClass,
+      chanMap, p, self), s"${procRunnerClass.getName}${this.nextName.id}")
     this.liveActors = this.liveActors + newRunner
     newRunner ! ProcGo
   }

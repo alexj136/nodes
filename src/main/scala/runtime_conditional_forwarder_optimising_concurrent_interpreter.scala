@@ -6,21 +6,6 @@ import interpreter_common._
 import interpreter_common.Functions._
 import concurrent_interpreter._
 
-class RunTCondFwdOptProcManager(
-    launcher: Launcher,
-    _nextName: Name)
-  extends ProcManager(launcher, _nextName) {
-
-  override def makeRunner(chanMap: Map[Name, ActorRef], p: Proc): Unit = {
-    this.nextName = this.nextName.next
-    val newRunner: ActorRef = context.actorOf(Props(
-      classOf[RunTCondFwdOptProcRunner],
-      chanMap, p, self), s"RunTCondFwdOptProcRunner${this.nextName.id}")
-    this.liveActors = this.liveActors + newRunner
-    newRunner ! ProcGo
-  }
-}
-
 class RunTCondFwdOptProcRunner(
     _chanMap: Map[Name, ActorRef],
     _proc: Proc,
