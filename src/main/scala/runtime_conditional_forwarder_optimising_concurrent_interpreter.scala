@@ -22,7 +22,7 @@ class RunTCondFwdOptProcRunner(
 
 object serverRewrite extends Function1[Proc, Option[Proc]] {
 
-  override def apply(p: Proc): Proc = p match {
+  override def apply(p: Proc): Option[Proc] = p match {
     case Send(chExp, msg, p) => serverRewrite(p) map (p => Send(chExp, msg, p))
 
     case Receive(repl, chExp, bind, p) =>
@@ -30,15 +30,15 @@ object serverRewrite extends Function1[Proc, Option[Proc]] {
 
     case LetIn(bind, exp, p) => serverRewrite(p) map (p => LetIn(bind, exp, p))
 
-    case IfThenElse(exp, p, q) =>
-      serverRewrite(p) map (p =>
-        serverRewrite(q) map (q =>
-          IfThenElse(exp, p, q)))
+    case IfThenElse(exp, p, q) => for {
+      p_ <- serverRewrite(p)
+      q_ <- serverRewrite(q)
+    } yield IfThenElse(exp, p_, q_)
 
-    case Parallel(p, q) =>
-      serverRewrite(p) map (p =>
-        serverRewrite(q) map (q =>
-          Parallel(exp, p, q)))
+    case Parallel(p, q) => for {
+      p_ <- serverRewrite(p)
+      q_ <- serverRewrite(q)
+    } yield Parallel(p_, q_)
 
     case New(nrch0,
          Send(chExp0, msg0,
