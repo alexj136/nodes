@@ -18,6 +18,12 @@ class RunTCondFwdOptProcRunner(
   }
 
   override def handleServer(chExp: Exp, bind: Name, p: Proc): Unit = ???
+
+  override def handleMetaMessageReceived(metaInfo: MetaInfo): Unit =
+    metaInfo match {
+      case UseAlternateChannel(oldCh, (newChName, newChRef)) => ???
+      case _ => Unit
+    }
 }
 
 object serverRewrite extends Function1[Proc, Option[Proc]] {
@@ -31,14 +37,14 @@ object serverRewrite extends Function1[Proc, Option[Proc]] {
     case LetIn(bind, exp, p) => serverRewrite(p) map (p => LetIn(bind, exp, p))
 
     case IfThenElse(exp, p, q) => for {
-      p_ <- serverRewrite(p)
-      q_ <- serverRewrite(q)
-    } yield IfThenElse(exp, p_, q_)
+      newP <- serverRewrite(p)
+      newQ <- serverRewrite(q)
+    } yield IfThenElse(exp, newP, newQ)
 
     case Parallel(p, q) => for {
-      p_ <- serverRewrite(p)
-      q_ <- serverRewrite(q)
-    } yield Parallel(p_, q_)
+      newP <- serverRewrite(p)
+      newQ <- serverRewrite(q)
+    } yield Parallel(newP, newQ)
 
     case New(nrch0,
          Send(chExp0, msg0,
@@ -61,4 +67,7 @@ object serverRewrite extends Function1[Proc, Option[Proc]] {
 
 // Signals to a server caller that a new server can be used, so substitute the
 // channel name of the old server with a new one.
-case class UseAlternateChannel(oldCh: Name, newCh: Name) extends MetaInfo
+case class UseAlternateChannel(
+    oldCh: Name,
+    newCh: (Name, ActorRef))
+  extends MetaInfo
