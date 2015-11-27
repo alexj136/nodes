@@ -21,7 +21,8 @@ class RunTCondFwdOptProcRunner(
 
   override def handleMetaMessageReceived(metaInfo: MetaInfo): Unit =
     metaInfo match {
-      case UseAlternateChannel(oldCh, (newChName, newChRef)) => ???
+      case UseAlternateChannel(oldCh, (newChName, newChRef)) if this.isServer =>
+        ???
       case _ => Unit
     }
 }
