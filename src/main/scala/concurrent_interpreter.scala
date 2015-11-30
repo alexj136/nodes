@@ -308,13 +308,13 @@ class PrintingChannel(
     procManager: ActorRef)
   extends AbstractImplActor(procManager) {
 
-  def receive: Receive = {
+  def receive: Receive = ({
     case MsgSenderToChan(evalMsg, _, _) => {
       procManager ! SendOccurred
       println(evalMsg.unEvalExp pstr this.names)
       sender ! MsgConfirmToSender
     }
-  }
+  }: Receive) orElse forceReportStop
 }
 
 // Top class for messages sent in this implementation
