@@ -7,10 +7,11 @@ import interpreter_common.Functions._
 import concurrent_interpreter._
 
 class FwdOptProcRunner(
+    parent: Option[ActorRef],
     _chanMap: Map[Name, ActorRef],
     _proc: Proc,
     procManager: ActorRef)
-  extends ProcRunner(_chanMap, _proc, procManager) {
+  extends ProcRunner(parent, _chanMap, _proc, procManager) {
 
   private var optimisationAttempted: Boolean = false
 

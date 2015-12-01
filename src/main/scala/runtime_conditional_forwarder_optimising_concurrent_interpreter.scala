@@ -7,10 +7,11 @@ import interpreter_common.Functions._
 import concurrent_interpreter._
 
 class RunTCondFwdOptProcRunner(
+    _parent: Option[ActorRef],
     _chanMap: Map[Name, ActorRef],
     _proc: Proc,
     procManager: ActorRef)
-  extends ProcRunner(_chanMap, _proc, procManager) {
+  extends ProcRunner(_parent, _chanMap, _proc, procManager) {
 
   def isServer: Boolean = this.proc match {
     case Receive(true, _, _, _) => true

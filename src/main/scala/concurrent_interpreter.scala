@@ -67,7 +67,7 @@ class Launcher(
 
     procManager ! SetLiveActors(initChanMap.values.toSet)
 
-    procManager ! MakeRunner(initChanMap, p)
+    procManager ! MakeRunner(None, initChanMap, p)
 
     sys.scheduler.schedule(3.seconds, 3.seconds, procManager,
       CheckFinished)(sys.dispatcher)
@@ -98,9 +98,13 @@ class ProcManager(
     (this.nextName, newChannel)
   }
 
-  def makeRunner(chanMap: Map[Name, ActorRef], p: Proc): Unit = {
+  def makeRunner(
+      parent: Option[ActorRef],
+      chanMap: Map[Name, ActorRef],
+      p: Proc)
+  : Unit = {
     this.nextName = this.nextName.next
-    val newRunner: ActorRef = context.actorOf(Props(procRunnerClass,
+    val newRunner: ActorRef = context.actorOf(Props(procRunnerClass, parent,
       chanMap, p, self), s"${procRunnerClass.getName}${this.nextName.id}")
     this.liveActors = this.liveActors + newRunner
     newRunner ! ProcGo
@@ -134,7 +138,7 @@ class ProcManager(
       val (name, chan): (Name, ActorRef) = this.makeChannel
       sender ! MakeChannelResponse(name, chan)
     }
-    case MakeRunner(chanMap, p) => this.makeRunner(chanMap, p)
+    case MakeRunner(parent, chanMap, p) => this.makeRunner(parent, chanMap, p)
   }
 }
 
@@ -151,6 +155,7 @@ abstract class AbstractImplActor(val procManager: ActorRef) extends Actor {
 
 // Runs a process
 class ProcRunner(
+    val parent: Option[ActorRef],
     var chanMap: Map[Name, ActorRef],
     var proc: Proc,
     procManager: ActorRef)
@@ -194,7 +199,7 @@ class ProcRunner(
       case MsgChanToReceiver(evalMsg, metaInfo, newMappings) => {
         val newProc: Proc = substituteProc(p, bind, evalMsg)
         val newChanMap: Map[Name, ActorRef] = this.chanMap ++ newMappings
-        this.procManager ! MakeRunner(newChanMap, newProc)
+        this.procManager ! MakeRunner(Some(self), newChanMap, newProc)
         this.handleMetaMessageReceived(metaInfo)
         context.unbecome()
         self ! ProcGo
@@ -217,7 +222,7 @@ class ProcRunner(
   }
 
   def handleParallel(p: Proc, q: Proc): Unit = {
-    this.procManager ! MakeRunner(this.chanMap, q)
+    this.procManager ! MakeRunner(this.parent, this.chanMap, q)
     this.proc = p
     self ! ProcGo
   }
@@ -361,6 +366,7 @@ case object MakeChannel extends CreationRequest
 
 // Requests a new process
 case class  MakeRunner(
+    parent: Option[ActorRef],
     chanMap: Map[Name, ActorRef],
     p: Proc)
   extends CreationRequest
