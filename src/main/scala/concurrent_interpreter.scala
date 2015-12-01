@@ -146,7 +146,7 @@ abstract class AbstractImplActor(val procManager: ActorRef) extends Actor {
 
   def reportValue: Option[Proc] = None
 
-  def forceReportStop: Receive = {
+  def defaultBehaviours: Receive = {
     case ForceReportStop => {
       this.procManager ! ReportStop(this.reportValue)
     }
@@ -163,6 +163,10 @@ class ProcRunner(
 
   override def reportValue: Option[Proc] = Some(this.proc)
 
+  override def defaultBehaviours: Receive = super.defaultBehaviours orElse {
+    case metaInfo: MetaInfo => this.handleMetaMessageReceived(metaInfo)
+  }
+
   def handleSend(chExp: Exp, msg: Exp, p: Proc): Unit = {
     val evalChExp: EvalExp = evalExp(chExp)
     val evalMsg: EvalExp = evalExp(msg)
@@ -173,7 +177,7 @@ class ProcRunner(
       this.proc = p
       context.unbecome()
       self ! ProcGo
-    }}: Receive) orElse forceReportStop)
+    }}: Receive) orElse defaultBehaviours)
   }
 
   def handleReceive(chExp: Exp, bind: Name, p: Proc): Unit = {
@@ -189,7 +193,7 @@ class ProcRunner(
         context.unbecome()
         self ! ProcGo
       }
-    }: Receive) orElse forceReportStop)
+    }: Receive) orElse defaultBehaviours)
   }
 
   def handleServer(chExp: Exp, bind: Name, p: Proc): Unit = {
@@ -204,7 +208,7 @@ class ProcRunner(
         context.unbecome()
         self ! ProcGo
       }
-    }: Receive) orElse forceReportStop)
+    }: Receive) orElse defaultBehaviours)
   }
 
   def handleLetIn(bind: Name, exp: Exp, p: Proc): Unit = {
@@ -234,7 +238,7 @@ class ProcRunner(
       this.proc = substituteProc(p, name, EEChan(id))
       context.unbecome()
       self ! ProcGo
-    }}: Receive) orElse forceReportStop)
+    }}: Receive) orElse defaultBehaviours)
   }
 
   def handleCurrentProcess: Unit = this.proc match {
@@ -257,7 +261,7 @@ class ProcRunner(
 
   def receive = ({
     case ProcGo => this.handleCurrentProcess
-  }: Receive) orElse forceReportStop
+  }: Receive) orElse defaultBehaviours
 
   def handleMetaMessageReceived(metaInfo: MetaInfo): Unit = metaInfo match {
     case _ => Unit
@@ -292,7 +296,7 @@ class Channel(procManager: ActorRef) extends AbstractImplActor(procManager) {
           this.deliver(msgSender, msgReceiver, evalMsg, metaInfo, newMappings)
           context.unbecome()
         }
-      }: Receive) orElse forceReportStop)
+      }: Receive) orElse defaultBehaviours)
     }
     // If the sender delivery comes before the receiver request
     case MsgSenderToChan(evalMsg, metaInfo, newMappings) => {
@@ -303,9 +307,9 @@ class Channel(procManager: ActorRef) extends AbstractImplActor(procManager) {
           this.deliver(msgSender, msgReceiver, evalMsg, metaInfo, newMappings)
           context.unbecome()
         }
-      }: Receive) orElse forceReportStop)
+      }: Receive) orElse defaultBehaviours)
     }
-  }: Receive) orElse forceReportStop
+  }: Receive) orElse defaultBehaviours
 }
 
 class PrintingChannel(
@@ -319,7 +323,7 @@ class PrintingChannel(
       println(evalMsg.unEvalExp pstr this.names)
       sender ! MsgConfirmToSender
     }
-  }: Receive) orElse forceReportStop
+  }: Receive) orElse defaultBehaviours
 }
 
 // Top class for messages sent in this implementation
