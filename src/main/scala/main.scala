@@ -3,8 +3,8 @@ package main
 import syntax._
 import parser._
 import interpreter._
-import concurrent_interpreter._
-import forwarder_optimising_concurrent_interpreter._
+import interpreter.concurrent._
+import interpreter.concurrent.forwarder_optimising.spawn_time._
 import java.io.File
 import java.io.FileInputStream
 import java.io.IOException

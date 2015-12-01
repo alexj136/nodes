@@ -1,9 +1,9 @@
-package runtime_conditional_forwarder_optimising_concurrent_interpreter
+package interpreter.concurrent.forwarder_optimising.runtime_conditional
 
 import akka.actor._
 import syntax._
 import interpreter._
-import concurrent_interpreter._
+import interpreter.concurrent._
 
 class RunTCondFwdOptProcRunner(
     _parent: Option[ActorRef],

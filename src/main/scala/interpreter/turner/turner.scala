@@ -1,4 +1,4 @@
-package turner_interpreter
+package interpreter.turner
 
 import syntax._
 import interpreter._

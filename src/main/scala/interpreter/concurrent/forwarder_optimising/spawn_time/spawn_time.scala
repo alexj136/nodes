@@ -1,9 +1,9 @@
-package forwarder_optimising_concurrent_interpreter
+package interpreter.concurrent.forwarder_optimising.spawn_time
 
 import akka.actor._
 import syntax._
 import interpreter._
-import concurrent_interpreter._
+import interpreter.concurrent._
 
 class FwdOptProcRunner(
     parent: Option[ActorRef],

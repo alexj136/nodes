@@ -1,8 +1,8 @@
-package forwarder_optimising_turner_interpreter
+package interpreter.turner.forwarder_optimising
 
 import syntax._
 import interpreter._
-import turner_interpreter._
+import interpreter.turner._
 
 class ForwarderOptimisingTMState(
     run:   List[Proc], 

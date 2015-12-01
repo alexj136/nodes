@@ -1,4 +1,4 @@
-package concurrent_interpreter
+package interpreter.concurrent
 
 import scala.concurrent.{Await, Future}
 import scala.concurrent.duration._
