@@ -2,8 +2,7 @@ package main
 
 import syntax._
 import parser._
-import interpreter_common._
-import interpreter_common.Functions._
+import interpreter._
 import concurrent_interpreter._
 import forwarder_optimising_concurrent_interpreter._
 import java.io.File

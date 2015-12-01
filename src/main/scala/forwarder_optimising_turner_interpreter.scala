@@ -1,8 +1,7 @@
 package forwarder_optimising_turner_interpreter
 
 import syntax._
-import interpreter_common._
-import interpreter_common.Functions._
+import interpreter._
 import turner_interpreter._
 
 class ForwarderOptimisingTMState(

@@ -1,8 +1,7 @@
 package tracing_interpreter
 
 import syntax._
-import interpreter_common._
-import interpreter_common.Functions._
+import interpreter._
 
 sealed abstract class ProcQueue {
   def sends    : Boolean
@@ -102,7 +101,7 @@ class TracingMachineState(
 
     case Left(Send(ChanLiteral(ch), msg, p)) :: runTail
       if this.names.get(ch) == Some("$print") => {
-        println(evalExp(msg).unEvalExp pstr this.names)
+        println((EvalExp from msg).unEvalExp pstr this.names)
         this.withRun(Left(p) :: runTail).someOf
       }
 
@@ -111,7 +110,7 @@ class TracingMachineState(
         val (copies, bind, q): (Option[Int], Name, Proc) =
           this.wait(ch).headReceive
         val moreRecs: ProcQueue = this.wait(ch).tail
-        val qSub: Proc = substituteProc(q, bind, evalExp(msg))
+        val qSub: Proc = substituteProc(q, bind, EvalExp from msg)
         val waitTail: ProcQueue = if (copies.isEmpty) moreRecs
           else moreRecs append Right(copies map (_ + 1), bind, q)
         this.withRun(Left(p) :: (runTail :+ Left(qSub)))
@@ -122,7 +121,7 @@ class TracingMachineState(
         .withWait(ch, this.wait(ch) append Left(msg, p))
         .someOf
 
-    case Left(Send(chExp, msg, p)) :: runTail => evalExp(chExp) match {
+    case Left(Send(chExp, msg, p)) :: runTail => EvalExp from chExp match {
       case EEChan(ch) =>
         this.withRun(Left(Send(ChanLiteral(ch), msg, p)) :: runTail).someOf
       case _          => throw FreeVariableError(Send(chExp, msg, p))
@@ -132,7 +131,7 @@ class TracingMachineState(
       if (this.wait(ch).sends) {
         val (msg, q): (Exp, Proc) = this.wait(ch).headSend
         val moreSends: ProcQueue = this.wait(ch).tail
-        val pSub: Proc = substituteProc(p, bind, evalExp(msg))
+        val pSub: Proc = substituteProc(p, bind, EvalExp from msg)
         this.withRun(Left(pSub) :: (runTail :+ Left(q)))
             .withWait(ch, moreSends)
             .someOf
@@ -143,7 +142,7 @@ class TracingMachineState(
         .someOf
 
     case Left(Receive(false, chExp, bind, p)) :: runTail =>
-      evalExp(chExp) match {
+      EvalExp from chExp match {
         case EEChan(ch) =>
           this.withRun(Left(Receive(false, ChanLiteral(ch), bind, p)) :: runTail)
             .someOf
@@ -153,10 +152,10 @@ class TracingMachineState(
     case Right((copies, chExp, bind, p)) :: runTail => ???
 
     case Left(LetIn(name, exp, p)) :: runTail =>
-      this.withRun(Left(substituteProc(p, name, evalExp(exp))) :: runTail)
+      this.withRun(Left(substituteProc(p, name, EvalExp from exp)) :: runTail)
         .someOf
 
-    case Left(IfThenElse(exp, tP, fP)) :: runTail => evalExp(exp) match {
+    case Left(IfThenElse(exp, tP, fP)) :: runTail => EvalExp from exp match {
       case EEBool(true ) => this.withRun(Left(tP) :: runTail).someOf
       case EEBool(false) => this.withRun(Left(fP) :: runTail).someOf
       case _             => throw TypeError("if")

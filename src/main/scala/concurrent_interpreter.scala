@@ -6,8 +6,7 @@ import akka.util.Timeout
 import akka.actor._
 import akka.pattern.{Patterns, ask}
 import syntax._
-import interpreter_common._
-import interpreter_common.Functions._
+import interpreter._
 
 /**
  * This module gives an interpreted concurrent implementation of the nodes
@@ -168,8 +167,8 @@ class ProcRunner(
   }
 
   def handleSend(chExp: Exp, msg: Exp, p: Proc): Unit = {
-    val evalChExp: EvalExp = evalExp(chExp)
-    val evalMsg: EvalExp = evalExp(msg)
+    val evalChExp: EvalExp = EvalExp from chExp
+    val evalMsg: EvalExp = EvalExp from msg
     this.chanMap(evalChExp.channelName) ! MsgSenderToChan(evalMsg,
       this.computeMetaMessageToSend,
       this.chanMap.filterKeys(evalMsg.channelNames.contains(_)))
@@ -181,7 +180,7 @@ class ProcRunner(
   }
 
   def handleReceive(chExp: Exp, bind: Name, p: Proc): Unit = {
-    val evalChExp: EvalExp = evalExp(chExp)
+    val evalChExp: EvalExp = EvalExp from chExp
     this.chanMap(evalChExp.channelName) ! MsgRequestFromReceiver
     context.become(({
       case MsgChanToReceiver(evalMsg, metaInfo, newMappings) => {
@@ -197,7 +196,7 @@ class ProcRunner(
   }
 
   def handleServer(chExp: Exp, bind: Name, p: Proc): Unit = {
-    val evalChExp: EvalExp = evalExp(chExp)
+    val evalChExp: EvalExp = EvalExp from chExp
     this.chanMap(evalChExp.channelName) ! MsgRequestFromReceiver
     context.become(({
       case MsgChanToReceiver(evalMsg, metaInfo, newMappings) => {
@@ -212,12 +211,12 @@ class ProcRunner(
   }
 
   def handleLetIn(bind: Name, exp: Exp, p: Proc): Unit = {
-    this.proc = substituteProc(p, bind, evalExp(exp))
+    this.proc = substituteProc(p, bind, EvalExp from exp)
     self ! ProcGo
   }
 
   def handleIfThenElse(exp: Exp, p: Proc, q: Proc): Unit = {
-    evalExp(exp) match {
+    EvalExp from exp match {
       case EEBool(true ) => this.proc = p
       case EEBool(false) => this.proc = q
       case _ => ???

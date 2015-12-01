@@ -1,8 +1,7 @@
 package turner_interpreter
 
 import syntax._
-import interpreter_common._
-import interpreter_common.Functions._
+import interpreter._
 
 class TurnerMachineState(
     run:   List[Proc], 
@@ -68,7 +67,7 @@ class TurnerMachineState(
   def handleSend(send: Send): Option[MachineState] = send match {
     case Send(ChanLiteral(ch), msg, p)
       if this.names.get(ch) == Some("$print") => {
-        println(evalExp(msg).unEvalExp pstr this.names)
+        println((EvalExp from msg).unEvalExp pstr this.names)
         this.runPrepend(p).someOf
       }
 
@@ -78,7 +77,7 @@ class TurnerMachineState(
       nextWait match {
 
       case Some(Receive(repl, ChanLiteral(_), bind, q)) => {
-        val qSub: Proc = substituteProc(q, bind, evalExp(msg))
+        val qSub: Proc = substituteProc(q, bind, EvalExp from msg)
         if (repl)
           thisWithoutNextWait
             .runPrepend(p)
@@ -94,7 +93,7 @@ class TurnerMachineState(
       case _ => this.waitAppend(ch, send).someOf
     }
 
-    case Send(chExp, msg, p) => evalExp(chExp) match {
+    case Send(chExp, msg, p) => EvalExp from chExp match {
       case EEChan(ch) => this.runPrepend(Send(ChanLiteral(ch), msg, p)).someOf
       case _          => throw FreeVariableError(send)
     }
@@ -107,7 +106,7 @@ class TurnerMachineState(
       nextWait match {
 
         case Some(Send(ChanLiteral(_), msg, q)) => {
-          val pSub: Proc = substituteProc(p, bind, evalExp(msg))
+          val pSub: Proc = substituteProc(p, bind, EvalExp from msg)
           if (repl)
             thisWithoutNextWait
               .runPrepend(receive)
@@ -123,7 +122,7 @@ class TurnerMachineState(
         case _ => this.waitAppend(ch, receive).someOf
       }
 
-    case Receive(repl, chExp, bind, p) => evalExp(chExp) match {
+    case Receive(repl, chExp, bind, p) => EvalExp from chExp match {
       case EEChan(ch) =>
         this.runPrepend(Receive(repl, ChanLiteral(ch), bind, p)).someOf
       case _          => throw FreeVariableError(receive)
@@ -132,11 +131,11 @@ class TurnerMachineState(
 
   def handleLetIn(letIn: LetIn): Option[MachineState] = letIn match {
     case LetIn(name, exp, p) =>
-      this.runPrepend(substituteProc(p, name, evalExp(exp))).someOf
+      this.runPrepend(substituteProc(p, name, EvalExp from exp)).someOf
   }
 
   def handleIfThenElse(iTE: IfThenElse): Option[MachineState] = iTE match {
-    case IfThenElse(exp, tP, fP) => evalExp(exp) match {
+    case IfThenElse(exp, tP, fP) => EvalExp from exp match {
       case EEBool(bool)  => this.runPrepend(if (bool) tP else fP).someOf
       case _             => throw TypeError("if")
     }
