@@ -21,9 +21,10 @@ class RunTCondFwdOptProcRunner(
 
   override def handleMetaMessageReceived(metaInfo: MetaInfo): Unit =
     metaInfo match {
-      case UseAlternateChannel(oldCh, (newChName, newChRef)) if this.isServer =>
+      case UseAlternateChannel(oldChName, newChRef) if this.isServer =>
         ???
-      case _ => Unit
+      case NotifyParent(moreInfo) => this.parent map (_ ! moreInfo)
+      case _ => super.handleMetaMessageReceived(metaInfo)
     }
 }
 
@@ -69,6 +70,9 @@ object serverRewrite extends Function1[Proc, Option[Proc]] {
 // Signals to a server caller that a new server can be used, so substitute the
 // channel name of the old server with a new one.
 case class UseAlternateChannel(
-    oldCh: Name,
-    newCh: (Name, ActorRef))
+    oldChName: Name,
+    newChRef: ActorRef)
   extends MetaInfo
+
+// Tells a process to pass the contained MetaInfo on to its parent process.
+case class NotifyParent(metaInfo: MetaInfo) extends MetaInfo
