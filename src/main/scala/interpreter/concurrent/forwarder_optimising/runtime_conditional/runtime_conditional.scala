@@ -19,35 +19,53 @@ class RunTCondFwdOptProcRunner(
 
   override def handleServer(chExp: Exp, bind: Name, p: Proc): Unit = ???
 
-  override def handleMetaMessageReceived(metaInfo: MetaInfo): Unit =
-    metaInfo match {
-      case UseAlternateChannel(oldChName, newChRef) if this.isServer =>
-        ???
-      case NotifyParent(moreInfo) => this.parent map (_ ! moreInfo)
-      case _ => super.handleMetaMessageReceived(metaInfo)
+  override def handleMetaMessageReceived(
+      metaInfo: MetaInfo)
+  : Unit = metaInfo match {
+
+    case UseAlternateChannel(
+        oldChName,
+        newChName,
+        newChRef) if this.isServer => {
+
+      this.chanMap = this.chanMap updated (newChName, newChRef)
+      this.proc = ???/*this.substituteProc(this.proc, oldChName,
+        ChanLiteral(newChName))*/
     }
+
+    case NotifyParent(moreInfo) => this.parent map (_ ! moreInfo)
+
+    case _ => super.handleMetaMessageReceived(metaInfo)
+  }
 }
 
-object serverRewrite extends Function1[Proc, Option[Proc]] {
+object forwarderRewrite extends Function1[Proc, Option[Proc]] {
 
   override def apply(p: Proc): Option[Proc] = p match {
-    case Send(chExp, msg, p) => serverRewrite(p) map (p => Send(chExp, msg, p))
+    case Send(chExp, msg, p) =>
+      forwarderRewrite(p) map (p => Send(chExp, msg, p))
 
     case Receive(repl, chExp, bind, p) =>
-      serverRewrite(p) map (p => Receive(repl, chExp, bind, p))
+      forwarderRewrite(p) map (p => Receive(repl, chExp, bind, p))
 
-    case LetIn(bind, exp, p) => serverRewrite(p) map (p => LetIn(bind, exp, p))
+    case LetIn(bind, exp, p) =>
+      forwarderRewrite(p) map (p => LetIn(bind, exp, p))
 
     case IfThenElse(exp, p, q) => for {
-      newP <- serverRewrite(p)
-      newQ <- serverRewrite(q)
+      newP <- forwarderRewrite(p)
+      newQ <- forwarderRewrite(q)
     } yield IfThenElse(exp, newP, newQ)
 
     case Parallel(p, q) => for {
-      newP <- serverRewrite(p)
-      newQ <- serverRewrite(q)
+      newP <- forwarderRewrite(p)
+      newQ <- forwarderRewrite(q)
     } yield Parallel(newP, newQ)
 
+    /* Here we match conditional forwards. These processes create a new channel
+     * and send a computation request, expecting a reply on the new channel.
+     * Hence the outgoing message msg0 must be an expression containing the new
+     * channel nrch0.
+     */
     case New(nrch0,
          Send(chExp0, msg0,
          Receive(false, Variable(nrch1), reply0,
@@ -61,7 +79,7 @@ object serverRewrite extends Function1[Proc, Option[Proc]] {
              && (reply0 == reply2))
                => (Some(???): Option[Proc])
 
-    case New(bind, p) => serverRewrite(p) map (p => New(bind, p))
+    case New(bind, p) => forwarderRewrite(p) map (p => New(bind, p))
 
     case End => (None: Option[Proc])
   }
@@ -71,6 +89,7 @@ object serverRewrite extends Function1[Proc, Option[Proc]] {
 // channel name of the old server with a new one.
 case class UseAlternateChannel(
     oldChName: Name,
+    newChName: Name,
     newChRef: ActorRef)
   extends MetaInfo
 
