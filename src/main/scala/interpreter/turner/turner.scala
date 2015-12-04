@@ -3,6 +3,21 @@ package interpreter.turner
 import syntax._
 import interpreter._
 
+object runWithTurnerMachine
+  extends Function3[Proc, Map[Name, String], Name, Proc] {
+
+  def apply(proc: Proc, names: Map[Name, String], next: Name): Proc = {
+    var state: TurnerMachineState =
+      new TurnerMachineState(proc.listify, names, next)
+    var stepState: Option[TurnerMachineState] = state.step
+    while (stepState != None) {
+      state     = stepState.get
+      stepState = state.step
+    }
+    state.toProc
+  }
+}
+
 class TurnerMachineState(
     run:   List[Proc], 
     wait:  Map[Name, List[Proc]],
