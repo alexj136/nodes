@@ -6,6 +6,8 @@ abstract class MachineState {
   def toProc: Proc
   def step: Option[MachineState]
   def someOf: Option[MachineState] = Some(this)
+  def getNames: Map[Name, String]
+  def getNext: Name
 }
 
 sealed abstract class EvaluationException extends Exception

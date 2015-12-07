@@ -3,18 +3,27 @@ package interpreter.turner
 import syntax._
 import interpreter._
 
-object runWithTurnerMachine
-  extends Function3[Proc, Map[Name, String], Name, Proc] {
+object runWithTurnerMachine extends Function3[
+    Proc,
+    Map[Name, String],
+    Name,
+    (Proc, Map[Name, String], Name)
+  ] {
 
-  def apply(proc: Proc, names: Map[Name, String], next: Name): Proc = {
-    var state: TurnerMachineState =
-      new TurnerMachineState(proc.listify, names, next)
-    var stepState: Option[TurnerMachineState] = state.step
+  def apply(
+      proc: Proc,
+      names: Map[Name, String],
+      next: Name)
+  : (Proc, Map[Name, String], Name) = {
+    var state: MachineState = new TurnerMachineState(proc.listify,
+      names map {case (id, str) => (id, Nil)}, names, next)
+    println("jere")
+    var stepState: Option[MachineState] = state.step
     while (stepState != None) {
       state     = stepState.get
       stepState = state.step
     }
-    state.toProc
+    (state.toProc, state.getNames, state.getNext)
   }
 }
 
@@ -26,6 +35,9 @@ class TurnerMachineState(
 
   override def toProc: Proc = (this.run :: this.wait.toList.map(_._2)).flatten
     .fold(End){ (p, q) => Parallel(p, q) }
+
+  def getNames: Map[Name, String] = names
+  def getNext: Name = next
 
   def withRun(newRun: List[Proc]): TurnerMachineState =
     new TurnerMachineState(newRun, this.wait, this.names, this.next)

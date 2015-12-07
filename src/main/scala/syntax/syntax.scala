@@ -66,9 +66,11 @@ sealed abstract class Proc extends SyntaxElement {
 
   /** Syntax-equivalence for processes.
    */
-  def syntaxEquiv(thisNames: Map[Name, String],
-      q: Proc, qNames: Map[Name, String]): Boolean =
-    (this, q) match {
+  def syntaxEquiv(
+      thisNames: Map[Name, String],
+      q: Proc,
+      qNames: Map[Name, String])
+    : Boolean = (this, q) match {
       case ( Send       ( c , e , p     ) , Send       ( d , f , q     ) ) =>
         c.syntaxEquiv(thisNames, d, qNames) &&
           e.syntaxEquiv(thisNames, f, qNames) &&
@@ -94,7 +96,15 @@ sealed abstract class Proc extends SyntaxElement {
         true
       case ( _                            , _                            ) =>
         false
-    }
+  }
+
+  /* Structural congruence for processes.
+   */
+  def struct(
+      thisNames: Map[Name, String],
+      q: Proc,
+      qNames: Map[Name, String])
+    : Boolean = ???
 }
 
 case class  Send      ( ch:   Exp     , msg: Exp  , p:    Proc           )
