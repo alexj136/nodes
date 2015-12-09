@@ -6,8 +6,9 @@ sealed trait SyntaxElement {
   def free: Set[Name]
 }
 
-class Name(val id: Int) {
+case class Name(val id: Int) {
   def next: Name = new Name(this.id + 1)
+  override def toString: String = s"Name(${this.id})" // for debugging
 }
 
 abstract class Info

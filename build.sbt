@@ -10,6 +10,8 @@ libraryDependencies += "org.scalacheck" %% "scalacheck" % "1.12.5" % "test"
 
 scalacOptions ++= Seq("-feature", "-deprecation", "unchecked")
 
+testOptions in Test += Tests.Argument(TestFrameworks.ScalaCheck, "-verbosity", "2")
+
 sourceGenerators in Compile <+= sourceManaged in Compile map { dir =>
   val lexerFile = dir / "Lexer.java"
   scala.sys.process.Process(
