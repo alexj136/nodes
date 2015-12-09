@@ -65,38 +65,32 @@ sealed abstract class Proc extends SyntaxElement {
     case _                  => List(this)
   }
 
-  /** Syntax-equivalence for processes.
+  /** Alpha-equivalence for processes. If the processes are alpha-equivalent, a
+   *  Some of a map containing the 'name equlivalences' between this and that
+   *  arereturned in an Option. If they are not alpha equivalent, None is
+   *  returned.
    */
-  def syntaxEquiv(
-      thisNames: Map[Name, String],
-      q: Proc,
-      qNames: Map[Name, String])
-    : Boolean = (this, q) match {
-      case ( Send       ( c , e , p     ) , Send       ( d , f , q     ) ) =>
-        c.syntaxEquiv(thisNames, d, qNames) &&
-          e.syntaxEquiv(thisNames, f, qNames) &&
-          p.syntaxEquiv(thisNames, q, qNames)
-      case ( Receive    ( r , c , e , p ) , Receive    ( s , d , f , q ) ) =>
-        (r == s) && c.syntaxEquiv(thisNames, d, qNames) &&
-          (thisNames(e) == qNames(f)) &&
-          p.syntaxEquiv(thisNames, q, qNames)
-      case ( LetIn      ( n , x , p     ) , LetIn      ( m , y , q     ) ) =>
-        (thisNames(n) == qNames(m)) &&
-          x.syntaxEquiv(thisNames, y, qNames) &&
-          p.syntaxEquiv(thisNames, q, qNames)
-      case ( IfThenElse ( a , p , r     ) , IfThenElse ( b , q , s     ) ) =>
-        a.syntaxEquiv(thisNames, b, qNames) &&
-          p.syntaxEquiv(thisNames, q, qNames) &&
-          r.syntaxEquiv(thisNames, s, qNames)
-      case ( Parallel   ( p , r         ) , Parallel   ( q , s         ) ) =>
-        p.syntaxEquiv(thisNames, q, qNames) &&
-          r.syntaxEquiv(thisNames, s, qNames)
-      case ( New        ( n , p         ) , New        ( m , q         ) ) =>
-        p.syntaxEquiv(thisNames, q, qNames) && (thisNames(n) == qNames(m))
-      case ( End                          , End                          ) =>
-        true
-      case ( _                            , _                            ) =>
-        false
+  def alphaEquiv(that: Proc): Option[Map[Name, Name]] = (this, that) match {
+    case ( Send       ( c , e , p     ) , Send       ( d , f , q     ) ) =>
+      alphaEquivCombine(alphaEquivCombine(
+        c alphaEquiv d, e alphaEquiv f), p alphaEquiv q)
+    case ( Receive    ( r , c , e , p ) , Receive    ( s , d , f , q ) ) =>
+      if (r == s) alphaEquivCombine(c alphaEquiv d,
+        alphaEquivEnsureBinding(p alphaEquiv q, e, f)) else None
+    case ( LetIn      ( n , x , p     ) , LetIn      ( m , y , q     ) ) =>
+      alphaEquivCombine(x alphaEquiv y,
+        alphaEquivEnsureBinding(p alphaEquiv q, n, m))
+    case ( IfThenElse ( a , p , r     ) , IfThenElse ( b , q , s     ) ) =>
+      alphaEquivCombine(alphaEquivCombine(
+        a alphaEquiv b, p alphaEquiv q), r alphaEquiv s)
+    case ( Parallel   ( p , r         ) , Parallel   ( q , s         ) ) =>
+      alphaEquivCombine(p alphaEquiv q, r alphaEquiv s)
+    case ( New        ( n , p         ) , New        ( m , q         ) ) =>
+      alphaEquivEnsureBinding(p alphaEquiv q, n, m)
+    case ( End                          , End                          ) =>
+      Some(Map.empty)
+    case ( _                            , _                            ) =>
+      None
   }
 
   /* Structural congruence for processes.
@@ -105,7 +99,7 @@ sealed abstract class Proc extends SyntaxElement {
       thisNames: Map[Name, String],
       q: Proc,
       qNames: Map[Name, String])
-    : Boolean = ???
+    : Boolean = false
 }
 
 case class  Send      ( ch:   Exp     , msg: Exp  , p:    Proc           )
@@ -180,30 +174,67 @@ sealed abstract class Exp extends SyntaxElement {
       s"${l pstr names} ${ty.toString} ${r pstr names}"
   }
 
-  /** Syntax-equivalence for expressions
+  /** Alpha-equivalence for expressions
    */
-  def syntaxEquiv(thisNames: Map[Name, String],
-      y: Exp, yNames: Map[Name, String]): Boolean =
-    (this, y) match {
+  def alphaEquiv(that: Exp): Option[Map[Name, Name]] = {
+
+    (this, that) match {
       case ( Variable    ( n         ) , Variable    ( m         ) ) =>
-        thisNames(n) == yNames(m)
+        Some(Map(n -> m))
       case ( IntLiteral  ( a         ) , IntLiteral  ( b         ) ) =>
-        a == b
+        if (a == b) Some(Map.empty) else None
       case ( BoolLiteral ( a         ) , BoolLiteral ( b         ) ) =>
-        a == b
+        if (a == b) Some(Map.empty) else None
       case ( ChanLiteral ( n         ) , ChanLiteral ( m         ) ) =>
-        thisNames(n) == yNames(m)
+        Some(Map(n -> m))
       case ( Pair        ( a , c     ) , Pair        ( b , d     ) ) =>
-        a.syntaxEquiv(thisNames, b, yNames) &&
-          c.syntaxEquiv(thisNames, d, yNames)
+        alphaEquivCombine(a alphaEquiv b, c alphaEquiv d)
       case ( UnExp       ( a , c     ) , UnExp       ( b , d     ) ) =>
-        (a == b) && c.syntaxEquiv(thisNames, d, yNames)
+        if (a == b) c alphaEquiv d else None
       case ( BinExp      ( a , c , e ) , BinExp      ( b , d , f ) ) =>
-        (a == b) && c.syntaxEquiv(thisNames, d, yNames) &&
-          e.syntaxEquiv(thisNames, f, yNames)
-      case ( _                         , _                         ) => false
+        if (a == b) alphaEquivCombine(c alphaEquiv d, e alphaEquiv f) else None
+      case ( _                         , _                         ) => None
     }
+  }
 }
+
+object alphaEquivCombine extends Function2[
+    Option[Map[Name, Name]],
+    Option[Map[Name, Name]],
+    Option[Map[Name, Name]]
+  ] {
+
+  def apply(
+      a: Option[Map[Name, Name]],
+      b: Option[Map[Name, Name]])
+    : Option[Map[Name, Name]] = (a, b) match {
+    case (Some(am), Some(bm))
+      if !(((am.keySet & bm.keySet) map (n => am(n) == bm(n)))
+        contains false) => Some(am ++ bm)
+    case _ => None
+  }
+}
+
+object alphaEquivEnsureBinding extends Function3[
+    Option[Map[Name, Name]],
+    Name,
+    Name,
+    Option[Map[Name, Name]]
+  ] {
+
+  def apply(
+      a: Option[Map[Name, Name]],
+      n: Name,
+      m: Name)
+    : Option[Map[Name, Name]] = a match {
+    case Some(assocs)
+      if !assocs.contains(n) && !assocs.valuesIterator.contains(m) => a
+    case Some(assocs)
+      if  assocs.contains(n) &&  assocs(n) == m                    => a
+    case _ => None
+  }
+}
+
 case class Variable    ( name:      Name                          ) extends Exp
 case class IntLiteral  ( value:     Int                           ) extends Exp
 case class BoolLiteral ( value:     Boolean                       ) extends Exp
@@ -229,7 +260,6 @@ sealed abstract class BinOp {
     case Or         => "||"
   }
 }
-
 case object Add       extends BinOp
 case object Sub       extends BinOp
 case object Mul       extends BinOp
