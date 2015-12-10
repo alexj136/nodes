@@ -6,17 +6,12 @@ import org.scalacheck._
 
 object TurnerMachineProperties extends Properties("Proc") {
 
-  val names: Map[Name, String] = Map (
-    ( Name(0), "a" ) ,
-    ( Name(1), "b" ) ,
-    ( Name(2), "c" ) ,
-    ( Name(3), "d" ) ,
-    ( Name(4), "e" ) ,
-    ( Name(5), "f" ) )
+  val names: Map[Name, String] = (((0 to 51) map (n => Name(n)))
+    .zip(((('a' to 'z') ++ ('A' to 'Z')) map (s => s.toString)))).toMap
     
-  val next: Name = Name(6)
+  val next: Name = Name(52)
 
-  property("sumall") = {
+  property("addThreeNumbers") = {
 
     /* proc =
      *
@@ -45,10 +40,10 @@ object TurnerMachineProperties extends Properties("Proc") {
         Receive(false, ChanLiteral(Name(4)), Name(5),
           Send(ChanLiteral(Name(0)), Variable(Name(5)), End))))
     Prop.forAll { ( x: Int, y: Int, z: Int ) => {
-      val (procPost, namesPost, nextPost): (Proc, Map[Name, String], Name) =
-        runWithTurnerMachine(proc(x, y, z), names, next)
-      procPost.struct(namesPost,
-        Send(ChanLiteral(Name(0)), IntLiteral(x+y+z), End), namesPost)
+      val procPost: Proc = runWithTurnerMachine(proc(x, y, z), names, next)._1
+      Proc.fromList(procPost.listify.filter({ case x => x != End })).alphaEquiv(
+        Proc.fromList(Send(ChanLiteral(Name(0)), IntLiteral(x + y + z), End)
+          .listify.filter({ case x => x != End }))).nonEmpty
     }}
   }
 }

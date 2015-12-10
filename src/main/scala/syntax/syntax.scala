@@ -92,14 +92,6 @@ sealed abstract class Proc extends SyntaxElement {
     case ( _                            , _                            ) =>
       None
   }
-
-  /* Structural congruence for processes.
-   */
-  def struct(
-      thisNames: Map[Name, String],
-      q: Proc,
-      qNames: Map[Name, String])
-    : Boolean = false
 }
 
 case class  Send      ( ch:   Exp     , msg: Exp  , p:    Proc           )
