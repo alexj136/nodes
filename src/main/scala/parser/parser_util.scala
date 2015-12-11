@@ -10,10 +10,10 @@ import scala.io.Source
 
 sealed abstract class ParserResult
 
-case class ParserSuccess(
-    p: Proc,
-    names: Map[String, Name],
-    nextName: Name)
+case class ParserSuccess             (
+    val p        : Proc              ,
+    val names    : Map[String, Name] ,
+    val nextName : Name              )
   extends ParserResult
 
 case class SyntaxErrors(errors: List[SyntaxError]) extends ParserResult {

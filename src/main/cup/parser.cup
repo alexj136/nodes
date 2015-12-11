@@ -151,6 +151,10 @@ e ::= IDENT:name                    {: RESULT = new Variable(name);     :}
     | u:op e:exp                    {: RESULT = new UnExp(op, exp);     :}
     | LPAREN e:exp RPAREN           {: RESULT = exp;                    :}
     | LCURLY e:l COMMA e:r RCURLY   {: RESULT = new Pair(l, r);         :}
+    | DASH e:exp
+        {:
+            RESULT = new BinExp(Sub$.MODULE$, new IntLiteral(0), exp);
+        :}
     | error:err e:exp            
         {:
             report_error("", new SyntaxError(errxleft, errxright));
