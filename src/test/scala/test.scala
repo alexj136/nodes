@@ -4,7 +4,15 @@ import syntax._
 import interpreter.turner.runWithTurnerMachine
 import org.scalacheck._
 
-object TurnerMachineProperties extends Properties("Proc") {
+object ProcProperties extends Properties("Proc") {
+
+  property("alphaEquiv") = Prop.forAll { ( n0: Name, n1: Name, n2: Name ) => {
+    (Send(ChanLiteral(n0), Variable(n1), End) alphaEquiv
+      Send(ChanLiteral(n1), Variable(n2), End)).nonEmpty
+  }}
+}
+
+object TurnerMachineProperties extends Properties("TurnerMachineState") {
 
   val names: Map[Name, String] = (((0 to 51) map (n => Name(n)))
     .zip(((('a' to 'z') ++ ('A' to 'Z')) map (s => s.toString)))).toMap
@@ -27,7 +35,7 @@ object TurnerMachineProperties extends Properties("Proc") {
      *
      *  send a : (x+y+z) . end
      */
-    val proc: Function3[Int, Int, Int, Proc] = (x: Int, y: Int, z: Int) =>
+    val proc: Function3[Int, Int, Int, Proc] = ( x: Int, y: Int, z: Int ) =>
       Proc.fromList(List(
         Send(ChanLiteral(Name(0)), IntLiteral(x), End),
         Send(ChanLiteral(Name(0)), IntLiteral(y), End),
