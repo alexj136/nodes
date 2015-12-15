@@ -46,8 +46,15 @@ object ProcProperties extends Properties("Proc") {
 
   val genEnd: Gen[Proc] = const(End)
 
-  def genProc: Gen[Proc] = oneOf(genSend, genReceive, genNew, genParallel,
-    genLetIn, genIfThenElse, genEnd)
+  def genProc: Gen[Proc] = lzy(frequency(
+    (  2 , genSend       ) ,
+    (  2 , genReceive    ) ,
+    (  1 , genNew        ) ,
+    (  1 , genParallel   ) ,
+    (  1 , genLetIn      ) ,
+    (  1 , genIfThenElse ) ,
+    ( 20 , genEnd        ) )
+  )
 
   val genVariable: Gen[Exp] = for {
     id <- genName
@@ -97,11 +104,18 @@ object ProcProperties extends Properties("Proc") {
     r  <- genExp
   } yield BinExp(op, l, r)
 
-  def genExp: Gen[Exp] = oneOf(genVariable, genIntLiteral, genBoolLiteral,
-    genChanLiteral, genPair, genUnExp, genBinExp)
+  def genExp: Gen[Exp] = lzy(frequency(
+    ( 10 , genVariable    ) ,
+    ( 10 , genIntLiteral  ) ,
+    ( 10 , genBoolLiteral ) ,
+    ( 10 , genChanLiteral ) ,
+    (  1 , genPair        ) ,
+    (  2 , genUnExp       ) ,
+    (  1 , genBinExp      ) )
+  )
 
   def genName: Gen[Name] = for {
-    id <- arbitrary[Int]
+    id <- lzy(arbitrary[Int])
   } yield Name(id)
 
   implicit val arbitraryProc: Arbitrary[Proc] = Arbitrary(genProc)
