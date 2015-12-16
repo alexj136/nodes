@@ -18,11 +18,11 @@ class RunTCondFwdOptProcRunner(
     case _                      => false
   }
 
-  override def handleServer(chExp: Exp, bind: Name, p: Proc): Unit = ???
-
   override def handleMetaMessageReceived(
       metaInfo: MetaInfo)
-  : Unit = metaInfo match {
+    : Unit = metaInfo match {
+
+    case LogChildPath(conditionExp: Exp) if this.isServer => ???
 
     case UseAlternateChannel(
         oldChName,
@@ -117,6 +117,10 @@ object Transformations {
     }
   }
 }
+
+// Records info about the path through conditionals required to reach the hot
+// sending code
+case class LogChildPath(conditionExp: exp) extends MetaInfo
 
 // Signals to a server caller that a new server can be used, so substitute the
 // channel name of the old server with a new one.
