@@ -11,6 +11,7 @@ class RunTCondFwdOptProcRunner(
     _proc: Proc,
     procManager: ActorRef)
   extends ProcRunner(_parent, _chanMap, _proc, procManager) {
+  import Transformations._
 
   def isServer: Boolean = this.proc match {
     case Receive(true, _, _, _) => true
@@ -29,8 +30,7 @@ class RunTCondFwdOptProcRunner(
         newChRef) if this.isServer => {
 
       this.chanMap = this.chanMap updated (newChName, newChRef)
-      this.proc = ???/*this.substituteProc(this.proc, oldChName,
-        ChanLiteral(newChName))*/
+      this.proc = renameChannelInProc(this.proc, oldChName, newChName)
     }
 
     case NotifyParent(moreInfo) => this.parent map (_ ! moreInfo)
@@ -39,9 +39,9 @@ class RunTCondFwdOptProcRunner(
   }
 }
 
-object forwarderRewrite extends Function1[Proc, Option[Proc]] {
+object Transformations {
 
-  override def apply(p: Proc): Option[Proc] = p match {
+  def forwarderRewrite(p: Proc): Option[Proc] = p match {
     case Send(chExp, msg, p) =>
       forwarderRewrite(p) map (p => Send(chExp, msg, p))
 
@@ -82,6 +82,39 @@ object forwarderRewrite extends Function1[Proc, Option[Proc]] {
     case New(bind, p) => forwarderRewrite(p) map (p => New(bind, p))
 
     case End => (None: Option[Proc])
+  }
+
+  def renameChannelInProc(proc: Proc, from: Name, to: Name): Proc = {
+    val renameP: Function1[Proc, Proc] = p => renameChannelInProc(p, from, to)
+    val renameE: Function1[Exp , Exp ] = e => renameChannelInExp (e, from, to)
+    proc match {
+      case Send       ( c , e , p     ) =>
+        Send(renameE(c), renameE(e), renameP(p))
+      case Receive    ( s , c , n , p ) =>
+        Receive(s, renameE(c), n, if (n != from) renameP(p) else p)
+      case LetIn      ( n , e , p     ) =>
+        LetIn(n, renameE(e), if (n != from) renameP(p) else p)
+      case IfThenElse ( e , p , q     ) =>
+        IfThenElse(renameE(e), renameP(p), renameP(q))
+      case Parallel   ( p , q         ) =>
+        Parallel(renameP(p), renameP(q))
+      case New        ( n , p         ) =>
+        New(n, if (n != from) renameP(p) else p)
+      case End                          => End
+    }
+  }
+
+  def renameChannelInExp(exp: Exp, from: Name, to: Name): Exp = {
+    val renameE: Function1[Exp, Exp] = e => renameChannelInExp(e, from, to)
+    exp match {
+      case Variable    ( n         ) => if (n == from) Variable(to) else exp
+      case IntLiteral  ( x         ) => exp
+      case BoolLiteral ( x         ) => exp
+      case ChanLiteral ( c         ) => exp
+      case Pair        ( l , r     ) => Pair(renameE(l), renameE(r))
+      case UnExp       ( t , e     ) => UnExp(t, renameE(e))
+      case BinExp      ( t , l , r ) => BinExp(t, renameE(l), renameE(r))
+    }
   }
 }
 

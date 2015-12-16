@@ -112,54 +112,54 @@ object EvalExp {
       case (PRight, _           ) => throw TypeError("->")
     }
     case BinExp ( ty , lhs , rhs ) =>
-      (ty, EvalExp from lhs, EvalExp from rhs) match {
+        (ty, EvalExp from lhs, EvalExp from rhs) match {
 
-        // Int -> Int -> Int
-        case(Add, EEInt(l), EEInt(r)) => EEInt(l + r)
-        case(Add, _, _) => throw TypeError("+")
+      // Int -> Int -> Int
+      case(Add, EEInt(l), EEInt(r)) => EEInt(l + r)
+      case(Add, _, _) => throw TypeError("+")
 
-        case(Sub, EEInt(l), EEInt(r)) => EEInt(l - r)
-        case(Sub, _, _) => throw TypeError("-")
+      case(Sub, EEInt(l), EEInt(r)) => EEInt(l - r)
+      case(Sub, _, _) => throw TypeError("-")
 
-        case(Mul, EEInt(l), EEInt(r)) => EEInt(l * r)
-        case(Mul, _, _) => throw TypeError("*")
+      case(Mul, EEInt(l), EEInt(r)) => EEInt(l * r)
+      case(Mul, _, _) => throw TypeError("*")
 
-        case(Div, EEInt(l), EEInt(r)) => EEInt(l / r)
-        case(Div, _, _) => throw TypeError("/")
+      case(Div, EEInt(l), EEInt(r)) => EEInt(l / r)
+      case(Div, _, _) => throw TypeError("/")
 
-        case(Mod, EEInt(l), EEInt(r)) => EEInt(l % r)
-        case(Mod, _, _) => throw TypeError("%")
+      case(Mod, EEInt(l), EEInt(r)) => EEInt(l % r)
+      case(Mod, _, _) => throw TypeError("%")
 
-        // A -> A -> Bool
-        case(Equal, EEInt(l), EEInt(r)) => EEBool(l == r)
-        case(Equal, EEBool(l), EEBool(r)) => EEBool(l == r)
-        case(Equal, EEChan(l), EEChan(r)) => EEBool(l == r)
-        case(Equal, _, _) => throw TypeError("==")
+      // A -> A -> Bool
+      case(Equal, EEInt(l), EEInt(r)) => EEBool(l == r)
+      case(Equal, EEBool(l), EEBool(r)) => EEBool(l == r)
+      case(Equal, EEChan(l), EEChan(r)) => EEBool(l == r)
+      case(Equal, _, _) => throw TypeError("==")
 
-        case(NotEqual, EEInt(l), EEInt(r)) => EEBool(l != r)
-        case(NotEqual, EEBool(l), EEBool(r)) => EEBool(l != r)
-        case(NotEqual, EEChan(l), EEChan(r)) => EEBool(l != r)
-        case(NotEqual, _, _) => throw TypeError("!=")
+      case(NotEqual, EEInt(l), EEInt(r)) => EEBool(l != r)
+      case(NotEqual, EEBool(l), EEBool(r)) => EEBool(l != r)
+      case(NotEqual, EEChan(l), EEChan(r)) => EEBool(l != r)
+      case(NotEqual, _, _) => throw TypeError("!=")
 
-        // Int -> Int -> Bool
-        case(Less, EEInt(l), EEInt(r)) => EEBool(l < r)
-        case(Less, _, _) => throw TypeError("<")
+      // Int -> Int -> Bool
+      case(Less, EEInt(l), EEInt(r)) => EEBool(l < r)
+      case(Less, _, _) => throw TypeError("<")
 
-        case(LessEq, EEInt(l), EEInt(r)) => EEBool(l <= r)
-        case(LessEq, _, _) => throw TypeError("<=")
+      case(LessEq, EEInt(l), EEInt(r)) => EEBool(l <= r)
+      case(LessEq, _, _) => throw TypeError("<=")
 
-        case(Greater, EEInt(l), EEInt(r)) => EEBool(l > r)
-        case(Greater, _, _) => throw TypeError(">")
+      case(Greater, EEInt(l), EEInt(r)) => EEBool(l > r)
+      case(Greater, _, _) => throw TypeError(">")
 
-        case(GreaterEq, EEInt(l), EEInt(r)) => EEBool(l >= r)
-        case(GreaterEq, _, _) => throw TypeError(">=")
+      case(GreaterEq, EEInt(l), EEInt(r)) => EEBool(l >= r)
+      case(GreaterEq, _, _) => throw TypeError(">=")
 
-        // Bool -> Bool -> Bool
-        case(And, EEBool(l), EEBool(r)) => EEBool(l && r)
-        case(And, _, _) => throw TypeError(">")
+      // Bool -> Bool -> Bool
+      case(And, EEBool(l), EEBool(r)) => EEBool(l && r)
+      case(And, _, _) => throw TypeError(">")
 
-        case(Or, EEBool(l), EEBool(r)) => EEBool(l || r)
-        case(Or, _, _) => throw TypeError(">=")
-      }
+      case(Or, EEBool(l), EEBool(r)) => EEBool(l || r)
+      case(Or, _, _) => throw TypeError(">=")
+    }
   }
 }
