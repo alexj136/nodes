@@ -1,7 +1,6 @@
 package syntax
 
-sealed trait SyntaxElement {
-  var info: Info = NoInfo
+sealed trait SyntaxElement(val info: Info = NoInfo) {
   def pstr(names: Map[Name, String]): String
   def free: Set[Name]
 }

@@ -107,10 +107,10 @@ object Transformations {
   def renameChannelInExp(exp: Exp, from: Name, to: Name): Exp = {
     val renameE: Function1[Exp, Exp] = e => renameChannelInExp(e, from, to)
     exp match {
-      case Variable    ( n         ) => if (n == from) Variable(to) else exp
+      case Variable    ( n         ) => exp
       case IntLiteral  ( x         ) => exp
       case BoolLiteral ( x         ) => exp
-      case ChanLiteral ( c         ) => exp
+      case ChanLiteral ( c         ) => if (n == from) ChanLiteral(to) else exp
       case Pair        ( l , r     ) => Pair(renameE(l), renameE(r))
       case UnExp       ( t , e     ) => UnExp(t, renameE(e))
       case BinExp      ( t , l , r ) => BinExp(t, renameE(l), renameE(r))
