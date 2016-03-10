@@ -15,7 +15,8 @@ testOptions in Test += Tests.Argument(TestFrameworks.ScalaCheck, "-verbosity", "
 sourceGenerators in Compile <+= sourceManaged in Compile map { dir =>
   val lexerFile = dir / "Lexer.java"
   scala.sys.process.Process(
-    s"java -jar ./lib/jflex-1.6.1.jar -d $dir --nobak src/main/flex/lexer.flex").!
+    s"java -jar ./lib/jflex-1.6.1.jar -d $dir " ++
+    "--nobak src/main/flex/lexer.flex").!
   Seq(lexerFile)
 }
 
@@ -23,6 +24,7 @@ sourceGenerators in Compile <+= sourceManaged in Compile map { dir =>
   val parserFile = dir / "Parser.java"
   val symFile = dir / "sym.java"
   scala.sys.process.Process(
-    s"java -cp ./lib/ -jar ./lib/java-cup-11b.jar -destdir $dir -parser Parser -locations src/main/cup/parser.cup").!
+    s"java -cp ./lib/ -jar ./lib/java-cup-11b.jar -destdir $dir " ++
+    "-parser Parser -locations src/main/cup/parser.cup").!
   Seq(parserFile, symFile)
 }

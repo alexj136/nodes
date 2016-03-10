@@ -110,7 +110,7 @@ object Transformations {
       case Variable    ( n         ) => exp
       case IntLiteral  ( x         ) => exp
       case BoolLiteral ( x         ) => exp
-      case ChanLiteral ( c         ) => if (n == from) ChanLiteral(to) else exp
+      case ChanLiteral ( c         ) => if (c == from) ChanLiteral(to) else exp
       case Pair        ( l , r     ) => Pair(renameE(l), renameE(r))
       case UnExp       ( t , e     ) => UnExp(t, renameE(e))
       case BinExp      ( t , l , r ) => BinExp(t, renameE(l), renameE(r))
@@ -120,7 +120,7 @@ object Transformations {
 
 // Records info about the path through conditionals required to reach the hot
 // sending code
-case class LogChildPath(conditionExp: exp) extends MetaInfo
+case class LogChildPath(conditionExp: Exp) extends MetaInfo
 
 // Signals to a server caller that a new server can be used, so substitute the
 // channel name of the old server with a new one.
