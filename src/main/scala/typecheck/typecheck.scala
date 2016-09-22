@@ -79,63 +79,47 @@ object Typecheck {
       val (deR, nnR): (SType, Name) = dequantify(r, nnA)
       (SFunc(deA, deR), nnR)
     }
-    case SQuant( n , t ) => dequantify(subst(t, n, nn), nn.next)
+    case SQuant( n , t ) => {
+      val (newT, nnT): (SType, Name) = subst(t, n, nn, nn.next)
+      dequantify(newT, nnT)
+    }
   }
 
   /**
    * Substitute type variables in a type expression, of a given name, to another
-   * given name.
+   * given name. Alpha conversion of quantified expressions is sometimes
+   * necessary to prevent erroneous capture, so a next-name parameter is
+   * required and returned.
    */
-  def subst(ty: SType, from: Name, to:Name): SType = ty match {
-    case SInt            => SInt
-    case SBool           => SBool
-    case SChan           => SChan
-    case SPair ( l , r ) => SPair(subst(l, from, to), subst(r, from, to))
-    case SVar  ( n     ) => SVar(if (n == from) to else n)
-    case SFunc ( a , r ) => SFunc(subst(a, from, to), subst(r, from, to))
-    case SQuant( n , t ) =>
-      if (n == from) SQuant(n, t)
-      // If substituting within the quantifier would cause this quantifier to
-      // erroneously capture the substituted name, first rename the quantifier
-      // and its bound variables to a new name.
-      else if (n == to) {
-        val newN: Name = maxOfConcreteAndOptionalName(n, maxSVarName(t)).next
-        SQuant(newN, subst(subst(t, n, newN), from, to))
+  def subst(ty: SType, from: Name, to:Name, nn: Name): (SType, Name) =
+    ty match {
+      case SInt            => (SInt                           , nn)
+      case SBool           => (SBool                          , nn)
+      case SChan           => (SChan                          , nn)
+      case SVar  ( n     ) => (SVar(if (n == from) to else n) , nn)
+      case SPair ( l , r ) => {
+        val (subL, nnL): (SType, Name) = subst(l, from, to, nn)
+        val (subR, nnR): (SType, Name) = subst(r, from, to, nnL)
+        (SPair(subL, subR), nnR)
       }
-      else SQuant(n, subst(t, from, to))
-  }
-
-  /**
-   * Get the maximum SVar name in a type. Returns an Option[Name] because a
-   * type may not contain any variables and thus have no maximum name.
-   */
-  def maxSVarName(ty: SType): Option[Name] = ty match {
-    case SInt            => None
-    case SBool           => None
-    case SChan           => None
-    case SPair ( l , r ) => maxOf(maxSVarName(l), maxSVarName(r))
-    case SVar  ( n     ) => Some(n)
-    case SQuant( n , t ) => maxOf(Some(n), maxSVarName(t))
-    case SFunc ( a , r ) => maxOf(maxSVarName(a), maxSVarName(r))
-  }
-
-  /**
-   * Out of two Option[Name]s, optionally compute the greater one. If one is
-   * None, the other is greater. If both are None, the result is None.
-   */
-  def maxOf(a: Option[Name], b: Option[Name]): Option[Name] = (a, b) match {
-    case (Some(na) , Some(nb)) => if (na.id >= nb.id) a else b
-    case (Some(_)  , None    ) => a
-    case (None     , Some(_) ) => b
-    case (None     , None    ) => None
-  }
-
-  /**
-   * Out of a Name and an Option[Name], compute which one is greater. If the
-   * optional one is None, the non-optional one is greater by default.
-   */
-  def maxOfConcreteAndOptionalName(n: Name, on: Option[Name]): Name = on match {
-    case None    => n
-    case Some(m) => if (n.id >= m.id) n else m
-  }
+      case SFunc ( a , r ) => {
+        val (subA, nnA): (SType, Name) = subst(a, from, to, nn)
+        val (subR, nnR): (SType, Name) = subst(r, from, to, nnA)
+        (SFunc(subA, subR), nnR)
+      }
+      case SQuant( n , t ) =>
+        if (n == from) (SQuant(n, t), nn)
+        // If substituting within the quantifier would cause this quantifier to
+        // erroneously capture the substituted name, first rename the quantifier
+        // and its bound variables to a new name.
+        else if (n == to) {
+          val (subT, nnT): (SType, Name) = subst(t, n, nn, nn.next)
+          val (subSubT, nnST): (SType, Name) = subst(subT, from, to, nnT)
+          (SQuant(nn, subSubT), nnST)
+        }
+        else {
+          val (subT, nnT): (SType, Name) = subst(t, from, to, nn)
+          (SQuant(n, subT), nnT)
+        }
+    }
 }

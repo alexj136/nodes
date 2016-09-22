@@ -181,22 +181,21 @@ object TurnerMachineProperties extends Properties("TurnerMachineState") {
 
 object TypecheckProperties extends Properties("Typecheck") {
 
-  property("dequantifyPLeft") = Prop.forAll { ( n: Int ) => {
+  property("dequantifyPLeft") = Prop.forAll { ( n: Int ) => { ( n > 1 ) ==> {
     Typecheck.dequantify(Typecheck.typeOfUnOp(PLeft), new Name(n)) ==
     (SFunc(SPair(SVar(new Name(n)), SVar(new Name(n + 1))),
       SVar(new Name(n)))
     , new Name(n + 2))
-  }}
+  }}}
 
-  property("dequantifyPRight") = Prop.forAll { ( n: Int ) => {
+  property("dequantifyPRight") = Prop.forAll { ( n: Int ) => { ( n > 1 ) ==> {
     Typecheck.dequantify(Typecheck.typeOfUnOp(PRight), new Name(n)) ==
     (SFunc(SPair(SVar(new Name(n)), SVar(new Name(n + 1))),
       SVar(new Name(n + 1)))
     , new Name(n + 2))
-  }}
+  }}}
 
   /*property("someProperty") = Prop.forAll { ( op: UnOp ) => {
     true
   }}*/
-
 }
