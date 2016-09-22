@@ -32,8 +32,13 @@ object Typecheck {
           constraintsExp(r, env, nnL)
         (SPair(tyL, tyR), constrL union constrR, nnR)
       }
-      case UnExp       ( ty   , of     ) => ???
-      case BinExp      ( ty   , l  , r ) => ???
+      case UnExp       ( op   , of     ) => {
+        val (tyOf, constrOf, nnOf): (SType, Set[(SType, SType)], Name) =
+          constraintsExp(of, env, nn)
+        val (tyOp, nnOp): (SType, Name) = dequantify(typeOfUnOp(op), nnOf)
+        (returnType(tyOp), constrOf union Set((argumentType(tyOp), tyOf)), nnOp)
+      }
+      case BinExp      ( op   , l  , r ) => ???
     }
 
   def typeOfBinOp(op: BinOp): SType = op match {
@@ -58,6 +63,37 @@ object Typecheck {
       SFunc(SPair(SVar(new Name(0)), SVar(new Name(1))), SVar(new Name(0)))))
     case PRight => SQuant(new Name(0), SQuant(new Name(1),
       SFunc(SPair(SVar(new Name(0)), SVar(new Name(1))), SVar(new Name(1)))))
+  }
+
+  /**
+   * Given an SType assumed to be a function type (as would always be after
+   * dequantification of a UnOp or BinOp), get the return type of the function.
+   */
+  def returnType(ty: SType): SType = ty match {
+    case SFunc(_, r) => r
+    case _           => {
+      val errMsg: String =
+        "tried to get the return type of a non-SFunc SType. returnType() may " +
+        "only be called on STypes known to be SFunc, such as those returned "  +
+        "from a call to dequantify()."
+      throw new RuntimeException(errMsg)
+    }
+  }
+
+  /**
+   * Given an SType assumed to be a function type (as would always be after
+   * dequantification of a UnOp or BinOp), get the argument type of the
+   * function.
+   */
+  def argumentType(ty: SType): SType = ty match {
+    case SFunc(a, _) => a
+    case _           => {
+      val errMsg: String =
+        "tried to get the argument type of a non-SFunc SType. argumentType() " +
+        "may only be called on STypes known to be SFunc, such as those "       +
+        "returned from a call to dequantify()."
+      throw new RuntimeException(errMsg)
+    }
   }
 
   /**
