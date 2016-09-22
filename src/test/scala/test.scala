@@ -1,6 +1,7 @@
 package test
 
 import syntax._
+import typecheck._
 import interpreter.turner.runWithTurnerMachine
 import org.scalacheck._
 import Gen._
@@ -176,4 +177,26 @@ object TurnerMachineProperties extends Properties("TurnerMachineState") {
           .listify.filter({ case x => x != End }))).nonEmpty
     }}
   }
+}
+
+object TypecheckProperties extends Properties("Typecheck") {
+
+  property("dequantifyPLeft") = Prop.forAll { ( n: Int ) => {
+    Typecheck.dequantify(Typecheck.typeOfUnOp(PLeft), new Name(n)) ==
+    (SFunc(SPair(SVar(new Name(n)), SVar(new Name(n + 1))),
+      SVar(new Name(n)))
+    , new Name(n + 2))
+  }}
+
+  property("dequantifyPRight") = Prop.forAll { ( n: Int ) => {
+    Typecheck.dequantify(Typecheck.typeOfUnOp(PRight), new Name(n)) ==
+    (SFunc(SPair(SVar(new Name(n)), SVar(new Name(n + 1))),
+      SVar(new Name(n + 1)))
+    , new Name(n + 2))
+  }}
+
+  /*property("someProperty") = Prop.forAll { ( op: UnOp ) => {
+    true
+  }}*/
+
 }
