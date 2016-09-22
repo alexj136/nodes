@@ -15,16 +15,26 @@ object Typecheck {
 
   def checkProc(p: Proc, env: Map[Name, SType]): SType = ???
 
-  def checkExp(e: Exp, env: Map[Name, SType]): SType = e match {
-    case Variable    ( name          ) => env(name)
-    case IntLiteral  ( value         ) => SInt
-    case BoolLiteral ( value         ) => SBool
-    case ChanLiteral ( name          ) => SChan
-    case Pair        ( l    , r      ) =>
-      SPair(checkExp(l, env), checkExp(r, env))
-    case UnExp       ( ty   , of     ) => ???
-    case BinExp      ( ty   , l  , r ) => ???
-  }
+  def constraintsExp(
+    e: Exp,
+    env: Map[Name, SType],
+    nn: Name
+  ): (SType, Set[(SType, SType)], Name) =
+    e match {
+      case Variable    ( name          ) => (env(name), Set.empty, nn)
+      case IntLiteral  ( value         ) => (SInt     , Set.empty, nn)
+      case BoolLiteral ( value         ) => (SBool    , Set.empty, nn)
+      case ChanLiteral ( name          ) => (SChan    , Set.empty, nn)
+      case Pair        ( l    , r      ) => {
+        val (tyL, constrL, nnL): (SType, Set[(SType, SType)], Name) =
+          constraintsExp(l, env, nn)
+        val (tyR, constrR, nnR): (SType, Set[(SType, SType)], Name) =
+          constraintsExp(r, env, nnL)
+        (SPair(tyL, tyR), constrL union constrR, nnR)
+      }
+      case UnExp       ( ty   , of     ) => ???
+      case BinExp      ( ty   , l  , r ) => ???
+    }
 
   def typeOfBinOp(op: BinOp): SType = op match {
     case Add        => SFunc(SInt , SFunc(SInt , SInt ))
@@ -48,5 +58,73 @@ object Typecheck {
       SFunc(SPair(SVar(new Name(0)), SVar(new Name(1))), SVar(new Name(0)))))
     case PRight => SQuant(new Name(0), SQuant(new Name(1),
       SFunc(SPair(SVar(new Name(0)), SVar(new Name(1))), SVar(new Name(1)))))
+  }
+
+  def dequantify(ty: SType, nn: Name): (SType, Name) = ty match {
+    case _ => ???
+  }
+
+  /**
+   * Substitute type variables in a type expression, of a given name, to another
+   * given name.
+   */
+  def subst(ty: SType, from: Name, to:Name): SType = {
+
+      /**
+      * Out of a Name and an Option[Name], compute which one is greater. If the
+      * optional one None, the non-optional one is greater by default.
+      */
+      def maxOfConcreteAndOptionalName(n: Name, on: Option[Name]): Name =
+        on match {
+          case None    => n
+          case Some(m) => if (n.id >= m.id) n else m
+        }
+
+      /**
+      * Get the maximum SVar name in a type. Returns an Option[Name] because a
+      * type may not contain any variables and thus have no maximum name.
+      */
+      def maxSVarName(ty: SType): Option[Name] = {
+
+        /**
+        * Out of two Option[Name]s, compute which one is greater. If one is None,
+        * the other is greater.
+        */
+        def maxOf(a: Option[Name], b: Option[Name]): Option[Name] = (a, b) match {
+          case (Some(na) , Some(nb)) => if (na.id >= nb.id) a else b
+          case (Some(_)  , None    ) => a
+          case (None     , Some(_) ) => b
+          case (None     , None    ) => None
+        }
+
+        ty match {
+          case SInt            => None
+          case SBool           => None
+          case SChan           => None
+          case SPair ( l , r ) => maxOf(maxSVarName(l), maxSVarName(r))
+          case SVar  ( n     ) => Some(n)
+          case SQuant( n , t ) => maxOf(Some(n), maxSVarName(t))
+          case SFunc ( a , r ) => maxOf(maxSVarName(a), maxSVarName(r))
+        }
+      }
+
+    ty match {
+      case SInt            => SInt
+      case SBool           => SBool
+      case SChan           => SChan
+      case SPair ( l , r ) => SPair(subst(l, from, to), subst(r, from, to))
+      case SVar  ( n     ) => SVar(if (n == from) to else n)
+      case SQuant( n , t ) =>
+        if (n == from) SQuant(n, t)
+        // If substituting within the quantifier would cause this quantifier to
+        // erroneously capture the substituted name, first rename the quantifier
+        // and its bound variables to a new name.
+        else if (n == to) {
+          val newN: Name = maxOfConcreteAndOptionalName(n, maxSVarName(t)).next
+          SQuant(newN, subst(subst(t, n, newN), from, to))
+        }
+        else SQuant(n, subst(t, from, to))
+      case SFunc ( a , r ) => SFunc(subst(a, from, to), subst(r, from, to))
+    }
   }
 }
