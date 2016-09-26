@@ -2,7 +2,39 @@ package typecheck
 
 import syntax._
 
-sealed abstract class SType
+sealed abstract class SType {
+
+  /**
+   * Given an SType assumed to be a function type (as would always be after
+   * dequantification of a UnOp or BinOp), get the argument type of the
+   * function.
+   */
+  def argTy: SType = this match {
+    case SFunc(a, _) => a
+    case _           => {
+      val errMsg: String =
+        "tried to get the argument type of a non-SFunc SType. SType.argTy() "  +
+        "may only be called on STypes known to be SFunc, such as those "       +
+        "returned from a call to dequantify()."
+      throw new RuntimeException(errMsg)
+    }
+  }
+
+  /**
+   * Given an SType assumed to be a function type (as would always be after
+   * dequantification of a UnOp or BinOp), get the return type of the function.
+   */
+  def retTy: SType = this match {
+    case SFunc(_, r) => r
+    case _           => {
+      val errMsg: String =
+        "tried to get the return type of a non-SFunc SType. SType.retTy() " +
+        "may only be called on STypes known to be SFunc, such as those "    +
+        "returned from a call to dequantify()."
+      throw new RuntimeException(errMsg)
+    }
+  }
+}
 case object SInt extends SType
 case object SBool extends SType
 case object SChan extends SType
@@ -36,9 +68,17 @@ object Typecheck {
         val (tyOf, constrOf, nnOf): (SType, Set[(SType, SType)], Name) =
           constraintsExp(of, env, nn)
         val (tyOp, nnOp): (SType, Name) = dequantify(typeOfUnOp(op), nnOf)
-        (returnType(tyOp), constrOf union Set((argumentType(tyOp), tyOf)), nnOp)
+        (tyOp.retTy, constrOf union Set((tyOp.argTy, tyOf)), nnOp)
       }
-      case BinExp      ( op   , l  , r ) => ???
+      case BinExp      ( op   , l  , r ) => {
+        val (tyL, constrL, nnL): (SType, Set[(SType, SType)], Name) =
+          constraintsExp(l, env, nn)
+        val (tyR, constrR, nnR): (SType, Set[(SType, SType)], Name) =
+          constraintsExp(r, env, nnL)
+        val (tyOp, nnOp): (SType, Name) = dequantify(typeOfBinOp(op), nnR)
+        (tyOp.retTy.retTy, constrL union constrR union
+          Set((tyOp.argTy, tyL), (tyOp.retTy.argTy, tyR)), nnOp)
+      }
     }
 
   def typeOfBinOp(op: BinOp): SType = op match {
@@ -66,37 +106,6 @@ object Typecheck {
   }
 
   /**
-   * Given an SType assumed to be a function type (as would always be after
-   * dequantification of a UnOp or BinOp), get the return type of the function.
-   */
-  def returnType(ty: SType): SType = ty match {
-    case SFunc(_, r) => r
-    case _           => {
-      val errMsg: String =
-        "tried to get the return type of a non-SFunc SType. returnType() may " +
-        "only be called on STypes known to be SFunc, such as those returned "  +
-        "from a call to dequantify()."
-      throw new RuntimeException(errMsg)
-    }
-  }
-
-  /**
-   * Given an SType assumed to be a function type (as would always be after
-   * dequantification of a UnOp or BinOp), get the argument type of the
-   * function.
-   */
-  def argumentType(ty: SType): SType = ty match {
-    case SFunc(a, _) => a
-    case _           => {
-      val errMsg: String =
-        "tried to get the argument type of a non-SFunc SType. argumentType() " +
-        "may only be called on STypes known to be SFunc, such as those "       +
-        "returned from a call to dequantify()."
-      throw new RuntimeException(errMsg)
-    }
-  }
-
-  /**
    * Remove quantifiers from an SType. The Name parameter & Name return value is
    * the next globally available Name, before and after the dequantification.
    */
@@ -116,7 +125,7 @@ object Typecheck {
       (SFunc(deA, deR), nnR)
     }
     case SQuant( n , t ) => {
-      val (newT, nnT): (SType, Name) = subst(t, n, nn, nn.next)
+      val (newT, nnT): (SType, Name) = sTVarSubst(t, n, nn, nn.next)
       dequantify(newT, nnT)
     }
   }
@@ -127,20 +136,20 @@ object Typecheck {
    * necessary to prevent erroneous capture, so a next-name parameter is
    * required and returned.
    */
-  def subst(ty: SType, from: Name, to:Name, nn: Name): (SType, Name) =
+  def sTVarSubst(ty: SType, from: Name, to:Name, nn: Name): (SType, Name) =
     ty match {
       case SInt            => (SInt                           , nn)
       case SBool           => (SBool                          , nn)
       case SChan           => (SChan                          , nn)
       case SVar  ( n     ) => (SVar(if (n == from) to else n) , nn)
       case SPair ( l , r ) => {
-        val (subL, nnL): (SType, Name) = subst(l, from, to, nn)
-        val (subR, nnR): (SType, Name) = subst(r, from, to, nnL)
+        val (subL, nnL): (SType, Name) = sTVarSubst(l, from, to, nn)
+        val (subR, nnR): (SType, Name) = sTVarSubst(r, from, to, nnL)
         (SPair(subL, subR), nnR)
       }
       case SFunc ( a , r ) => {
-        val (subA, nnA): (SType, Name) = subst(a, from, to, nn)
-        val (subR, nnR): (SType, Name) = subst(r, from, to, nnA)
+        val (subA, nnA): (SType, Name) = sTVarSubst(a, from, to, nn)
+        val (subR, nnR): (SType, Name) = sTVarSubst(r, from, to, nnA)
         (SFunc(subA, subR), nnR)
       }
       case SQuant( n , t ) =>
@@ -149,12 +158,12 @@ object Typecheck {
         // erroneously capture the substituted name, first rename the quantifier
         // and its bound variables to a new name.
         else if (n == to) {
-          val (subT, nnT): (SType, Name) = subst(t, n, nn, nn.next)
-          val (subSubT, nnST): (SType, Name) = subst(subT, from, to, nnT)
+          val (subT, nnT): (SType, Name) = sTVarSubst(t, n, nn, nn.next)
+          val (subSubT, nnST): (SType, Name) = sTVarSubst(subT, from, to, nnT)
           (SQuant(nn, subSubT), nnST)
         }
         else {
-          val (subT, nnT): (SType, Name) = subst(t, from, to, nn)
+          val (subT, nnT): (SType, Name) = sTVarSubst(t, from, to, nn)
           (SQuant(n, subT), nnT)
         }
     }
