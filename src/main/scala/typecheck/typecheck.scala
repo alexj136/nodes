@@ -34,6 +34,36 @@ sealed abstract class SType {
       throw new RuntimeException(errMsg)
     }
   }
+
+  /**
+   * Substitute type variables in a type expression, of a given name, to another
+   * given type expression. Only gives the correct result when n does not occur
+   * in this.
+   */
+  def sTypeSubst ( from: Name , to: SType ) : SType = this match {
+    case SVar  ( n     ) if n == from => to
+    case SVar  ( n     ) if n != from => this
+    case SPair ( l , r )              =>
+      SPair ( l sTypeSubst ( from , to ) , r sTypeSubst ( from , to ) )
+    case SFunc ( a , r )              =>
+      SFunc ( a sTypeSubst ( from , to ) , r sTypeSubst ( from , to ) )
+    case SQuant ( _ , _ )             => ???
+    case _                            => this
+  }
+
+  /**
+   * Occurs check - check a type variable name does not occur within this type,
+   * with which it must be unified. Such a situation would cause infinite
+   * recursion during unification.
+   */
+  def hasOccurrenceOf ( n: Name ) : Boolean = ( n , this ) match {
+    case ( x , SVar  ( y     ) ) => x == y
+    case ( x , SFunc ( a , r ) ) =>
+      ( a hasOccurrenceOf x ) || ( r hasOccurrenceOf x )
+    case ( x , SPair ( l , r ) ) =>
+      ( l hasOccurrenceOf x ) || ( r hasOccurrenceOf x )
+    case _ => false
+  }
 }
 case object SInt extends SType
 case object SBool extends SType
@@ -43,6 +73,21 @@ case class SVar(n: Name) extends SType
 case class SQuant(n: Name, t: SType) extends SType
 case class SFunc(a: SType, r: SType) extends SType
 
+case class ConstraintSet(val set: Set[(SType, SType)]) {
+  def split:(Option[(SType, SType)], ConstraintSet) = set.toList match {
+    case ( constr :: constrRest ) =>
+      ( Some ( constr ) , ConstraintSet( constrRest.toSet ) )
+    case Nil                      => ( None , this )
+  }
+  def union(other: ConstraintSet): ConstraintSet = ( this , other ) match {
+    case ( ConstraintSet ( a ) , ConstraintSet ( b ) ) =>
+      ConstraintSet ( a union b )
+  }
+  def +(constr: (SType, SType)): ConstraintSet = this match {
+    case ConstraintSet ( set ) => ConstraintSet ( set + constr )
+  }
+}
+
 object Typecheck {
 
   def checkProc(p: Proc, env: Map[Name, SType]): SType = ???
@@ -51,29 +96,23 @@ object Typecheck {
    * Constraint set unification
    */
   def unify(constr: Set[(SType, SType)]): Option[Function1[SType, SType]] =
-    ( constr.headOption , constr.tail ) match {
-      case ( None                 , _    ) => Some ( identity )
-      case ( Some ( ( t1 , t2 ) ) , rest ) if t1 == t2 => unify ( rest )
-      case ( Some ( ( t1 , t2 ) ) , rest )             => (t1, t2) match {
-        case ( SPair ( t1l , t1r ) , SPair ( t2l , t2r ) ) =>
-          unify ( rest union Set ( ( t1l , t2l ) , ( t1r , t2r ) ) )
-        case ( SFunc ( t1a , t1r ) , SFunc ( t2a , t2r ) ) =>
-          unify ( rest union Set ( ( t1a , t2a ) , ( t1r , t2r ) ) )
+    constr.toList match {
+      case Nil            => Some ( identity )
+      case ( ( t1 , t2 ) :: rest ) if t1 == t2 => unify ( rest.toSet )
+      case ( ( t1 , t2 ) :: rest )             => (t1, t2) match {
+        case ( SVar   ( n         ) , ty                  ) =>
+          if ( ! ( ty hasOccurrenceOf n ) )
+            unify ( ??? )
+          else ???
+        case ( SPair  ( t1l , t1r ) , SPair  ( t2l , t2r ) ) =>
+          unify ( rest.toSet union Set ( ( t1l , t2l ) , ( t1r , t2r ) ) )
+        case ( SFunc  ( t1a , t1r ) , SFunc  ( t2a , t2r ) ) =>
+          unify ( rest.toSet union Set ( ( t1a , t2a ) , ( t1r , t2r ) ) )
+        case ( SQuant ( _   , _   ) , _                    ) => ???
+        case ( _                    , SQuant ( _   , _   ) ) => ???
         case _ => ???
       }
     }
-
-  /**
-   * Occurs check - check a type variable name does not occur within a type with
-   * which it must be unified. Such a situation would cause infinite recursion
-   * during unification.
-   */
-  def occurs(n: Name, ty: SType): Boolean = (n, ty) match {
-    case ( x , SVar  ( y     ) ) => x == y
-    case ( x , SFunc ( a , r ) ) => occurs ( x , a ) || occurs ( x , r )
-    case ( x , SPair ( l , r ) ) => occurs ( x , l ) || occurs ( x , r )
-    case _ => false
-  }
 
   def constraintsExp(
     e: Exp,
@@ -164,7 +203,7 @@ object Typecheck {
    * necessary to prevent erroneous capture, so a next-name parameter is
    * required and returned.
    */
-  def sTVarSubst(ty: SType, from: Name, to:Name, nn: Name): (SType, Name) =
+  def sTVarSubst(ty: SType, from: Name, to: Name, nn: Name): (SType, Name) =
     ty match {
       case SInt            => (SInt                           , nn)
       case SBool           => (SBool                          , nn)
