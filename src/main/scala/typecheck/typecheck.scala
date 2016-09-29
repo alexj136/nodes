@@ -47,6 +47,34 @@ object Typecheck {
 
   def checkProc(p: Proc, env: Map[Name, SType]): SType = ???
 
+  /**
+   * Constraint set unification
+   */
+  def unify(constr: Set[(SType, SType)]): Option[Function1[SType, SType]] =
+    ( constr.headOption , constr.tail ) match {
+      case ( None                 , _    ) => Some ( identity )
+      case ( Some ( ( t1 , t2 ) ) , rest ) if t1 == t2 => unify ( rest )
+      case ( Some ( ( t1 , t2 ) ) , rest )             => (t1, t2) match {
+        case ( SPair ( t1l , t1r ) , SPair ( t2l , t2r ) ) =>
+          unify ( rest union Set ( ( t1l , t2l ) , ( t1r , t2r ) ) )
+        case ( SFunc ( t1a , t1r ) , SFunc ( t2a , t2r ) ) =>
+          unify ( rest union Set ( ( t1a , t2a ) , ( t1r , t2r ) ) )
+        case _ => ???
+      }
+    }
+
+  /**
+   * Occurs check - check a type variable name does not occur within a type with
+   * which it must be unified. Such a situation would cause infinite recursion
+   * during unification.
+   */
+  def occurs(n: Name, ty: SType): Boolean = (n, ty) match {
+    case ( x , SVar  ( y     ) ) => x == y
+    case ( x , SFunc ( a , r ) ) => occurs ( x , a ) || occurs ( x , r )
+    case ( x , SPair ( l , r ) ) => occurs ( x , l ) || occurs ( x , r )
+    case _ => false
+  }
+
   def constraintsExp(
     e: Exp,
     env: Map[Name, SType],
