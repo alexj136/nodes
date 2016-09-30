@@ -1,7 +1,6 @@
 package test
 
 import syntax._
-import typecheck._
 import interpreter.turner.runWithTurnerMachine
 import org.scalacheck._
 import Gen._
@@ -110,9 +109,9 @@ object ProcProperties extends Properties("Proc") {
     ( 10 , genIntLiteral  ) ,
     ( 10 , genBoolLiteral ) ,
     ( 10 , genChanLiteral ) ,
-    (  1 , genPair        ) ,
-    (  2 , genUnExp       ) ,
-    (  1 , genBinExp      ) )
+    (  3 , genPair        ) ,
+    (  6 , genUnExp       ) ,
+    (  3 , genBinExp      ) )
   )
 
   def genName: Gen[Name] = for {
@@ -180,22 +179,37 @@ object TurnerMachineProperties extends Properties("TurnerMachineState") {
 }
 
 object TypecheckProperties extends Properties("Typecheck") {
+  import typecheck._
+  import typecheck.Typecheck._
+  import ProcProperties._ // For arbitrary processes and expressions
 
   property("dequantifyPLeft") = Prop.forAll { ( n: Int ) => { ( n > 1 ) ==> {
-    Typecheck.dequantify(Typecheck.typeOfUnOp(PLeft), new Name(n)) ==
-    (SFunc(SPair(SVar(new Name(n)), SVar(new Name(n + 1))),
-      SVar(new Name(n)))
-    , new Name(n + 2))
+    dequantify(typeOfUnOp(PLeft), new Name(n)) ==
+      (SFunc(SPair(SVar(new Name(n)), SVar(new Name(n + 1))), SVar(new Name(n)))
+      , new Name(n + 2))
   }}}
 
   property("dequantifyPRight") = Prop.forAll { ( n: Int ) => { ( n > 1 ) ==> {
-    Typecheck.dequantify(Typecheck.typeOfUnOp(PRight), new Name(n)) ==
-    (SFunc(SPair(SVar(new Name(n)), SVar(new Name(n + 1))),
-      SVar(new Name(n + 1)))
-    , new Name(n + 2))
+    dequantify(typeOfUnOp(PRight), new Name(n)) ==
+      (SFunc(SPair(SVar(new Name(n)), SVar(new Name(n + 1)))
+      , SVar(new Name(n + 1))), new Name(n + 2))
   }}}
 
-  /*property("someProperty") = Prop.forAll { ( op: UnOp ) => {
-    true
-  }}*/
+  property("unifyBadlyTypedExpFails") = {
+    val exp: Exp = UnExp(PLeft, IntLiteral(1))
+    val (_, constraints: ConstraintSet, _) =
+      constraintsExp(exp, Map.empty, new Name(0))
+    unify(constraints) == None
+  }
+
+  property("unifyArbitraryExpNoCrash") = Prop.forAll { exp: Exp => {
+    // Free variables are SInts in the typing environment
+    val (_, constraints: ConstraintSet, _) = constraintsExp(exp,
+      ( exp.free map ( n => ( n , SInt ) ) ).toMap, new Name(0))
+    val unifyFn: Option[Function1[SType, SType]] = unify ( constraints )
+    unifyFn match {
+      case None       => true
+      case Some ( f ) => f.isInstanceOf[Function1[SType, SType]]
+    }
+  }}
 }
