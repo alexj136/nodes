@@ -73,19 +73,23 @@ case class SVar(n: Name) extends SType
 case class SQuant(n: Name, t: SType) extends SType
 case class SFunc(a: SType, r: SType) extends SType
 
-case class ConstraintSet(val set: Set[(SType, SType)]) {
-  def split:(Option[(SType, SType)], ConstraintSet) = set.toList match {
-    case ( constr :: constrRest ) =>
-      ( Some ( constr ) , ConstraintSet( constrRest.toSet ) )
-    case Nil                      => ( None , this )
-  }
-  def union(other: ConstraintSet): ConstraintSet = ( this , other ) match {
-    case ( ConstraintSet ( a ) , ConstraintSet ( b ) ) =>
-      ConstraintSet ( a union b )
-  }
-  def +(constr: (SType, SType)): ConstraintSet = this match {
-    case ConstraintSet ( set ) => ConstraintSet ( set + constr )
-  }
+case class ConstraintSet( val set: Set [ ( SType , SType ) ] ) {
+  def split: ( Option [ ( SType , SType ) ] , ConstraintSet ) =
+    set.toList match {
+      case Nil                      => ( None , this )
+      case ( constr :: constrRest ) =>
+        ( Some ( constr ) , ConstraintSet( constrRest.toSet ) )
+    }
+  def union ( other: ConstraintSet ) : ConstraintSet =
+    ConstraintSet ( set union other.set )
+  def + ( constr: ( SType , SType ) ) : ConstraintSet =
+    ConstraintSet ( set + constr )
+  def map ( f: Function1 [ SType , SType ] ) : ConstraintSet =
+    ConstraintSet( set map ( constr => ( f ( constr._1 ) , f ( constr._2 ) ) ) )
+}
+
+case object ConstraintSet {
+  def empty: ConstraintSet = ConstraintSet ( Set.empty )
 }
 
 object Typecheck {
@@ -95,56 +99,61 @@ object Typecheck {
   /**
    * Constraint set unification
    */
-  def unify(constr: Set[(SType, SType)]): Option[Function1[SType, SType]] =
-    constr.toList match {
-      case Nil            => Some ( identity )
-      case ( ( t1 , t2 ) :: rest ) if t1 == t2 => unify ( rest.toSet )
-      case ( ( t1 , t2 ) :: rest )             => (t1, t2) match {
-        case ( SVar   ( n         ) , ty                  ) =>
-          if ( ! ( ty hasOccurrenceOf n ) )
-            unify ( ??? )
-          else ???
+  def unify(constrs: ConstraintSet): Option[Function1[SType, SType]] = {
+    val exception =
+      new RuntimeException("SQuant not removed from type before unification")
+    constrs.split match {
+      case ( None , _                    )             => Some ( identity )
+      case ( Some ( ( t1 , t2 ) ) , rest ) if t1 == t2 => unify ( rest )
+      case ( Some ( ( t1 , t2 ) ) , rest )             => ( t1 , t2 ) match {
+        case ( SVar ( n ) , ty         ) if ! ( ty hasOccurrenceOf n ) =>
+          unify ( rest map ( t => t sTypeSubst ( n , ty ) ) )
+            . map ( f => f compose ( t => t sTypeSubst ( n , ty ) ) )
+        case ( ty         , SVar ( n ) ) if ! ( ty hasOccurrenceOf n ) =>
+          unify ( rest map ( t => t sTypeSubst ( n , ty ) ) )
+            . map ( f => f compose ( t => t sTypeSubst ( n , ty ) ) )
         case ( SPair  ( t1l , t1r ) , SPair  ( t2l , t2r ) ) =>
-          unify ( rest.toSet union Set ( ( t1l , t2l ) , ( t1r , t2r ) ) )
+          unify ( rest + ( t1l , t2l ) + ( t1r , t2r ) )
         case ( SFunc  ( t1a , t1r ) , SFunc  ( t2a , t2r ) ) =>
-          unify ( rest.toSet union Set ( ( t1a , t2a ) , ( t1r , t2r ) ) )
-        case ( SQuant ( _   , _   ) , _                    ) => ???
-        case ( _                    , SQuant ( _   , _   ) ) => ???
-        case _ => ???
+          unify ( rest + ( t1a , t2a ) + ( t1r , t2r ) )
+        case ( SQuant ( _   , _   ) , _                    ) => throw exception
+        case ( _                    , SQuant ( _   , _   ) ) => throw exception
+        case _                                               => None
       }
     }
+  }
 
   def constraintsExp(
     e: Exp,
     env: Map[Name, SType],
     nn: Name
-  ): (SType, Set[(SType, SType)], Name) =
+  ): (SType, ConstraintSet, Name) =
     e match {
-      case Variable    ( name          ) => (env(name), Set.empty, nn)
-      case IntLiteral  ( value         ) => (SInt     , Set.empty, nn)
-      case BoolLiteral ( value         ) => (SBool    , Set.empty, nn)
-      case ChanLiteral ( name          ) => (SChan    , Set.empty, nn)
+      case Variable    ( name          ) => (env(name), ConstraintSet.empty, nn)
+      case IntLiteral  ( value         ) => (SInt     , ConstraintSet.empty, nn)
+      case BoolLiteral ( value         ) => (SBool    , ConstraintSet.empty, nn)
+      case ChanLiteral ( name          ) => (SChan    , ConstraintSet.empty, nn)
       case Pair        ( l    , r      ) => {
-        val (tyL, constrL, nnL): (SType, Set[(SType, SType)], Name) =
+        val (tyL, constrL, nnL): (SType, ConstraintSet, Name) =
           constraintsExp(l, env, nn)
-        val (tyR, constrR, nnR): (SType, Set[(SType, SType)], Name) =
+        val (tyR, constrR, nnR): (SType, ConstraintSet, Name) =
           constraintsExp(r, env, nnL)
         (SPair(tyL, tyR), constrL union constrR, nnR)
       }
       case UnExp       ( op   , of     ) => {
-        val (tyOf, constrOf, nnOf): (SType, Set[(SType, SType)], Name) =
+        val (tyOf, constrOf, nnOf): (SType, ConstraintSet, Name) =
           constraintsExp(of, env, nn)
         val (tyOp, nnOp): (SType, Name) = dequantify(typeOfUnOp(op), nnOf)
-        (tyOp.retTy, constrOf union Set((tyOp.argTy, tyOf)), nnOp)
+        (tyOp.retTy, constrOf + (tyOp.argTy, tyOf), nnOp)
       }
       case BinExp      ( op   , l  , r ) => {
-        val (tyL, constrL, nnL): (SType, Set[(SType, SType)], Name) =
+        val (tyL, constrL, nnL): (SType, ConstraintSet, Name) =
           constraintsExp(l, env, nn)
-        val (tyR, constrR, nnR): (SType, Set[(SType, SType)], Name) =
+        val (tyR, constrR, nnR): (SType, ConstraintSet, Name) =
           constraintsExp(r, env, nnL)
         val (tyOp, nnOp): (SType, Name) = dequantify(typeOfBinOp(op), nnR)
-        (tyOp.retTy.retTy, constrL union constrR union
-          Set((tyOp.argTy, tyL), (tyOp.retTy.argTy, tyR)), nnOp)
+        (tyOp.retTy.retTy, constrL union constrR + (tyOp.argTy, tyL) +
+          (tyOp.retTy.argTy, tyR), nnOp)
       }
     }
 
