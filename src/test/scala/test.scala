@@ -1,13 +1,12 @@
 package test
 
 import syntax._
-import interpreter.turner.runWithTurnerMachine
 import org.scalacheck._
 import Gen._
 import Arbitrary.arbitrary
 import org.scalacheck.Prop.BooleanOperators
 
-object ProcProperties extends Properties("Proc") {
+object ArbitraryTypes {
 
   val genSend: Gen[Proc] = for {
     ch   <- genExp
@@ -121,6 +120,10 @@ object ProcProperties extends Properties("Proc") {
   implicit val arbitraryProc: Arbitrary[Proc] = Arbitrary(genProc)
   implicit val arbitraryExp : Arbitrary[Exp ] = Arbitrary(genExp )
   implicit val arbitraryName: Arbitrary[Name] = Arbitrary(genName)
+}
+
+object ProcProperties extends Properties("Proc") {
+  import ArbitraryTypes._
 
   property("alphaEquivIsReflexive") = Prop.forAll { ( p: Proc ) => {
     (p alphaEquiv p).nonEmpty
@@ -135,11 +138,28 @@ object ProcProperties extends Properties("Proc") {
 }
 
 object TurnerMachineProperties extends Properties("TurnerMachineState") {
+  import parser._
+  import parser.Parser._
+  import interpreter.turner.runWithTurnerMachine
 
   val names: Map[Name, String] = (((0 to 51) map (n => Name(n)))
     .zip(((('a' to 'z') ++ ('A' to 'Z')) map (s => s.toString)))).toMap
     
   val next: Name = Name(52)
+
+  property("simpleProcess") = {
+    val procStr: String = "receive $a : y . send y : y . end | " +
+      "send $a : $x . end"
+    parseString( procStr ) match {
+      case SyntaxErrors  ( _ )                => false
+      case ParserSuccess ( proc , nmap , nn ) => {
+        runWithTurnerMachine ( proc , nmap.map ( _.swap ) , nn )._1.listify
+          .filter( _ != End )
+          .==( List ( Send ( ChanLiteral ( nmap ( "$x" ) ) ,
+            ChanLiteral ( nmap ( "$x" ) ) , End ) ) )
+      }
+    }
+  }
 
   property("addThreeNumbers") = {
 
@@ -171,9 +191,9 @@ object TurnerMachineProperties extends Properties("TurnerMachineState") {
           Send(ChanLiteral(Name(0)), Variable(Name(5)), End))))
     Prop.forAll { ( x: Int, y: Int, z: Int ) => {
       val procPost: Proc = runWithTurnerMachine(proc(x, y, z), names, next)._1
-      Proc.fromList(procPost.listify.filter({ case x => x != End })).alphaEquiv(
+      Proc.fromList(procPost.listify.filter( _ != End )).alphaEquiv(
         Proc.fromList(Send(ChanLiteral(Name(0)), IntLiteral(x + y + z), End)
-          .listify.filter({ case x => x != End }))).nonEmpty
+          .listify.filter( _ != End ))).nonEmpty
     }}
   }
 }
@@ -181,7 +201,7 @@ object TurnerMachineProperties extends Properties("TurnerMachineState") {
 object TypecheckProperties extends Properties("Typecheck") {
   import typecheck._
   import typecheck.Typecheck._
-  import ProcProperties._ // For arbitrary processes and expressions
+  import ArbitraryTypes._
 
   property("dequantifyPLeft") = Prop.forAll { ( n: Int ) => { ( n > 1 ) ==> {
     dequantify(typeOfUnOp(PLeft), new Name(n)) ==
@@ -203,7 +223,7 @@ object TypecheckProperties extends Properties("Typecheck") {
   }
 
   property("unifyArbitraryExpNoCrash") = Prop.forAll { exp: Exp => {
-    // Free variables are SInts in the typing environment
+    // Free variables are SInts in this typing environment
     val (_, constraints: ConstraintSet, _) = constraintsExp(exp,
       ( exp.free map ( n => ( n , SInt ) ) ).toMap, new Name(0))
     val unifyFn: Option[Function1[SType, SType]] = unify ( constraints )

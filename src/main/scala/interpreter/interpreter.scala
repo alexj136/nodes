@@ -16,7 +16,7 @@ case class FreeVariableError(in: SyntaxElement) extends EvaluationException
 
 object substituteProc extends Function3[Proc, Name, EvalExp, Proc] {
 
-  /** Substitute the Name 'to' for the Name 'from' within the Proc act, and
+  /** Substitute the EvalExp 'to' for the Name 'from' within the Proc act, and
     *  obtain the resulting Proc.
     */
   def apply(p: Proc, from: Name, to: EvalExp): Proc = {

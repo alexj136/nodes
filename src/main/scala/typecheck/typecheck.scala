@@ -38,7 +38,7 @@ sealed abstract class SType {
   /**
    * Substitute type variables in a type expression, of a given name, to another
    * given type expression. Only gives the correct result when n does not occur
-   * in this.
+   * in this. Only defined over types that do not contain quantifiers.
    */
   def sTypeSubst ( from: Name , to: SType ) : SType = this match {
     case SVar  ( n     ) if n == from => to
@@ -47,7 +47,8 @@ sealed abstract class SType {
       SPair ( l sTypeSubst ( from , to ) , r sTypeSubst ( from , to ) )
     case SFunc ( a , r )              =>
       SFunc ( a sTypeSubst ( from , to ) , r sTypeSubst ( from , to ) )
-    case SQuant ( _ , _ )             => ???
+    case SQuant ( _ , _ )             => throw new RuntimeException (
+      "STypeSubst defined only over types that do not contain quantifiers." )
     case _                            => this
   }
 
@@ -76,16 +77,15 @@ case class SFunc(a: SType, r: SType) extends SType
 case class ConstraintSet( val set: Set [ ( SType , SType ) ] ) {
   def split: ( Option [ ( SType , SType ) ] , ConstraintSet ) =
     set.toList match {
-      case Nil                      => ( None , this )
-      case ( constr :: constrRest ) =>
-        ( Some ( constr ) , ConstraintSet( constrRest.toSet ) )
+      case ( c :: cs ) => ( Some ( c ) , ConstraintSet( cs.toSet ) )
+      case Nil         => ( None       , this                      )
     }
   def union ( other: ConstraintSet ) : ConstraintSet =
     ConstraintSet ( set union other.set )
   def + ( constr: ( SType , SType ) ) : ConstraintSet =
     ConstraintSet ( set + constr )
   def map ( f: Function1 [ SType , SType ] ) : ConstraintSet =
-    ConstraintSet( set map ( constr => ( f ( constr._1 ) , f ( constr._2 ) ) ) )
+    ConstraintSet( set map ( c => ( f ( c._1 ) , f ( c._2 ) ) ) )
 }
 
 case object ConstraintSet {
@@ -107,11 +107,11 @@ object Typecheck {
       case ( Some ( ( t1 , t2 ) ) , rest ) if t1 == t2 => unify ( rest )
       case ( Some ( ( t1 , t2 ) ) , rest )             => ( t1 , t2 ) match {
         case ( SVar ( n ) , ty         ) if ! ( ty hasOccurrenceOf n ) =>
-          unify ( rest map ( t => t sTypeSubst ( n , ty ) ) )
-            . map ( f => f compose ( t => t sTypeSubst ( n , ty ) ) )
+          unify ( rest map ( _ sTypeSubst ( n , ty ) ) )
+            . map ( _ compose ( _ sTypeSubst ( n , ty ) ) )
         case ( ty         , SVar ( n ) ) if ! ( ty hasOccurrenceOf n ) =>
-          unify ( rest map ( t => t sTypeSubst ( n , ty ) ) )
-            . map ( f => f compose ( t => t sTypeSubst ( n , ty ) ) )
+          unify ( rest map ( _ sTypeSubst ( n , ty ) ) )
+            . map ( _ compose ( _ sTypeSubst ( n , ty ) ) )
         case ( SPair  ( t1l , t1r ) , SPair  ( t2l , t2r ) ) =>
           unify ( rest + ( t1l , t2l ) + ( t1r , t2r ) )
         case ( SFunc  ( t1a , t1r ) , SFunc  ( t2a , t2r ) ) =>
