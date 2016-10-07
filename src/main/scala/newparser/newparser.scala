@@ -91,56 +91,46 @@ class Lexer extends RegexParsers {
   override val whiteSpace = "[ \t\r\f\n]+".r
 
   def lex : Parser [ List [ Token ] ] = phrase ( rep1 (
-    lexBang   | lexStar    | lexDot     | lexColon   | lexLet     |
-    lexNew    | lexIf      | lexThen    | lexElse    | lexEndif   |
-    lexSend   | lexReceive | lexServer  | lexBar     | lexEnd     |
-    lexLparen | lexRparen  | lexLcurly  | lexRcurly  | lexComma   |
-    lexLarrow | lexRarrow  | lexTrue    | lexFalse   | lexPlus    |
-    lexDash   | lexFslash  | lexPerc    | lexEqual   | lexEqeq    |
-    lexNeq    | lexLess    | lexLesseq  | lexGrtr    | lexGrtreq  |
-    lexAnd    | lexOr      | lexIdent   | lexChan    | lexInt     ) )
-
-  def lexBang    : Parser [ Token ] = "!"                  ^^ { _ => BANG    }
-  def lexStar    : Parser [ Token ] = "*"                  ^^ { _ => STAR    }
-  def lexDot     : Parser [ Token ] = "."                  ^^ { _ => DOT     }
-  def lexColon   : Parser [ Token ] = ":"                  ^^ { _ => COLON   }
-  def lexLet     : Parser [ Token ] = "let"                ^^ { _ => LET     }
-  def lexNew     : Parser [ Token ] = "new"                ^^ { _ => NEW     }
-  def lexIf      : Parser [ Token ] = "if"                 ^^ { _ => IF      }
-  def lexThen    : Parser [ Token ] = "then"               ^^ { _ => THEN    }
-  def lexElse    : Parser [ Token ] = "else"               ^^ { _ => ELSE    }
-  def lexEndif   : Parser [ Token ] = "endif"              ^^ { _ => ENDIF   }
-  def lexSend    : Parser [ Token ] = "send"               ^^ { _ => SEND    }
-  def lexReceive : Parser [ Token ] = "receive"            ^^ { _ => RECEIVE }
-  def lexServer  : Parser [ Token ] = "server"             ^^ { _ => SERVER  }
-  def lexBar     : Parser [ Token ] = "|"                  ^^ { _ => BAR     }
-  def lexEnd     : Parser [ Token ] = "end"                ^^ { _ => END     }
-  def lexLparen  : Parser [ Token ] = "("                  ^^ { _ => LPAREN  }
-  def lexRparen  : Parser [ Token ] = ")"                  ^^ { _ => RPAREN  }
-  def lexLcurly  : Parser [ Token ] = "{"                  ^^ { _ => LCURLY  }
-  def lexRcurly  : Parser [ Token ] = "}"                  ^^ { _ => RCURLY  }
-  def lexComma   : Parser [ Token ] = ","                  ^^ { _ => COMMA   }
-  def lexLarrow  : Parser [ Token ] = "<-"                 ^^ { _ => LARROW  }
-  def lexRarrow  : Parser [ Token ] = "->"                 ^^ { _ => RARROW  }
-  def lexTrue    : Parser [ Token ] = "true"               ^^ { _ => TRUE    }
-  def lexFalse   : Parser [ Token ] = "false"              ^^ { _ => FALSE   }
-  def lexPlus    : Parser [ Token ] = "+"                  ^^ { _ => PLUS    }
-  def lexDash    : Parser [ Token ] = "-"                  ^^ { _ => DASH    }
-  def lexFslash  : Parser [ Token ] = "/"                  ^^ { _ => FSLASH  }
-  def lexPerc    : Parser [ Token ] = "%"                  ^^ { _ => PERC    }
-  def lexEqual   : Parser [ Token ] = "="                  ^^ { _ => EQUAL   }
-  def lexEqeq    : Parser [ Token ] = "=="                 ^^ { _ => EQEQ    }
-  def lexNeq     : Parser [ Token ] = "!="                 ^^ { _ => NEQ     }
-  def lexLess    : Parser [ Token ] = "<"                  ^^ { _ => LESS    }
-  def lexLesseq  : Parser [ Token ] = "<="                 ^^ { _ => LESSEQ  }
-  def lexGrtr    : Parser [ Token ] = ">"                  ^^ { _ => GRTR    }
-  def lexGrtreq  : Parser [ Token ] = ">="                 ^^ { _ => GRTREQ  }
-  def lexAnd     : Parser [ Token ] = "&&"                 ^^ { _ => AND     }
-  def lexOr      : Parser [ Token ] = "||"                 ^^ { _ => OR      }
-  def lexIdent   : Parser [ Token ] = """[a-z]+""".r       ^^ { IDENT ( _ )  }
-  def lexChan    : Parser [ Token ] = """\$[a-z]+""".r     ^^ { CHAN  ( _ )  }
-  def lexInt     : Parser [ Token ] = """(0|[1-9]\d*)""".r ^^ { INT   ( _ )  }
-
+    "!"                  ^^ { _ => BANG    } |||
+    "*"                  ^^ { _ => STAR    } |||
+    "."                  ^^ { _ => DOT     } |||
+    ":"                  ^^ { _ => COLON   } |||
+    "let"                ^^ { _ => LET     } |||
+    "new"                ^^ { _ => NEW     } |||
+    "if"                 ^^ { _ => IF      } |||
+    "then"               ^^ { _ => THEN    } |||
+    "else"               ^^ { _ => ELSE    } |||
+    "endif"              ^^ { _ => ENDIF   } |||
+    "send"               ^^ { _ => SEND    } |||
+    "receive"            ^^ { _ => RECEIVE } |||
+    "server"             ^^ { _ => SERVER  } |||
+    "|"                  ^^ { _ => BAR     } |||
+    "end"                ^^ { _ => END     } |||
+    "("                  ^^ { _ => LPAREN  } |||
+    ")"                  ^^ { _ => RPAREN  } |||
+    "{"                  ^^ { _ => LCURLY  } |||
+    "}"                  ^^ { _ => RCURLY  } |||
+    ","                  ^^ { _ => COMMA   } |||
+    "<-"                 ^^ { _ => LARROW  } |||
+    "->"                 ^^ { _ => RARROW  } |||
+    "true"               ^^ { _ => TRUE    } |||
+    "false"              ^^ { _ => FALSE   } |||
+    "+"                  ^^ { _ => PLUS    } |||
+    "-"                  ^^ { _ => DASH    } |||
+    "/"                  ^^ { _ => FSLASH  } |||
+    "%"                  ^^ { _ => PERC    } |||
+    "="                  ^^ { _ => EQUAL   } |||
+    "=="                 ^^ { _ => EQEQ    } |||
+    "!="                 ^^ { _ => NEQ     } |||
+    "<"                  ^^ { _ => LESS    } |||
+    "<="                 ^^ { _ => LESSEQ  } |||
+    ">"                  ^^ { _ => GRTR    } |||
+    ">="                 ^^ { _ => GRTREQ  } |||
+    "&&"                 ^^ { _ => AND     } |||
+    "||"                 ^^ { _ => OR      } |||
+    """[a-z_]+""".r      ^^ { IDENT ( _ )  } |||
+    """\$[a-z_]+""".r    ^^ { CHAN  ( _ )  } |||
+    """(0|[1-9]\d*)""".r ^^ { INT   ( _ )  } ) )
 }
 
 sealed abstract class Token

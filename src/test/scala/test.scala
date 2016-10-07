@@ -137,6 +137,22 @@ object ProcProperties extends Properties("Proc") {
   }
 }
 
+object NewParserProperties extends Properties("NewParser") {
+  import newparser._
+  import scala.util.parsing.combinator._
+  import scala.util.parsing.input.CharSequenceReader
+
+  property("keywordNotIdent") = {
+    val lexer: Lexer = new newparser.Lexer ( )
+    val input: CharSequenceReader = new CharSequenceReader ( "send" )
+    val result: lexer.ParseResult [ List [ Token ] ] = lexer.lex ( input )
+    result match {
+      case lexer.Success ( tks , _ ) => tks == List ( SEND )
+      case _ => println ( result ) ; false
+    }
+  }
+}
+
 object TurnerMachineProperties extends Properties("TurnerMachineState") {
   import parser._
   import parser.Parser._
