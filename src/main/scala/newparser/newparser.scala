@@ -85,12 +85,15 @@ class Parser extends RegexParsers with PackratParsers {
     "->" ^^ { _ => PRight }
 }
 
-class Lexer extends RegexParsers {
+object Lexer extends RegexParsers {
 
   override def skipWhitespace = true
-  override val whiteSpace = "[ \t\r\f\n]+".r
+  override val whiteSpace = """[ \t\r\f\n]+""".r
 
   def lex : Parser [ List [ Token ] ] = phrase ( rep1 (
+    """[a-z_]+""".r      ^^ { IDENT ( _ )  } |||
+    """\$[a-z_]+""".r    ^^ { CHAN  ( _ )  } |||
+    """(0|[1-9]\d*)""".r ^^ { INT   ( _ )  } |||
     "!"                  ^^ { _ => BANG    } |||
     "*"                  ^^ { _ => STAR    } |||
     "."                  ^^ { _ => DOT     } |||
@@ -127,10 +130,7 @@ class Lexer extends RegexParsers {
     ">"                  ^^ { _ => GRTR    } |||
     ">="                 ^^ { _ => GRTREQ  } |||
     "&&"                 ^^ { _ => AND     } |||
-    "||"                 ^^ { _ => OR      } |||
-    """[a-z_]+""".r      ^^ { IDENT ( _ )  } |||
-    """\$[a-z_]+""".r    ^^ { CHAN  ( _ )  } |||
-    """(0|[1-9]\d*)""".r ^^ { INT   ( _ )  } ) )
+    "||"                 ^^ { _ => OR      } ) )
 }
 
 sealed abstract class Token

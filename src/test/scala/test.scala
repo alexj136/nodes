@@ -139,18 +139,36 @@ object ProcProperties extends Properties("Proc") {
 
 object NewParserProperties extends Properties("NewParser") {
   import newparser._
-  import scala.util.parsing.combinator._
   import scala.util.parsing.input.CharSequenceReader
 
-  property("keywordNotIdent") = {
-    val lexer: Lexer = new newparser.Lexer ( )
-    val input: CharSequenceReader = new CharSequenceReader ( "send" )
-    val result: lexer.ParseResult [ List [ Token ] ] = lexer.lex ( input )
-    result match {
-      case lexer.Success ( tks , _ ) => tks == List ( SEND )
-      case _ => println ( result ) ; false
+  def lexesAs ( input: String , expectedOutput: List [ Token ] ): Boolean =
+    Lexer.lex ( new CharSequenceReader ( input ) ) match {
+      case Lexer.Success ( tks , _ ) => tks == expectedOutput
+      case _ => false
     }
-  }
+
+  def lexerFails ( input: String ): Boolean =
+    Lexer.lex ( new CharSequenceReader ( input ) ) match {
+      case Lexer.Success ( _ , _ ) => false
+      case _ => true
+    }
+
+  property("keywordNotIdent") = lexesAs ( "send" , List ( SEND ) )
+
+  property("identNotTwoKeywords") =
+    lexesAs ( "sendsend" , List ( IDENT ( "sendsend" ) ) )
+
+  property("twoKeywordsNotIdent") =
+    lexesAs ( "send send" , List ( SEND , SEND ) ) &&
+    lexesAs ( "receive send" , List ( RECEIVE , SEND ) ) &&
+    lexesAs ( "receive end" , List ( RECEIVE , END ) )
+
+  property("twoIdents") =
+    lexesAs ( "a b" , List ( IDENT ( "a" ) , IDENT ( "b" ) ) )
+
+  property("justChan") = lexesAs ( "$send" , List ( CHAN ( "$send" ) ) )
+
+  property("justInt") = lexesAs ( "25" , List ( INT ( "25" ) ) )
 }
 
 object TurnerMachineProperties extends Properties("TurnerMachineState") {
