@@ -4,51 +4,52 @@ import syntax._
 import scala.util.parsing.combinator._
 import scala.util.parsing.input.CharSequenceReader
 
-class Parser extends RegexParsers with PackratParsers {
+class Parser extends Parsers with PackratParsers {
 
-  def name: Parser [ Name ] = """[a-z]+""".r ^^ { _ => Name ( ??? ) }
+  override type Elem = Token
+
+  def name: Parser [ Name ] =
+    accept ( "IDENT" , { case IDENT ( n ) => Name ( ??? ) } )
 
   lazy val proc: PackratParser [ Proc ] = par | end | snd | rcv | res
 
-  lazy val par: PackratParser [ Proc ] = proc ~ "|" ~ proc ^^ {
+  lazy val par: PackratParser [ Proc ] = proc ~ BAR ~ proc ^^ {
     case p ~ _ ~ q => Parallel ( p , q )
   }
 
   def snd: Parser [ Proc ] =
-    "send" ~ name ~ ":" ~ name ~ "." ~ proc ^^ {
+    SEND ~ name ~ COLON ~ name ~ DOT ~ proc ^^ {
       case _ ~ c ~ _ ~ m ~ _ ~ p => Send ( Variable ( c ) , Variable ( m ) , p )
     }
 
   def rcv: Parser [ Proc ] =
-    "receive" ~ name ~ ":" ~ name ~ "." ~ proc ^^ {
+    RECEIVE ~ name ~ COLON ~ name ~ DOT ~ proc ^^ {
       case _ ~ c ~ _ ~ b ~ _ ~ p => Receive ( false , Variable ( c ) , b , p )
     }
 
-  def res: Parser [ Proc ] = "new" ~ name ~ "." ~ proc ^^ {
+  def res: Parser [ Proc ] = NEW ~ name ~ DOT ~ proc ^^ {
     case _ ~ n ~ _ ~ p => New ( n , p )
   }
 
-  def end: Parser [ Proc ] = "end" ^^ { _ => End }
+  def end: Parser [ Proc ] = END ^^ { _ => End }
 
   lazy val exp: PackratParser [ Exp ] =
     variable | intLiteral | trueLiteral | falseLiteral | chanLiteral | pair |
-    binExp | unExp | "(" ~> exp <~ ")"
+    binExp | unExp | LPAREN ~> exp <~ RPAREN
 
   def variable: Parser [ Exp ] = name ^^ { Variable ( _ ) }
 
-  def intLiteral: Parser [ Exp ] = """(0|[1-9]\d*)""".r ^^ {
-    s => IntLiteral ( s.toInt )
-  }
+  def intLiteral: Parser [ Exp ] =
+    accept ( "INT" , { case INT ( i ) => IntLiteral ( i.toInt ) } )
 
-  def trueLiteral: Parser [ Exp ] = "true" ^^ { _ => BoolLiteral ( true ) }
+  def trueLiteral: Parser [ Exp ] = TRUE ^^ { _ => BoolLiteral ( true ) }
 
-  def falseLiteral: Parser [ Exp ] = "false" ^^ { _ => BoolLiteral ( false ) }
+  def falseLiteral: Parser [ Exp ] = FALSE ^^ { _ => BoolLiteral ( false ) }
 
-  def chanLiteral: Parser [ Exp ] = """\$[a-z]+""".r ^^ {
-    _ => ChanLiteral ( Name ( ??? ) )
-  }
+  def chanLiteral: Parser [ Exp ] =
+    accept ( "CHAN" , { case CHAN ( c ) => ChanLiteral ( Name ( ??? ) ) } )
 
-  def pair: Parser [ Exp ] = "{" ~ exp ~ "," ~ exp ~ "}" ^^ {
+  def pair: Parser [ Exp ] = LCURLY ~ exp ~ COMMA ~ exp ~ RCURLY ^^ {
     case _ ~ l ~ _ ~ r ~ _ => Pair ( l , r )
   }
 
@@ -60,29 +61,29 @@ class Parser extends RegexParsers with PackratParsers {
     case op ~ e => UnExp ( op , e )
   }
 
-  def uMinus: Parser [ Exp ] = "-" ~ exp ^^ {
+  def uMinus: Parser [ Exp ] = DASH ~ exp ^^ {
     case _ ~ e => BinExp ( Sub , IntLiteral ( 0 ) , e )
   }
 
   def binOpTy: Parser [ BinOp ] =
-    "+"  ^^ { _ => Add       } |
-    "-"  ^^ { _ => Sub       } |
-    "*"  ^^ { _ => Mul       } |
-    "/"  ^^ { _ => Div       } |
-    "%"  ^^ { _ => Mod       } |
-    "==" ^^ { _ => Equal     } |
-    "!=" ^^ { _ => NotEqual  } |
-    "<"  ^^ { _ => Less      } |
-    "<=" ^^ { _ => LessEq    } |
-    ">"  ^^ { _ => Greater   } |
-    ">=" ^^ { _ => GreaterEq } |
-    "&&" ^^ { _ => And       } |
-    "||" ^^ { _ => Or        }
+    PLUS   ^^ { _ => Add       } |
+    DASH   ^^ { _ => Sub       } |
+    STAR   ^^ { _ => Mul       } |
+    FSLASH ^^ { _ => Div       } |
+    PERC   ^^ { _ => Mod       } |
+    EQEQ   ^^ { _ => Equal     } |
+    NEQ    ^^ { _ => NotEqual  } |
+    LESS   ^^ { _ => Less      } |
+    LESSEQ ^^ { _ => LessEq    } |
+    GRTR   ^^ { _ => Greater   } |
+    GRTREQ ^^ { _ => GreaterEq } |
+    AND    ^^ { _ => And       } |
+    OR     ^^ { _ => Or        }
 
   def unOpTy: Parser [ UnOp ] =
-    "!"  ^^ { _ => Not    } |
-    "<-" ^^ { _ => PLeft  } |
-    "->" ^^ { _ => PRight }
+    BANG   ^^ { _ => Not    } |
+    LARROW ^^ { _ => PLeft  } |
+    RARROW ^^ { _ => PRight }
 }
 
 object Lexer extends RegexParsers {
