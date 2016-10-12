@@ -18,14 +18,39 @@ import scala.util.parsing.combinator._
 /** Responsible for converting a List [ PostToken ] into a syntax.Proc via the
  *  ... method.
  */
+
+sealed abstract class LexerParserError ( msg: String )
+case class LexerError  ( msg: String ) extends LexerParserError ( msg )
+case class ParserError ( msg: String ) extends LexerParserError ( msg )
+
+object LexAndParse extends Function1
+  [ String
+  , Either [ LexerParserError , ( Map [ String , Name ] , Name , Proc ) ] ] {
+
+  def apply (
+    input: String
+  ): Either [ LexerParserError , ( Map [ String , Name ] , Name , Proc ) ] =
+    for {
+      lexed  <- Lexer  ( input    ).right
+      parsed <- Parser ( lexed._3 ).right
+    } yield ( lexed._1 , lexed._2 , parsed )
+}
+
 object Parser extends Parsers with PackratParsers {
+
+  def apply ( input: List [ PostToken ] ): Either [ ParserError , Proc ] =
+    proc ( new TokenReader ( input ) ) match {
+      case Success   ( prc , rest ) => Right ( prc                 )
+      case NoSuccess ( msg , rest ) => Left  ( ParserError ( msg ) )
+    }
 
   override type Elem = PostToken
 
   def name: Parser [ Name ] =
     accept ( "POSTIDENT" , { case POSTIDENT ( n ) => n } )
 
-  lazy val proc: PackratParser [ Proc ] = par | end | snd | rcv | res | let
+  lazy val proc: PackratParser [ Proc ] =
+    phrase ( par | end | snd | rcv | res | let | LPAREN ~> proc <~ RPAREN )
 
   lazy val par: PackratParser [ Proc ] = proc ~ BAR ~ proc ^^ {
     case p ~ _ ~ q => Parallel ( p , q )
@@ -118,6 +143,14 @@ class TokenReader ( tokens: List [ PostToken ] ) extends Reader [ PostToken ] {
  *  List [ PreToken ].
  */
 object Lexer extends RegexParsers {
+
+  def apply ( input: String ): Either
+    [ LexerError
+    , ( Map [ String , Name ] , Name , List [ PostToken ] )
+    ] = lex ( new CharSequenceReader ( input ) ) match {
+      case Success   ( tks , rest ) => Right ( PreToken.processAll ( tks ) )
+      case NoSuccess ( msg , rest ) => Left  ( LexerError          ( msg ) )
+    }
 
   override def skipWhitespace = true
   override val whiteSpace = """[ \t\r\f\n]+""".r
