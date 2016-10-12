@@ -1,17 +1,31 @@
 package newparser
 
-import syntax._
-import scala.util.parsing.combinator._
-import scala.util.parsing.input.CharSequenceReader
+/** Implements a parser for the nodes language using scala's parser combinators.
+ *  Parsing is subdivided into separate lexing, processing and parsing phases.
+ *  - Lexing converts a String of nodes code into a List [ PreToken ]. PreTokens
+ *  are tokens where identifiers, ints and such carry the text that was lexed
+ *  to produce them.
+ *  - The processing step converts PreTokens into PostTokens, changing the
+ *  representation of names from Strings to Integers, providing a map between
+ *  string and integer names for printing purposes.
+ *  - Parsing converts a List [ PostToken ] into a syntax.Proc.
+ */
 
-class Parser extends Parsers with PackratParsers {
+import syntax._
+import scala.util.parsing.input._
+import scala.util.parsing.combinator._
+
+/** Responsible for converting a List [ PostToken ] into a syntax.Proc via the
+ *  ... method.
+ */
+object Parser extends Parsers with PackratParsers {
 
   override type Elem = PostToken
 
   def name: Parser [ Name ] =
-    accept ( "POSTIDENT" , { case POSTIDENT ( n ) => Name ( ??? ) } )
+    accept ( "POSTIDENT" , { case POSTIDENT ( n ) => n } )
 
-  lazy val proc: PackratParser [ Proc ] = par | end | snd | rcv | res
+  lazy val proc: PackratParser [ Proc ] = par | end | snd | rcv | res | let
 
   lazy val par: PackratParser [ Proc ] = proc ~ BAR ~ proc ^^ {
     case p ~ _ ~ q => Parallel ( p , q )
@@ -31,6 +45,10 @@ class Parser extends Parsers with PackratParsers {
     case _ ~ n ~ _ ~ p => New ( n , p )
   }
 
+  def let: Parser [ Proc ] = LET ~ name ~ EQUAL ~ exp ~ DOT ~ proc ^^ {
+    case _ ~ n ~ _ ~ e ~ _ ~ p => LetIn ( n , e , p )
+  }
+
   def end: Parser [ Proc ] = END ^^ { _ => End }
 
   lazy val exp: PackratParser [ Exp ] =
@@ -40,14 +58,14 @@ class Parser extends Parsers with PackratParsers {
   def variable: Parser [ Exp ] = name ^^ { Variable ( _ ) }
 
   def intLiteral: Parser [ Exp ] =
-    accept ( "POSTINT" , { case POSTINT ( i ) => IntLiteral ( i.toInt ) } )
+    accept ( "POSTINT" , { case POSTINT ( i ) => IntLiteral ( i ) } )
 
   def trueLiteral: Parser [ Exp ] = TRUE ^^ { _ => BoolLiteral ( true ) }
 
   def falseLiteral: Parser [ Exp ] = FALSE ^^ { _ => BoolLiteral ( false ) }
 
   def chanLiteral: Parser [ Exp ] = accept ( "POSTCHAN" , {
-    case POSTCHAN ( c ) => ChanLiteral ( Name ( ??? ) )
+    case POSTCHAN ( c ) => ChanLiteral ( c )
   } )
 
   def pair: Parser [ Exp ] = LCURLY ~ exp ~ COMMA ~ exp ~ RCURLY ^^ {
@@ -87,6 +105,18 @@ class Parser extends Parsers with PackratParsers {
     RARROW ^^ { _ => PRight }
 }
 
+/** Reader for Tokens used to feed a List [ PostToken ] into the Parser.
+ */
+class TokenReader ( tokens: List [ PostToken ] ) extends Reader [ PostToken ] {
+  override def first : PostToken = tokens.head
+  override def atEnd : Boolean = tokens.isEmpty
+  override def pos   : Position = NoPosition
+  override def rest  : Reader [ PostToken ] = new TokenReader( tokens.tail )
+}
+
+/** The lexer - provides the lex method which convers a String into a
+ *  List [ PreToken ].
+ */
 object Lexer extends RegexParsers {
 
   override def skipWhitespace = true
@@ -135,6 +165,13 @@ object Lexer extends RegexParsers {
     "||"                 ^^ { _ => OR         } ) )
 }
 
+/** Below we have the token classes. We have PreTokens and PostTokens to
+ *  represent tokens before and after the processing of lexed information.
+ *  KeyWdTokens are both Pre and Post tokens because they require no processing.
+ *  Tokens that contain information are divided into separate Pre and Post
+ *  InfoToken classes as they require processing.
+ */
+
 sealed abstract class PreToken {
   def process (
     nameMap: Map [ String , Name ] ,
@@ -162,6 +199,11 @@ object PreToken {
 sealed abstract class PreInfoToken ( text: String ) extends PreToken
 
 case class PREIDENT ( text: String ) extends PreInfoToken ( text ) {
+  /** Processing and IDENT consists of looking up the name map to see if the
+   *  string name already has an integer representation. If so, we use that
+   *  integer. If not, we choose a new integer (via Name.next) as the
+   *  representation and add that mapping to the map.
+   */
   override def process (
     nameMap: Map [ String , Name ] ,
     nextName: Name
@@ -173,6 +215,8 @@ case class PREIDENT ( text: String ) extends PreInfoToken ( text ) {
     }
 }
 case class PRECHAN  ( text: String ) extends PreInfoToken ( text ) {
+  /** Processing a CHAN is the same as with IDENTs.
+   */
   override def process (
     nameMap: Map [ String , Name ] ,
     nextName: Name
@@ -184,6 +228,8 @@ case class PRECHAN  ( text: String ) extends PreInfoToken ( text ) {
     }
 }
 case class PREINT   ( text: String ) extends PreInfoToken ( text ) {
+  /** To process an INT, we simply have to .toInt the string.
+   */
   override def process (
     nameMap: Map [ String , Name ] ,
     nextName: Name
