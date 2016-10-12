@@ -6,10 +6,10 @@ import scala.util.parsing.input.CharSequenceReader
 
 class Parser extends Parsers with PackratParsers {
 
-  override type Elem = Token
+  override type Elem = PostToken
 
   def name: Parser [ Name ] =
-    accept ( "IDENT" , { case IDENT ( n ) => Name ( ??? ) } )
+    accept ( "POSTIDENT" , { case POSTIDENT ( n ) => Name ( ??? ) } )
 
   lazy val proc: PackratParser [ Proc ] = par | end | snd | rcv | res
 
@@ -40,14 +40,15 @@ class Parser extends Parsers with PackratParsers {
   def variable: Parser [ Exp ] = name ^^ { Variable ( _ ) }
 
   def intLiteral: Parser [ Exp ] =
-    accept ( "INT" , { case INT ( i ) => IntLiteral ( i.toInt ) } )
+    accept ( "POSTINT" , { case POSTINT ( i ) => IntLiteral ( i.toInt ) } )
 
   def trueLiteral: Parser [ Exp ] = TRUE ^^ { _ => BoolLiteral ( true ) }
 
   def falseLiteral: Parser [ Exp ] = FALSE ^^ { _ => BoolLiteral ( false ) }
 
-  def chanLiteral: Parser [ Exp ] =
-    accept ( "CHAN" , { case CHAN ( c ) => ChanLiteral ( Name ( ??? ) ) } )
+  def chanLiteral: Parser [ Exp ] = accept ( "POSTCHAN" , {
+    case POSTCHAN ( c ) => ChanLiteral ( Name ( ??? ) )
+  } )
 
   def pair: Parser [ Exp ] = LCURLY ~ exp ~ COMMA ~ exp ~ RCURLY ^^ {
     case _ ~ l ~ _ ~ r ~ _ => Pair ( l , r )
@@ -91,57 +92,120 @@ object Lexer extends RegexParsers {
   override def skipWhitespace = true
   override val whiteSpace = """[ \t\r\f\n]+""".r
 
-  def lex : Parser [ List [ Token ] ] = phrase ( rep1 (
-    """[a-z_]+""".r      ^^ { IDENT ( _ )  } |||
-    """\$[a-z_]+""".r    ^^ { CHAN  ( _ )  } |||
-    """(0|[1-9]\d*)""".r ^^ { INT   ( _ )  } |||
-    "!"                  ^^ { _ => BANG    } |||
-    "*"                  ^^ { _ => STAR    } |||
-    "."                  ^^ { _ => DOT     } |||
-    ":"                  ^^ { _ => COLON   } |||
-    "let"                ^^ { _ => LET     } |||
-    "new"                ^^ { _ => NEW     } |||
-    "if"                 ^^ { _ => IF      } |||
-    "then"               ^^ { _ => THEN    } |||
-    "else"               ^^ { _ => ELSE    } |||
-    "endif"              ^^ { _ => ENDIF   } |||
-    "send"               ^^ { _ => SEND    } |||
-    "receive"            ^^ { _ => RECEIVE } |||
-    "server"             ^^ { _ => SERVER  } |||
-    "|"                  ^^ { _ => BAR     } |||
-    "end"                ^^ { _ => END     } |||
-    "("                  ^^ { _ => LPAREN  } |||
-    ")"                  ^^ { _ => RPAREN  } |||
-    "{"                  ^^ { _ => LCURLY  } |||
-    "}"                  ^^ { _ => RCURLY  } |||
-    ","                  ^^ { _ => COMMA   } |||
-    "<-"                 ^^ { _ => LARROW  } |||
-    "->"                 ^^ { _ => RARROW  } |||
-    "true"               ^^ { _ => TRUE    } |||
-    "false"              ^^ { _ => FALSE   } |||
-    "+"                  ^^ { _ => PLUS    } |||
-    "-"                  ^^ { _ => DASH    } |||
-    "/"                  ^^ { _ => FSLASH  } |||
-    "%"                  ^^ { _ => PERC    } |||
-    "="                  ^^ { _ => EQUAL   } |||
-    "=="                 ^^ { _ => EQEQ    } |||
-    "!="                 ^^ { _ => NEQ     } |||
-    "<"                  ^^ { _ => LESS    } |||
-    "<="                 ^^ { _ => LESSEQ  } |||
-    ">"                  ^^ { _ => GRTR    } |||
-    ">="                 ^^ { _ => GRTREQ  } |||
-    "&&"                 ^^ { _ => AND     } |||
-    "||"                 ^^ { _ => OR      } ) )
+  def lex : Parser [ List [ PreToken ] ] = phrase ( rep1 (
+    """[a-z_]+""".r      ^^ { PREIDENT ( _ )  } |||
+    """\$[a-z_]+""".r    ^^ { PRECHAN  ( _ )  } |||
+    """(0|[1-9]\d*)""".r ^^ { PREINT   ( _ )  } |||
+    "!"                  ^^ { _ => BANG       } |||
+    "*"                  ^^ { _ => STAR       } |||
+    "."                  ^^ { _ => DOT        } |||
+    ":"                  ^^ { _ => COLON      } |||
+    "let"                ^^ { _ => LET        } |||
+    "new"                ^^ { _ => NEW        } |||
+    "if"                 ^^ { _ => IF         } |||
+    "then"               ^^ { _ => THEN       } |||
+    "else"               ^^ { _ => ELSE       } |||
+    "endif"              ^^ { _ => ENDIF      } |||
+    "send"               ^^ { _ => SEND       } |||
+    "receive"            ^^ { _ => RECEIVE    } |||
+    "server"             ^^ { _ => SERVER     } |||
+    "|"                  ^^ { _ => BAR        } |||
+    "end"                ^^ { _ => END        } |||
+    "("                  ^^ { _ => LPAREN     } |||
+    ")"                  ^^ { _ => RPAREN     } |||
+    "{"                  ^^ { _ => LCURLY     } |||
+    "}"                  ^^ { _ => RCURLY     } |||
+    ","                  ^^ { _ => COMMA      } |||
+    "<-"                 ^^ { _ => LARROW     } |||
+    "->"                 ^^ { _ => RARROW     } |||
+    "true"               ^^ { _ => TRUE       } |||
+    "false"              ^^ { _ => FALSE      } |||
+    "+"                  ^^ { _ => PLUS       } |||
+    "-"                  ^^ { _ => DASH       } |||
+    "/"                  ^^ { _ => FSLASH     } |||
+    "%"                  ^^ { _ => PERC       } |||
+    "="                  ^^ { _ => EQUAL      } |||
+    "=="                 ^^ { _ => EQEQ       } |||
+    "!="                 ^^ { _ => NEQ        } |||
+    "<"                  ^^ { _ => LESS       } |||
+    "<="                 ^^ { _ => LESSEQ     } |||
+    ">"                  ^^ { _ => GRTR       } |||
+    ">="                 ^^ { _ => GRTREQ     } |||
+    "&&"                 ^^ { _ => AND        } |||
+    "||"                 ^^ { _ => OR         } ) )
 }
 
-sealed abstract class Token
-sealed abstract class InfoToken ( text: String ) extends Token
-sealed abstract class KeyWdToken extends Token { val text: String }
+sealed abstract class PreToken {
+  def process (
+    nameMap: Map [ String , Name ] ,
+    nextName: Name
+  ): ( Map [ String , Name ] , Name , PostToken )
+}
+object PreToken {
+  def processAll (
+    tokens: List [ PreToken ]
+  ): ( Map [ String , Name ] , Name , List [ PostToken ] ) = {
+    var nameMap  : Map [ String , Name ] = Map.empty
+    var nextName : Name                  = Name ( 0 )
+    var done     : List [ PostToken ]    = List ( )
+    var todo     : List [ PreToken  ]    = tokens
+    while ( ! todo.isEmpty ) {
+      val todoHeadProcessed = todo.head.process ( nameMap , nextName )
+      nameMap  = todoHeadProcessed._1
+      nextName = todoHeadProcessed._2
+      done     = done ++ List ( todoHeadProcessed._3 )
+      todo     = todo.tail
+    }
+    ( nameMap , nextName , done )
+  }
+}
+sealed abstract class PreInfoToken ( text: String ) extends PreToken
 
-case class  IDENT ( text: String ) extends InfoToken ( text )
-case class  CHAN  ( text: String ) extends InfoToken ( text )
-case class  INT   ( text: String ) extends InfoToken ( text )
-case class  ERROR ( text: String ) extends InfoToken ( text )
+case class PREIDENT ( text: String ) extends PreInfoToken ( text ) {
+  override def process (
+    nameMap: Map [ String , Name ] ,
+    nextName: Name
+  ): ( Map [ String , Name ] , Name , PostToken ) =
+    nameMap get this.text match {
+      case Some ( name ) => ( nameMap , nextName , POSTIDENT ( name ) )
+      case None          => ( nameMap + ( ( this.text , nextName ) ) ,
+        nextName.next , POSTIDENT ( nextName ) )
+    }
+}
+case class PRECHAN  ( text: String ) extends PreInfoToken ( text ) {
+  override def process (
+    nameMap: Map [ String , Name ] ,
+    nextName: Name
+  ): ( Map [ String , Name ] , Name , PostToken ) =
+    nameMap get this.text match {
+      case Some ( name ) => ( nameMap , nextName , POSTCHAN ( name ) )
+      case None          => ( nameMap + ( ( this.text , nextName ) ) ,
+        nextName.next , POSTCHAN ( nextName ) )
+    }
+}
+case class PREINT   ( text: String ) extends PreInfoToken ( text ) {
+  override def process (
+    nameMap: Map [ String , Name ] ,
+    nextName: Name
+  ): ( Map [ String , Name ] , Name , PostToken ) =
+    ( nameMap , nextName , POSTINT ( this.text.toInt ) )
+}
+
+sealed trait PostToken
+sealed trait PostInfoToken extends PostToken
+
+case class POSTIDENT ( name: Name ) extends PostInfoToken
+case class POSTCHAN  ( name: Name ) extends PostInfoToken
+case class POSTINT   ( num:  Int  ) extends PostInfoToken
+
+sealed abstract class KeyWdToken extends PreToken with PostToken {
+  val text: String
+  override def process (
+    nameMap: Map [ String , Name ] ,
+    nextName: Name
+  ): ( Map [ String , Name ] , Name , PostToken ) =
+    ( nameMap , nextName , this )
+}
 
 case object BANG    extends KeyWdToken { val text: String = "!"       }
 case object STAR    extends KeyWdToken { val text: String = "*"       }
