@@ -36,10 +36,10 @@ object LexAndParse extends Function1
     } yield ( lexed._1 , lexed._2 , parsed )
 }
 
-object Parser extends Parsers with PackratParsers {
+object Parser extends Parsers {
 
   def apply ( input: List [ PostToken ] ): Either [ ParserError , Proc ] =
-    proc ( new TokenReader ( input ) ) match {
+    phrase ( proc ) ( new TokenReader ( input ) ) match {
       case Success   ( prc , rest ) => Right ( prc                 )
       case NoSuccess ( msg , rest ) => Left  ( ParserError ( msg ) )
     }
@@ -49,36 +49,61 @@ object Parser extends Parsers with PackratParsers {
   def name: Parser [ Name ] =
     accept ( "POSTIDENT" , { case POSTIDENT ( n ) => n } )
 
-  lazy val proc: PackratParser [ Proc ] =
-    phrase ( par | end | snd | rcv | res | let | LPAREN ~> proc <~ RPAREN )
+  def proc: Parser [ Proc ] = par ^^ { Proc fromList _ }
 
-  lazy val par: PackratParser [ Proc ] = proc ~ BAR ~ proc ^^ {
-    case p ~ _ ~ q => Parallel ( p , q )
-  }
+  def par: Parser [ List [ Proc ] ] = rep1sep (
+    end | snd | rcv | srv | res | let | ite | LPAREN ~> proc <~ RPAREN , BAR )
 
   def snd: Parser [ Proc ] =
-    SEND ~ name ~ COLON ~ name ~ DOT ~ proc ^^ {
-      case _ ~ c ~ _ ~ m ~ _ ~ p => Send ( Variable ( c ) , Variable ( m ) , p )
+    SEND ~ exp ~ COLON ~ exp ~ DOT ~ proc ^^ {
+      case _ ~ c ~ _ ~ m ~ _ ~ p => Send ( c , m , p )
     }
 
   def rcv: Parser [ Proc ] =
-    RECEIVE ~ name ~ COLON ~ name ~ DOT ~ proc ^^ {
-      case _ ~ c ~ _ ~ b ~ _ ~ p => Receive ( false , Variable ( c ) , b , p )
+    RECEIVE ~ exp ~ COLON ~ name ~ DOT ~ proc ^^ {
+      case _ ~ c ~ _ ~ b ~ _ ~ p => Receive ( false , c , b , p )
     }
 
-  def res: Parser [ Proc ] = NEW ~ name ~ DOT ~ proc ^^ {
-    case _ ~ n ~ _ ~ p => New ( n , p )
+  def srv: Parser [ Proc ] =
+    SERVER ~ exp ~ COLON ~ name ~ DOT ~ proc ^^ {
+      case _ ~ c ~ _ ~ b ~ _ ~ p => Receive ( true , c , b , p )
+    }
+
+  def res: Parser [ Proc ] =
+    NEW ~ name ~ DOT ~ proc ^^ {
+      case _ ~ n ~ _ ~ p => New ( n , p )
+    }
+
+  def let: Parser [ Proc ] =
+    LET ~ name ~ EQUAL ~ exp ~ DOT ~ proc ^^ {
+      case _ ~ n ~ _ ~ e ~ _ ~ p => LetIn ( n , e , p )
+    }
+
+  def ite: Parser [ Proc ] =
+    IF ~ exp ~ THEN ~ proc ~ ELSE ~ proc ~ ENDIF ^^ {
+      case _ ~ e ~ _ ~ p ~ _ ~ q ~ _ => IfThenElse ( e , p , q )
+    }
+
+  def end: Parser [ Proc ] =
+    END ^^ {
+      _ => End
+    }
+
+  /**
+   * Combinator parsers for expressions. The only left-recursive production in
+   * the basic expression grammar for this language is the binary expression
+   * production, so we add an extra expNoBinExp production to remove the left
+   * recursion.
+   */
+
+  def exp: Parser [ Exp ] = binExp | expNoBinExp
+
+  def expNoBinExp: Parser [ Exp ] = variable | intLiteral | trueLiteral |
+    falseLiteral | chanLiteral | pair | unExp | LPAREN ~> exp <~ RPAREN
+
+  def binExp: Parser [ Exp ] = expNoBinExp ~ binOpTy ~ exp ^^ {
+    case l ~ op ~ r => BinExp ( op , l , r )
   }
-
-  def let: Parser [ Proc ] = LET ~ name ~ EQUAL ~ exp ~ DOT ~ proc ^^ {
-    case _ ~ n ~ _ ~ e ~ _ ~ p => LetIn ( n , e , p )
-  }
-
-  def end: Parser [ Proc ] = END ^^ { _ => End }
-
-  lazy val exp: PackratParser [ Exp ] =
-    variable | intLiteral | trueLiteral | falseLiteral | chanLiteral | pair |
-    binExp | unExp | LPAREN ~> exp <~ RPAREN
 
   def variable: Parser [ Exp ] = name ^^ { Variable ( _ ) }
 
@@ -95,10 +120,6 @@ object Parser extends Parsers with PackratParsers {
 
   def pair: Parser [ Exp ] = LCURLY ~ exp ~ COMMA ~ exp ~ RCURLY ^^ {
     case _ ~ l ~ _ ~ r ~ _ => Pair ( l , r )
-  }
-
-  lazy val binExp: PackratParser [ Exp ] = exp ~ binOpTy ~ exp ^^ {
-    case l ~ op ~ r => BinExp ( op , l , r )
   }
 
   def unExp: Parser [ Exp ] = unOpTy ~ exp ^^ {

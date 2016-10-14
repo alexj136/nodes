@@ -141,6 +141,8 @@ object NewParserProperties extends Properties("NewParser") {
   import newparser._
   import scala.util.parsing.input.CharSequenceReader
 
+  /* Lexer tests */
+
   def lexesAs ( input: String , expectedOutput: List [ PreToken ] ): Boolean =
     Lexer.lex ( new CharSequenceReader ( input ) ) match {
       case Lexer.Success ( tks , _ ) => tks == expectedOutput
@@ -169,6 +171,14 @@ object NewParserProperties extends Properties("NewParser") {
   property("justChan") = lexesAs ( "$send" , List ( PRECHAN ( "$send" ) ) )
 
   property("justInt") = lexesAs ( "25" , List ( PREINT ( "25" ) ) )
+
+  /* Parser tests */
+
+  property("noParProcs") = {
+    LexAndParse("end").right.get._3 == End &&
+    LexAndParse("send 1 : 2 . end").right.map ( _._3 == Send (
+      IntLiteral ( 1 ) , IntLiteral ( 2 ) , End ) ).right.getOrElse ( false )
+  }
 }
 
 object TurnerMachineProperties extends Properties("TurnerMachineState") {
