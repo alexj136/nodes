@@ -23,7 +23,7 @@ sealed abstract class LexerParserError ( msg: String )
 case class LexerError  ( msg: String ) extends LexerParserError ( msg )
 case class ParserError ( msg: String ) extends LexerParserError ( msg )
 
-object LexAndParse extends Function1
+object LexAndParseProc extends Function1
   [ String
   , Either [ LexerParserError , ( Map [ String , Name ] , Name , Proc ) ] ] {
 
@@ -31,15 +31,31 @@ object LexAndParse extends Function1
     input: String
   ): Either [ LexerParserError , ( Map [ String , Name ] , Name , Proc ) ] =
     for {
-      lexed  <- Lexer  ( input    ).right
-      parsed <- Parser ( lexed._3 ).right
+      lexed  <- Lexer  ( input                  ).right
+      parsed <- Parser ( Parser.proc , lexed._3 ).right
+    } yield ( lexed._1 , lexed._2 , parsed )
+}
+
+object LexAndParseExp extends Function1
+  [ String
+  , Either [ LexerParserError , ( Map [ String , Name ] , Name , Exp ) ] ] {
+
+  def apply (
+    input: String
+  ): Either [ LexerParserError , ( Map [ String , Name ] , Name , Exp ) ] =
+    for {
+      lexed  <- Lexer  ( input                  ).right
+      parsed <- Parser ( Parser.exp , lexed._3 ).right
     } yield ( lexed._1 , lexed._2 , parsed )
 }
 
 object Parser extends Parsers {
 
-  def apply ( input: List [ PostToken ] ): Either [ ParserError , Proc ] =
-    phrase ( proc ) ( new TokenReader ( input ) ) match {
+  def apply [ T ] (
+    production: Parser [ T ] ,
+    input: List [ PostToken ]
+  ): Either [ ParserError , T ] =
+    phrase ( production ) ( new TokenReader ( input ) ) match {
       case Success   ( prc , rest ) => Right ( prc                 )
       case NoSuccess ( msg , rest ) => Left  ( ParserError ( msg ) )
     }
