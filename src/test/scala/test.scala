@@ -174,33 +174,34 @@ object NewParserProperties extends Properties("NewParser") {
 
   /* Parser tests */
 
-  def procParsesAs ( input: String , expectedOutput: Proc ): Boolean =
-    LexAndParseProc ( input ).right.map ( _._3 == expectedOutput )
-      .right.getOrElse ( false )
-
-  def expParsesAs ( input: String , expectedOutput: Exp ): Boolean =
-    LexAndParseExp ( input ).right.map ( _._3 == expectedOutput )
+  def parsesAs [ T ] (
+    production: Parser.Parser [ T ] ,
+    input: String ,
+    expectedOutput: T
+  ): Boolean =
+    lexAndParse ( production , input ).right.map ( _._3 == expectedOutput )
       .right.getOrElse ( false )
 
   property("Procs") = {
-    procParsesAs ( "end" , End ) &&
-    procParsesAs ( "end | end | end" ,
+    parsesAs ( Parser.proc , "end" , End ) &&
+    parsesAs ( Parser.proc , "end | end | end" ,
       Parallel ( End , Parallel ( End , End ) ) ) &&
-    procParsesAs ("send 1 : 2 . end" ,
+    parsesAs ( Parser.proc , "send 1 : 2 . end" ,
       Send ( IntLiteral ( 1 ) , IntLiteral ( 2 ) , End ) ) &&
-    procParsesAs ("send 1 : 2 . end | receive 1 : a . end" ,
+    parsesAs ( Parser.proc , "send 1 : 2 . end | receive 1 : a . end" ,
       Parallel ( Send ( IntLiteral ( 1 ) , IntLiteral ( 2 ) , End ) ,
         Receive ( false , IntLiteral ( 1 ) , Name ( 0 ) , End ) ) )
   }
 
   property("Exps") = {
-    expParsesAs ( "a" , Variable ( Name ( 0 ) ) ) &&
-    expParsesAs ( "a + b" ,
+    parsesAs ( Parser.exp , "a" , Variable ( Name ( 0 ) ) ) &&
+    parsesAs ( Parser.exp , "a + b" ,
       BinExp ( Add , Variable ( Name ( 0 ) ) , Variable ( Name ( 1 ) ) ) ) &&
-    expParsesAs ( "a + b + c" ,
+    parsesAs ( Parser.exp , "a + b + c" ,
       BinExp ( Add , Variable ( Name ( 0 ) ) ,
         BinExp ( Add , Variable ( Name ( 1 ) ) , Variable ( Name ( 2 ) ) ) ) ) &&
-    ( LexAndParseExp ( "a + b + c" ) == LexAndParseExp ( "a + ( b + c )" ) )
+    ( lexAndParse ( Parser.exp , "a + b + c" ) ==
+      lexAndParse ( Parser.exp , "a + ( b + c )" ) )
   }
 }
 

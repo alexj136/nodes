@@ -1,13 +1,16 @@
 package syntax
+import scala.util.parsing.input.Positional
 
-sealed trait SyntaxElement {
+sealed trait SyntaxElement extends Positional {
   var info: Info = NoInfo
   def pstr(names: Map[Name, String]): String
   def free: Set[Name]
 }
 
-case class Name(val id: Int) {
+case class Name(val id: Int) extends SyntaxElement {
   def next: Name = new Name(this.id + 1)
+  def pstr(names: Map[Name, String]): String = names(this)
+  def free: Set[Name] = Set(this)
   override def toString: String = s"Name(${this.id})" // for debugging
 }
 

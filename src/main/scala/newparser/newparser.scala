@@ -19,33 +19,21 @@ import scala.util.parsing.combinator._
  *  ... method.
  */
 
-sealed abstract class LexerParserError ( msg: String )
-case class LexerError  ( msg: String ) extends LexerParserError ( msg )
-case class ParserError ( msg: String ) extends LexerParserError ( msg )
+sealed abstract class LexerParserError ( row: Int , col: Int , msg: String )
+case class LexerError  ( row: Int , col: Int , msg: String )
+  extends LexerParserError ( row , col , msg )
+case class ParserError ( row: Int , col: Int , msg: String )
+  extends LexerParserError ( row , col , msg )
 
-object LexAndParseProc extends Function1
-  [ String
-  , Either [ LexerParserError , ( Map [ String , Name ] , Name , Proc ) ] ] {
+object lexAndParse {
 
-  def apply (
+  def apply [ T ] (
+    production: Parser.Parser [ T ] ,
     input: String
-  ): Either [ LexerParserError , ( Map [ String , Name ] , Name , Proc ) ] =
+  ): Either [ LexerParserError , ( Map [ String , Name ] , Name , T ) ] =
     for {
-      lexed  <- Lexer  ( input                  ).right
-      parsed <- Parser ( Parser.proc , lexed._3 ).right
-    } yield ( lexed._1 , lexed._2 , parsed )
-}
-
-object LexAndParseExp extends Function1
-  [ String
-  , Either [ LexerParserError , ( Map [ String , Name ] , Name , Exp ) ] ] {
-
-  def apply (
-    input: String
-  ): Either [ LexerParserError , ( Map [ String , Name ] , Name , Exp ) ] =
-    for {
-      lexed  <- Lexer  ( input                  ).right
-      parsed <- Parser ( Parser.exp , lexed._3 ).right
+      lexed  <- Lexer  ( input                 ).right
+      parsed <- Parser ( production , lexed._3 ).right
     } yield ( lexed._1 , lexed._2 , parsed )
 }
 
@@ -57,38 +45,43 @@ object Parser extends Parsers {
   ): Either [ ParserError , T ] =
     phrase ( production ) ( new TokenReader ( input ) ) match {
       case Success   ( prc , rest ) => Right ( prc                 )
-      case NoSuccess ( msg , rest ) => Left  ( ParserError ( msg ) )
+      case NoSuccess ( msg , rest ) =>
+        Left ( ParserError ( rest.pos.line , rest.pos.column , msg ) )
     }
 
   override type Elem = PostToken
 
   def name: Parser [ Name ] =
-    accept ( "POSTIDENT" , { case POSTIDENT ( n ) => n } )
+    positioned { accept ( "POSTIDENT" , { case POSTIDENT ( n ) => n } ) }
 
-  def proc: Parser [ Proc ] = par ^^ { Proc fromList _ }
+  def proc: Parser [ Proc ] = positioned { par ^^ { Proc fromList _ } }
 
   def par: Parser [ List [ Proc ] ] = rep1sep (
     end | snd | rcv | srv | res | let | ite | LPAREN ~> proc <~ RPAREN , BAR )
 
-  def snd: Parser [ Proc ] =
+  def snd: Parser [ Proc ] = positioned {
     SEND ~ exp ~ COLON ~ exp ~ DOT ~ proc ^^ {
       case _ ~ c ~ _ ~ m ~ _ ~ p => Send ( c , m , p )
     }
+  }
 
-  def rcv: Parser [ Proc ] =
+  def rcv: Parser [ Proc ] = positioned {
     RECEIVE ~ exp ~ COLON ~ name ~ DOT ~ proc ^^ {
       case _ ~ c ~ _ ~ b ~ _ ~ p => Receive ( false , c , b , p )
     }
+  }
 
-  def srv: Parser [ Proc ] =
+  def srv: Parser [ Proc ] = positioned {
     SERVER ~ exp ~ COLON ~ name ~ DOT ~ proc ^^ {
       case _ ~ c ~ _ ~ b ~ _ ~ p => Receive ( true , c , b , p )
     }
+  }
 
-  def res: Parser [ Proc ] =
+  def res: Parser [ Proc ] = positioned {
     NEW ~ name ~ DOT ~ proc ^^ {
       case _ ~ n ~ _ ~ p => New ( n , p )
     }
+  }
 
   def let: Parser [ Proc ] =
     LET ~ name ~ EQUAL ~ exp ~ DOT ~ proc ^^ {
@@ -186,53 +179,54 @@ object Lexer extends RegexParsers {
     , ( Map [ String , Name ] , Name , List [ PostToken ] )
     ] = lex ( new CharSequenceReader ( input ) ) match {
       case Success   ( tks , rest ) => Right ( PreToken.processAll ( tks ) )
-      case NoSuccess ( msg , rest ) => Left  ( LexerError          ( msg ) )
+      case NoSuccess ( msg , rest ) =>
+        Left ( LexerError ( rest.pos.line , rest.pos.column , msg ) )
     }
 
   override def skipWhitespace = true
   override val whiteSpace = """[ \t\r\f\n]+""".r
 
   def lex : Parser [ List [ PreToken ] ] = phrase ( rep1 (
-    """[a-z_]+""".r      ^^ { PREIDENT ( _ )  } |||
-    """\$[a-z_]+""".r    ^^ { PRECHAN  ( _ )  } |||
-    """(0|[1-9]\d*)""".r ^^ { PREINT   ( _ )  } |||
-    "!"                  ^^ { _ => BANG       } |||
-    "*"                  ^^ { _ => STAR       } |||
-    "."                  ^^ { _ => DOT        } |||
-    ":"                  ^^ { _ => COLON      } |||
-    "let"                ^^ { _ => LET        } |||
-    "new"                ^^ { _ => NEW        } |||
-    "if"                 ^^ { _ => IF         } |||
-    "then"               ^^ { _ => THEN       } |||
-    "else"               ^^ { _ => ELSE       } |||
-    "endif"              ^^ { _ => ENDIF      } |||
-    "send"               ^^ { _ => SEND       } |||
-    "receive"            ^^ { _ => RECEIVE    } |||
-    "server"             ^^ { _ => SERVER     } |||
-    "|"                  ^^ { _ => BAR        } |||
-    "end"                ^^ { _ => END        } |||
-    "("                  ^^ { _ => LPAREN     } |||
-    ")"                  ^^ { _ => RPAREN     } |||
-    "{"                  ^^ { _ => LCURLY     } |||
-    "}"                  ^^ { _ => RCURLY     } |||
-    ","                  ^^ { _ => COMMA      } |||
-    "<-"                 ^^ { _ => LARROW     } |||
-    "->"                 ^^ { _ => RARROW     } |||
-    "true"               ^^ { _ => TRUE       } |||
-    "false"              ^^ { _ => FALSE      } |||
-    "+"                  ^^ { _ => PLUS       } |||
-    "-"                  ^^ { _ => DASH       } |||
-    "/"                  ^^ { _ => FSLASH     } |||
-    "%"                  ^^ { _ => PERC       } |||
-    "="                  ^^ { _ => EQUAL      } |||
-    "=="                 ^^ { _ => EQEQ       } |||
-    "!="                 ^^ { _ => NEQ        } |||
-    "<"                  ^^ { _ => LESS       } |||
-    "<="                 ^^ { _ => LESSEQ     } |||
-    ">"                  ^^ { _ => GRTR       } |||
-    ">="                 ^^ { _ => GRTREQ     } |||
-    "&&"                 ^^ { _ => AND        } |||
-    "||"                 ^^ { _ => OR         } ) )
+    positioned { """[a-z_]+""".r      ^^ { PREIDENT ( _ )  } } |||
+    positioned { """\$[a-z_]+""".r    ^^ { PRECHAN  ( _ )  } } |||
+    positioned { """(0|[1-9]\d*)""".r ^^ { PREINT   ( _ )  } } |||
+    positioned { "!"                  ^^ { _ => BANG       } } |||
+    positioned { "*"                  ^^ { _ => STAR       } } |||
+    positioned { "."                  ^^ { _ => DOT        } } |||
+    positioned { ":"                  ^^ { _ => COLON      } } |||
+    positioned { "let"                ^^ { _ => LET        } } |||
+    positioned { "new"                ^^ { _ => NEW        } } |||
+    positioned { "if"                 ^^ { _ => IF         } } |||
+    positioned { "then"               ^^ { _ => THEN       } } |||
+    positioned { "else"               ^^ { _ => ELSE       } } |||
+    positioned { "endif"              ^^ { _ => ENDIF      } } |||
+    positioned { "send"               ^^ { _ => SEND       } } |||
+    positioned { "receive"            ^^ { _ => RECEIVE    } } |||
+    positioned { "server"             ^^ { _ => SERVER     } } |||
+    positioned { "|"                  ^^ { _ => BAR        } } |||
+    positioned { "end"                ^^ { _ => END        } } |||
+    positioned { "("                  ^^ { _ => LPAREN     } } |||
+    positioned { ")"                  ^^ { _ => RPAREN     } } |||
+    positioned { "{"                  ^^ { _ => LCURLY     } } |||
+    positioned { "}"                  ^^ { _ => RCURLY     } } |||
+    positioned { ","                  ^^ { _ => COMMA      } } |||
+    positioned { "<-"                 ^^ { _ => LARROW     } } |||
+    positioned { "->"                 ^^ { _ => RARROW     } } |||
+    positioned { "true"               ^^ { _ => TRUE       } } |||
+    positioned { "false"              ^^ { _ => FALSE      } } |||
+    positioned { "+"                  ^^ { _ => PLUS       } } |||
+    positioned { "-"                  ^^ { _ => DASH       } } |||
+    positioned { "/"                  ^^ { _ => FSLASH     } } |||
+    positioned { "%"                  ^^ { _ => PERC       } } |||
+    positioned { "="                  ^^ { _ => EQUAL      } } |||
+    positioned { "=="                 ^^ { _ => EQEQ       } } |||
+    positioned { "!="                 ^^ { _ => NEQ        } } |||
+    positioned { "<"                  ^^ { _ => LESS       } } |||
+    positioned { "<="                 ^^ { _ => LESSEQ     } } |||
+    positioned { ">"                  ^^ { _ => GRTR       } } |||
+    positioned { ">="                 ^^ { _ => GRTREQ     } } |||
+    positioned { "&&"                 ^^ { _ => AND        } } |||
+    positioned { "||"                 ^^ { _ => OR         } } ) )
 }
 
 /** Below we have the token classes. We have PreTokens and PostTokens to
@@ -242,7 +236,7 @@ object Lexer extends RegexParsers {
  *  InfoToken classes as they require processing.
  */
 
-sealed abstract class PreToken {
+sealed abstract class PreToken extends Positional {
   def process (
     nameMap: Map [ String , Name ] ,
     nextName: Name
@@ -307,7 +301,7 @@ case class PREINT   ( text: String ) extends PreInfoToken ( text ) {
     ( nameMap , nextName , POSTINT ( this.text.toInt ) )
 }
 
-sealed trait PostToken
+sealed trait PostToken extends Positional
 sealed trait PostInfoToken extends PostToken
 
 case class POSTIDENT ( name: Name ) extends PostInfoToken
