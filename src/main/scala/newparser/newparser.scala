@@ -1,11 +1,11 @@
 package newparser
 
 /** Implements a parser for the nodes language using scala's parser combinators.
- *  Parsing is subdivided into separate lexing, processing and parsing phases.
+ *  Parsing is subdivided into separate lexing, postlexing and parsing phases.
  *  - Lexing converts a String of nodes code into a List [ PreToken ]. PreTokens
  *  are tokens where identifiers, ints and such carry the text that was lexed
  *  to produce them.
- *  - The processing step converts PreTokens into PostTokens, changing the
+ *  - The postlexing step converts PreTokens into PostTokens, changing the
  *  representation of names from Strings to Integers, providing a map between
  *  string and integer names for printing purposes.
  *  - Parsing converts a List [ PostToken ] into a syntax.Proc.
@@ -43,7 +43,7 @@ object Parser extends Parsers {
     production: Parser [ T ] ,
     input: List [ PostToken ]
   ): Either [ ParserError , T ] =
-    phrase ( production ) ( new TokenReader ( input ) ) match {
+    production ( new TokenReader ( input ) ) match {
       case Success   ( prc , rest ) => Right ( prc                 )
       case NoSuccess ( msg , rest ) =>
         Left ( ParserError ( rest.pos.line , rest.pos.column , msg ) )
@@ -51,52 +51,63 @@ object Parser extends Parsers {
 
   override type Elem = PostToken
 
-  def name: Parser [ Name ] =
-    positioned { accept ( "POSTIDENT" , { case POSTIDENT ( n ) => n } ) }
+  def name: Parser [ Name ] = positioned {
+    accept ( "POSTIDENT" , { case POSTIDENT ( n ) => n } )
+  }
 
-  def proc: Parser [ Proc ] = positioned { par ^^ { Proc fromList _ } }
+  def proc: Parser [ Proc ] = positioned {
+    phrase ( seq )
+  }
 
-  def par: Parser [ List [ Proc ] ] = rep1sep (
-    end | snd | rcv | srv | res | let | ite | LPAREN ~> proc <~ RPAREN , BAR )
+  def seq: Parser [ Proc ] = positioned {
+    end | snd | rcv | srv | res | let | ite | par
+  }
+
+  def par: Parser [ Proc ] = positioned {
+    LSQUARE ~> rep1sep ( seq , BAR ) <~ RSQUARE ^^ { Proc fromList _ }
+  }
 
   def snd: Parser [ Proc ] = positioned {
-    SEND ~ exp ~ COLON ~ exp ~ DOT ~ proc ^^ {
+    SEND ~ exp ~ COLON ~ exp ~ DOT ~ seq ^^ {
       case _ ~ c ~ _ ~ m ~ _ ~ p => Send ( c , m , p )
     }
   }
 
   def rcv: Parser [ Proc ] = positioned {
-    RECEIVE ~ exp ~ COLON ~ name ~ DOT ~ proc ^^ {
+    RECEIVE ~ exp ~ COLON ~ name ~ DOT ~ seq ^^ {
       case _ ~ c ~ _ ~ b ~ _ ~ p => Receive ( false , c , b , p )
     }
   }
 
   def srv: Parser [ Proc ] = positioned {
-    SERVER ~ exp ~ COLON ~ name ~ DOT ~ proc ^^ {
+    SERVER ~ exp ~ COLON ~ name ~ DOT ~ seq ^^ {
       case _ ~ c ~ _ ~ b ~ _ ~ p => Receive ( true , c , b , p )
     }
   }
 
   def res: Parser [ Proc ] = positioned {
-    NEW ~ name ~ DOT ~ proc ^^ {
+    NEW ~ name ~ DOT ~ seq ^^ {
       case _ ~ n ~ _ ~ p => New ( n , p )
     }
   }
 
-  def let: Parser [ Proc ] =
-    LET ~ name ~ EQUAL ~ exp ~ DOT ~ proc ^^ {
+  def let: Parser [ Proc ] = positioned {
+    LET ~ name ~ EQUAL ~ exp ~ DOT ~ seq ^^ {
       case _ ~ n ~ _ ~ e ~ _ ~ p => LetIn ( n , e , p )
     }
+  }
 
-  def ite: Parser [ Proc ] =
-    IF ~ exp ~ THEN ~ proc ~ ELSE ~ proc ~ ENDIF ^^ {
+  def ite: Parser [ Proc ] = positioned {
+    IF ~ exp ~ THEN ~ seq ~ ELSE ~ seq ~ ENDIF ^^ {
       case _ ~ e ~ _ ~ p ~ _ ~ q ~ _ => IfThenElse ( e , p , q )
     }
+  }
 
-  def end: Parser [ Proc ] =
+  def end: Parser [ Proc ] = positioned {
     END ^^ {
       _ => End
     }
+  }
 
   /**
    * Combinator parsers for expressions. The only left-recursive production in
@@ -108,56 +119,72 @@ object Parser extends Parsers {
   def exp: Parser [ Exp ] = binExp | expNoBinExp
 
   def expNoBinExp: Parser [ Exp ] = variable | intLiteral | trueLiteral |
-    falseLiteral | chanLiteral | pair | unExp | LPAREN ~> exp <~ RPAREN
+    falseLiteral | chanLiteral | pair | unExp |
+    positioned { LPAREN ~> exp <~ RPAREN }
 
-  def binExp: Parser [ Exp ] = expNoBinExp ~ binOpTy ~ exp ^^ {
-    case l ~ op ~ r => BinExp ( op , l , r )
+  def binExp: Parser [ Exp ] = positioned {
+    expNoBinExp ~ binOpTy ~ exp ^^ {
+      case l ~ op ~ r => BinExp ( op , l , r )
+    }
   }
 
-  def variable: Parser [ Exp ] = name ^^ { Variable ( _ ) }
+  def variable: Parser [ Exp ] = positioned { name ^^ { Variable ( _ ) } }
 
-  def intLiteral: Parser [ Exp ] =
+  def intLiteral: Parser [ Exp ] = positioned {
     accept ( "POSTINT" , { case POSTINT ( i ) => IntLiteral ( i ) } )
-
-  def trueLiteral: Parser [ Exp ] = TRUE ^^ { _ => BoolLiteral ( true ) }
-
-  def falseLiteral: Parser [ Exp ] = FALSE ^^ { _ => BoolLiteral ( false ) }
-
-  def chanLiteral: Parser [ Exp ] = accept ( "POSTCHAN" , {
-    case POSTCHAN ( c ) => ChanLiteral ( c )
-  } )
-
-  def pair: Parser [ Exp ] = LCURLY ~ exp ~ COMMA ~ exp ~ RCURLY ^^ {
-    case _ ~ l ~ _ ~ r ~ _ => Pair ( l , r )
   }
 
-  def unExp: Parser [ Exp ] = unOpTy ~ exp ^^ {
-    case op ~ e => UnExp ( op , e )
+  def trueLiteral: Parser [ Exp ] = positioned {
+    TRUE ^^ { _ => BoolLiteral ( true ) }
   }
 
-  def uMinus: Parser [ Exp ] = DASH ~ exp ^^ {
-    case _ ~ e => BinExp ( Sub , IntLiteral ( 0 ) , e )
+  def falseLiteral: Parser [ Exp ] = positioned {
+    FALSE ^^ { _ => BoolLiteral ( false ) }
+  }
+
+  def chanLiteral: Parser [ Exp ] = positioned {
+    accept ( "POSTCHAN" , {
+      case POSTCHAN ( c ) => ChanLiteral ( c )
+    } )
+  }
+
+  def pair: Parser [ Exp ] = positioned {
+    LCURLY ~ exp ~ COMMA ~ exp ~ RCURLY ^^ {
+      case _ ~ l ~ _ ~ r ~ _ => Pair ( l , r )
+    }
+  }
+
+  def unExp: Parser [ Exp ] = positioned {
+    unOpTy ~ exp ^^ {
+      case op ~ e => UnExp ( op , e )
+    }
+  }
+
+  def uMinus: Parser [ Exp ] = positioned {
+    DASH ~ exp ^^ {
+      case _ ~ e => BinExp ( Sub , IntLiteral ( 0 ) , e )
+    }
   }
 
   def binOpTy: Parser [ BinOp ] =
-    PLUS   ^^ { _ => Add       } |
-    DASH   ^^ { _ => Sub       } |
-    STAR   ^^ { _ => Mul       } |
-    FSLASH ^^ { _ => Div       } |
-    PERC   ^^ { _ => Mod       } |
-    EQEQ   ^^ { _ => Equal     } |
-    NEQ    ^^ { _ => NotEqual  } |
-    LESS   ^^ { _ => Less      } |
-    LESSEQ ^^ { _ => LessEq    } |
-    GRTR   ^^ { _ => Greater   } |
-    GRTREQ ^^ { _ => GreaterEq } |
-    AND    ^^ { _ => And       } |
-    OR     ^^ { _ => Or        }
+    positioned { PLUS   ^^ { _ => Add       } } |
+    positioned { DASH   ^^ { _ => Sub       } } |
+    positioned { STAR   ^^ { _ => Mul       } } |
+    positioned { FSLASH ^^ { _ => Div       } } |
+    positioned { PERC   ^^ { _ => Mod       } } |
+    positioned { EQEQ   ^^ { _ => Equal     } } |
+    positioned { NEQ    ^^ { _ => NotEqual  } } |
+    positioned { LESS   ^^ { _ => Less      } } |
+    positioned { LESSEQ ^^ { _ => LessEq    } } |
+    positioned { GRTR   ^^ { _ => Greater   } } |
+    positioned { GRTREQ ^^ { _ => GreaterEq } } |
+    positioned { AND    ^^ { _ => And       } } |
+    positioned { OR     ^^ { _ => Or        } }
 
   def unOpTy: Parser [ UnOp ] =
-    BANG   ^^ { _ => Not    } |
-    LARROW ^^ { _ => PLeft  } |
-    RARROW ^^ { _ => PRight }
+    positioned { BANG   ^^ { _ => Not    } } |
+    positioned { LARROW ^^ { _ => PLeft  } } |
+    positioned { RARROW ^^ { _ => PRight } }
 }
 
 /** Reader for Tokens used to feed a List [ PostToken ] into the Parser.
@@ -178,7 +205,7 @@ object Lexer extends RegexParsers {
     [ LexerError
     , ( Map [ String , Name ] , Name , List [ PostToken ] )
     ] = lex ( new CharSequenceReader ( input ) ) match {
-      case Success   ( tks , rest ) => Right ( PreToken.processAll ( tks ) )
+      case Success   ( tks , rest ) => Right ( PreToken.postLexAll ( tks ) )
       case NoSuccess ( msg , rest ) =>
         Left ( LexerError ( rest.pos.line , rest.pos.column , msg ) )
     }
@@ -209,6 +236,8 @@ object Lexer extends RegexParsers {
     positioned { ")"                  ^^ { _ => RPAREN     } } |||
     positioned { "{"                  ^^ { _ => LCURLY     } } |||
     positioned { "}"                  ^^ { _ => RCURLY     } } |||
+    positioned { "["                  ^^ { _ => LSQUARE    } } |||
+    positioned { "]"                  ^^ { _ => RSQUARE    } } |||
     positioned { ","                  ^^ { _ => COMMA      } } |||
     positioned { "<-"                 ^^ { _ => LARROW     } } |||
     positioned { "->"                 ^^ { _ => RARROW     } } |||
@@ -230,20 +259,21 @@ object Lexer extends RegexParsers {
 }
 
 /** Below we have the token classes. We have PreTokens and PostTokens to
- *  represent tokens before and after the processing of lexed information.
- *  KeyWdTokens are both Pre and Post tokens because they require no processing.
+ *  represent tokens before and after the postlexing of lexed information.
+ *  KeyWdTokens are both Pre and Post tokens because they require no postlexing.
  *  Tokens that contain information are divided into separate Pre and Post
- *  InfoToken classes as they require processing.
+ *  InfoToken classes as they require postlexing.
  */
 
-sealed abstract class PreToken extends Positional {
-  def process (
+sealed trait Token extends Positional
+sealed abstract class PreToken extends Token {
+  def postLex (
     nameMap: Map [ String , Name ] ,
     nextName: Name
   ): ( Map [ String , Name ] , Name , PostToken )
 }
 object PreToken {
-  def processAll (
+  def postLexAll (
     tokens: List [ PreToken ]
   ): ( Map [ String , Name ] , Name , List [ PostToken ] ) = {
     var nameMap  : Map [ String , Name ] = Map.empty
@@ -251,7 +281,7 @@ object PreToken {
     var done     : List [ PostToken ]    = List ( )
     var todo     : List [ PreToken  ]    = tokens
     while ( ! todo.isEmpty ) {
-      val todoHeadProcessed = todo.head.process ( nameMap , nextName )
+      val todoHeadProcessed = todo.head.postLex ( nameMap , nextName )
       nameMap  = todoHeadProcessed._1
       nextName = todoHeadProcessed._2
       done     = done ++ List ( todoHeadProcessed._3 )
@@ -268,40 +298,42 @@ case class PREIDENT ( text: String ) extends PreInfoToken ( text ) {
    *  integer. If not, we choose a new integer (via Name.next) as the
    *  representation and add that mapping to the map.
    */
-  override def process (
+  override def postLex (
     nameMap: Map [ String , Name ] ,
     nextName: Name
   ): ( Map [ String , Name ] , Name , PostToken ) =
     nameMap get this.text match {
-      case Some ( name ) => ( nameMap , nextName , POSTIDENT ( name ) )
+      case Some ( name ) => ( nameMap ,
+        nextName      , POSTIDENT ( name     ).setPos ( this.pos ) )
       case None          => ( nameMap + ( ( this.text , nextName ) ) ,
-        nextName.next , POSTIDENT ( nextName ) )
+        nextName.next , POSTIDENT ( nextName ).setPos ( this.pos ) )
     }
 }
 case class PRECHAN  ( text: String ) extends PreInfoToken ( text ) {
   /** Processing a CHAN is the same as with IDENTs.
    */
-  override def process (
+  override def postLex (
     nameMap: Map [ String , Name ] ,
     nextName: Name
   ): ( Map [ String , Name ] , Name , PostToken ) =
     nameMap get this.text match {
-      case Some ( name ) => ( nameMap , nextName , POSTCHAN ( name ) )
+      case Some ( name ) => ( nameMap ,
+        nextName      , POSTCHAN ( name     ).setPos ( this.pos ) )
       case None          => ( nameMap + ( ( this.text , nextName ) ) ,
-        nextName.next , POSTCHAN ( nextName ) )
+        nextName.next , POSTCHAN ( nextName ).setPos ( this.pos ) )
     }
 }
 case class PREINT   ( text: String ) extends PreInfoToken ( text ) {
-  /** To process an INT, we simply have to .toInt the string.
+  /** To postlex an INT, we simply have to .toInt the string.
    */
-  override def process (
+  override def postLex (
     nameMap: Map [ String , Name ] ,
     nextName: Name
   ): ( Map [ String , Name ] , Name , PostToken ) =
-    ( nameMap , nextName , POSTINT ( this.text.toInt ) )
+    ( nameMap , nextName , POSTINT ( this.text.toInt ).setPos ( this.pos ) )
 }
 
-sealed trait PostToken extends Positional
+sealed trait PostToken extends Token
 sealed trait PostInfoToken extends PostToken
 
 case class POSTIDENT ( name: Name ) extends PostInfoToken
@@ -310,7 +342,7 @@ case class POSTINT   ( num:  Int  ) extends PostInfoToken
 
 sealed abstract class KeyWdToken extends PreToken with PostToken {
   val text: String
-  override def process (
+  override def postLex (
     nameMap: Map [ String , Name ] ,
     nextName: Name
   ): ( Map [ String , Name ] , Name , PostToken ) =
@@ -336,6 +368,8 @@ case object LPAREN  extends KeyWdToken { val text: String = "("       }
 case object RPAREN  extends KeyWdToken { val text: String = ")"       }
 case object LCURLY  extends KeyWdToken { val text: String = "{"       }
 case object RCURLY  extends KeyWdToken { val text: String = "}"       }
+case object LSQUARE extends KeyWdToken { val text: String = "["       }
+case object RSQUARE extends KeyWdToken { val text: String = "]"       }
 case object COMMA   extends KeyWdToken { val text: String = ","       }
 case object LARROW  extends KeyWdToken { val text: String = "<-"      }
 case object RARROW  extends KeyWdToken { val text: String = "->"      }

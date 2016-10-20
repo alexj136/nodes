@@ -238,7 +238,11 @@ case class Pair        ( lhs:       Exp     , rhs: Exp            ) extends Exp
 case class UnExp       ( unOpType:  UnOp    , of:  Exp            ) extends Exp
 case class BinExp      ( binOpType: BinOp   , lhs: Exp , rhs: Exp ) extends Exp
 
-sealed abstract class BinOp {
+sealed abstract class BinOp extends SyntaxElement {
+
+  def pstr(names: Map[Name, String]): String = this.toString
+  def free: Set[Name] = Set.empty
+
   override def toString: String = this match {
     case Add        => "+"
     case Sub        => "-"
@@ -269,7 +273,11 @@ case object GreaterEq extends BinOp
 case object And       extends BinOp
 case object Or        extends BinOp
 
-sealed abstract class UnOp {
+sealed abstract class UnOp extends SyntaxElement {
+
+  def pstr(names: Map[Name, String]): String = this.toString
+  def free: Set[Name] = Set.empty
+
   override def toString: String = this match {
     case Not    => "!"
     case PLeft  => "<-"

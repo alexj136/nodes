@@ -184,11 +184,11 @@ object NewParserProperties extends Properties("NewParser") {
 
   property("Procs") = {
     parsesAs ( Parser.proc , "end" , End ) &&
-    parsesAs ( Parser.proc , "end | end | end" ,
+    parsesAs ( Parser.proc , "[ end | end | end ]" ,
       Parallel ( End , Parallel ( End , End ) ) ) &&
     parsesAs ( Parser.proc , "send 1 : 2 . end" ,
       Send ( IntLiteral ( 1 ) , IntLiteral ( 2 ) , End ) ) &&
-    parsesAs ( Parser.proc , "send 1 : 2 . end | receive 1 : a . end" ,
+    parsesAs ( Parser.proc , " [ send 1 : 2 . end | receive 1 : a . end ] " ,
       Parallel ( Send ( IntLiteral ( 1 ) , IntLiteral ( 2 ) , End ) ,
         Receive ( false , IntLiteral ( 1 ) , Name ( 0 ) , End ) ) )
   }
@@ -199,7 +199,8 @@ object NewParserProperties extends Properties("NewParser") {
       BinExp ( Add , Variable ( Name ( 0 ) ) , Variable ( Name ( 1 ) ) ) ) &&
     parsesAs ( Parser.exp , "a + b + c" ,
       BinExp ( Add , Variable ( Name ( 0 ) ) ,
-        BinExp ( Add , Variable ( Name ( 1 ) ) , Variable ( Name ( 2 ) ) ) ) ) &&
+        BinExp ( Add , Variable ( Name ( 1 ) ) ,
+          Variable ( Name ( 2 ) ) ) ) ) &&
     ( lexAndParse ( Parser.exp , "a + b + c" ) ==
       lexAndParse ( Parser.exp , "a + ( b + c )" ) )
   }
