@@ -1,3 +1,4 @@
+[
     server $subten : n_rch .
     let n   = <- n_rch .
     let rch = -> n_rch .
@@ -45,3 +46,4 @@
 
     send $loop : 9 .
     end
+]

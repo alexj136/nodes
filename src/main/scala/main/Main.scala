@@ -1,13 +1,13 @@
 package main
 
 import syntax._
-import parser._
+import newparser._
 import interpreter._
 import interpreter.concurrent._
 import interpreter.concurrent.forwarder_optimising.spawn_time._
 import java.io.File
-import java.io.FileInputStream
 import java.io.IOException
+import scala.io.Source
 
 // Input to new lexer from file thusly:
 //   newparser.Lexer.lex(new scala.util.parsing.input.PagedSeqReader(
@@ -20,7 +20,7 @@ object Main extends App {
     sys.exit(1)
   }
 
-  val file: File = new File(args(0))
+  val file: java.io.File = new java.io.File ( args ( 0 ) )
 
   if (!file.exists) {
     println(s"File '${file.getAbsolutePath}' does not exist.")
@@ -34,16 +34,15 @@ object Main extends App {
 
   try {
 
-    var stream: FileInputStream = new FileInputStream(file)
-    val parserResult: ParserResult = Parser.parseStream(stream)
-    stream.close()
-    parserResult match {
-      case ParserSuccess(proc, revNames, nextName) =>
-        new Launcher(proc, revNames("$print"), nextName, revNames.map(_.swap),
+    lexAndParse ( Parser.proc , Source fromFile args(0) ) match {
+      case Right ( ( names , nextName , proc ) ) =>
+        new Launcher(proc, names("$print"), nextName, names.map(_.swap),
           { case _ => {} }, classOf[FwdOptProcRunner])
-      case SyntaxErrors(errors) => {
-        (SyntaxErrors(errors) toStringWithText file) foreach { e => println(e) }
-        sys.exit(1)
+      case Left ( LexerError  ( row , col , msg ) ) => {
+        println("Lexical error (" + row + ", " + col + "): " + msg)
+      }
+      case Left ( ParserError ( row , col , msg ) ) => {
+        println("Syntax error (" + row + ", " + col + "): " + msg)
       }
     }
 

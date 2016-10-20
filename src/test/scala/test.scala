@@ -139,6 +139,7 @@ object ProcProperties extends Properties("Proc") {
 
 object NewParserProperties extends Properties("NewParser") {
   import newparser._
+  import scala.io.Source
   import scala.util.parsing.input.CharSequenceReader
 
   /* Lexer tests */
@@ -179,8 +180,8 @@ object NewParserProperties extends Properties("NewParser") {
     input: String ,
     expectedOutput: T
   ): Boolean =
-    lexAndParse ( production , input ).right.map ( _._3 == expectedOutput )
-      .right.getOrElse ( false )
+    lexAndParse ( production , Source fromString input ).right
+      .map ( _._3 == expectedOutput ).right.getOrElse ( false )
 
   property("Procs") = {
     parsesAs ( Parser.proc , "end" , End ) &&
@@ -201,8 +202,8 @@ object NewParserProperties extends Properties("NewParser") {
       BinExp ( Add , Variable ( Name ( 0 ) ) ,
         BinExp ( Add , Variable ( Name ( 1 ) ) ,
           Variable ( Name ( 2 ) ) ) ) ) &&
-    ( lexAndParse ( Parser.exp , "a + b + c" ) ==
-      lexAndParse ( Parser.exp , "a + ( b + c )" ) )
+    ( lexAndParse ( Parser.exp , Source fromString "a + b + c" ) ==
+      lexAndParse ( Parser.exp , Source fromString "a + ( b + c )" ) )
   }
 }
 

@@ -12,8 +12,10 @@ package newparser
  */
 
 import syntax._
+import scala.io.Source
 import scala.util.parsing.input._
 import scala.util.parsing.combinator._
+import scala.collection.immutable.PagedSeq
 
 /** Responsible for converting a List [ PostToken ] into a syntax.Proc via the
  *  ... method.
@@ -29,11 +31,11 @@ object lexAndParse {
 
   def apply [ T ] (
     production: Parser.Parser [ T ] ,
-    input: String
+    input: Source
   ): Either [ LexerParserError , ( Map [ String , Name ] , Name , T ) ] =
     for {
-      lexed  <- Lexer  ( input                 ).right
-      parsed <- Parser ( production , lexed._3 ).right
+      lexed  <- Lexer  ( input                       ).right
+      parsed <- Parser ( production , lexed._3       ).right
     } yield ( lexed._1 , lexed._2 , parsed )
 }
 
@@ -201,10 +203,10 @@ class TokenReader ( tokens: List [ PostToken ] ) extends Reader [ PostToken ] {
  */
 object Lexer extends RegexParsers {
 
-  def apply ( input: String ): Either
+  def apply ( input: Source ): Either
     [ LexerError
     , ( Map [ String , Name ] , Name , List [ PostToken ] )
-    ] = lex ( new CharSequenceReader ( input ) ) match {
+    ] = lex ( new PagedSeqReader ( PagedSeq.fromSource ( input ) ) ) match {
       case Success   ( tks , rest ) => Right ( PreToken.postLexAll ( tks ) )
       case NoSuccess ( msg , rest ) =>
         Left ( LexerError ( rest.pos.line , rest.pos.column , msg ) )
