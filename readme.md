@@ -9,15 +9,14 @@ Akka, scala's concurrency library.
 
 ## Source language syntax
 #### Processes
-    P, Q ::= send E : E . P             Output
+    P ::= send E : E . P                Output
         | receive E : X . P             Input
         | server E : X . P              Replicated input
         | let X = E . P                 Local abstraction
-        | if E then P else Q endif      Conditional
-        | P | Q                         Parallel composition
+        | if E then P1 else P2 endif    Conditional
+        | [ P1 | P2 | ... | PN ]        N-ary parallel composition
         | new X . P                     Channel creation
         | end                           Null process
-        | (P)                           Parenthesised process
 #### Expressions
     E, F ::= X                          Variables ([a-z_]+)
         | C                             Channel literals ($[a-z_]+)
