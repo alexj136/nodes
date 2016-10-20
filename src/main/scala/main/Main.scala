@@ -9,6 +9,10 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.IOException
 
+// Input to new lexer from file thusly:
+//   newparser.Lexer.lex(new scala.util.parsing.input.PagedSeqReader(
+//     scala.collections.immutable.PagedSeq.fromLines(
+//       scala.io.Source.fromFile("filename"))))
 object Main extends App {
 
   if (args.length < 1) {
