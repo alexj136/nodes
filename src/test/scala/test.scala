@@ -137,8 +137,8 @@ object ProcProperties extends Properties("Proc") {
   }
 }
 
-object NewParserProperties extends Properties("NewParser") {
-  import newparser._
+object ParserProperties extends Properties("Parser") {
+  import parser._
   import scala.io.Source
   import scala.util.parsing.input.CharSequenceReader
 
@@ -209,8 +209,8 @@ object NewParserProperties extends Properties("NewParser") {
 
 object TurnerMachineProperties extends Properties("TurnerMachineState") {
   import parser._
-  import parser.Parser._
   import interpreter.turner.runWithTurnerMachine
+  import scala.io.Source
 
   val names: Map[Name, String] = (((0 to 51) map (n => Name(n)))
     .zip(((('a' to 'z') ++ ('A' to 'Z')) map (s => s.toString)))).toMap
@@ -218,16 +218,16 @@ object TurnerMachineProperties extends Properties("TurnerMachineState") {
   val next: Name = Name(52)
 
   property("simpleProcess") = {
-    val procStr: String = "receive $a : y . send y : y . end | " +
-      "send $a : $x . end"
-    parseString( procStr ) match {
-      case SyntaxErrors  ( _ )                => false
-      case ParserSuccess ( proc , nmap , nn ) => {
+    val procStr: String = " [ receive $a : y . send y : y . end | " +
+      "send $a : $x . end ] "
+    lexAndParse ( Parser.proc , Source fromString procStr ) match {
+      case Right ( ( nmap , nn , proc ) ) => {
         runWithTurnerMachine ( proc , nmap.map ( _.swap ) , nn )._1.listify
           .filter( _ != End )
           .==( List ( Send ( ChanLiteral ( nmap ( "$x" ) ) ,
             ChanLiteral ( nmap ( "$x" ) ) , End ) ) )
       }
+      case Left ( _ ) => false
     }
   }
 

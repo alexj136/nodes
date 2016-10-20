@@ -1,7 +1,7 @@
 package main
 
 import syntax._
-import newparser._
+import parser._
 import interpreter._
 import interpreter.concurrent._
 import interpreter.concurrent.forwarder_optimising.spawn_time._

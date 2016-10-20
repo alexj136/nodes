@@ -1,4 +1,4 @@
-package newparser
+package parser
 
 /** Implements a parser for the nodes language using scala's parser combinators.
  *  Parsing is subdivided into separate lexing, postlexing and parsing phases.
