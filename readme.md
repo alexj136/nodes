@@ -45,12 +45,6 @@ Akka, scala's concurrency library.
 Just SBT and a JRE8. SBT will download the required scala compiler and
 libraries.
 
-## State
-At present, the project is in a pre-alpha state. A fairly solid lexer and parser
-have been built using JFlex and CUP, with nice error messages.
-The implementation uses dynamic typing, with no attempt to give nice error
-messages.
-
 ## Todos
 The main priorities for this project are:
 - To implement a static type system
