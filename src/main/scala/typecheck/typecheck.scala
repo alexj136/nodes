@@ -66,13 +66,13 @@ sealed abstract class SType {
     case _ => false
   }
 }
-case object SInt extends SType
-case object SBool extends SType
-case object SChan extends SType
-case class SPair(l: SType, r: SType) extends SType
-case class SVar(n: Name) extends SType
-case class SQuant(n: Name, t: SType) extends SType
-case class SFunc(a: SType, r: SType) extends SType
+case object SInt                           extends SType
+case object SBool                          extends SType
+case object SChan                          extends SType
+case class  SPair  ( l: SType , r: SType ) extends SType
+case class  SVar   ( n: Name             ) extends SType
+case class  SQuant ( n: Name  , t: SType ) extends SType
+case class  SFunc  ( a: SType , r: SType ) extends SType
 
 case class ConstraintSet( val set: Set [ ( SType , SType ) ] ) {
   def split: ( Option [ ( SType , SType ) ] , ConstraintSet ) =
@@ -99,7 +99,7 @@ object Typecheck {
   /**
    * Constraint set unification
    */
-  def unify(constrs: ConstraintSet): Option[Function1[SType, SType]] = {
+  def unify(constrs: ConstraintSet): Option[SType => SType] = {
     val exception =
       new RuntimeException("SQuant not removed from type before unification")
     constrs.split match {
@@ -123,39 +123,53 @@ object Typecheck {
     }
   }
 
+  def constraintsProc(
+    p: Proc,
+    env: Map[Name, SType],
+    nn: Name
+  ): (SType, ConstraintSet, Name) = p match {
+    case Send       ( ch    , msg , p        ) => ???
+    case Receive    ( true  , ch  , bind , p ) => ???
+    case Receive    ( false , ch  , bind , p ) => ???
+    case LetIn      ( bind  , exp , p        ) => ???
+    case IfThenElse ( exp   , tP  , fP       ) => ???
+    case Parallel   ( p     , q              ) => ???
+    case New        ( name  , p              ) => ???
+    case End                                   => (??? , ConstraintSet.empty, nn)
+  }
+
   def constraintsExp(
     e: Exp,
     env: Map[Name, SType],
     nn: Name
-  ): (SType, ConstraintSet, Name) =
-    e match {
-      case Variable    ( name          ) => (env(name), ConstraintSet.empty, nn)
-      case IntLiteral  ( value         ) => (SInt     , ConstraintSet.empty, nn)
-      case BoolLiteral ( value         ) => (SBool    , ConstraintSet.empty, nn)
-      case ChanLiteral ( name          ) => (SChan    , ConstraintSet.empty, nn)
-      case Pair        ( l    , r      ) => {
-        val (tyL, constrL, nnL): (SType, ConstraintSet, Name) =
-          constraintsExp(l, env, nn)
-        val (tyR, constrR, nnR): (SType, ConstraintSet, Name) =
-          constraintsExp(r, env, nnL)
-        (SPair(tyL, tyR), constrL union constrR, nnR)
-      }
-      case UnExp       ( op   , of     ) => {
-        val (tyOf, constrOf, nnOf): (SType, ConstraintSet, Name) =
-          constraintsExp(of, env, nn)
-        val (tyOp, nnOp): (SType, Name) = dequantify(typeOfUnOp(op), nnOf)
-        (tyOp.retTy, constrOf + (tyOp.argTy, tyOf), nnOp)
-      }
-      case BinExp      ( op   , l  , r ) => {
-        val (tyL, constrL, nnL): (SType, ConstraintSet, Name) =
-          constraintsExp(l, env, nn)
-        val (tyR, constrR, nnR): (SType, ConstraintSet, Name) =
-          constraintsExp(r, env, nnL)
-        val (tyOp, nnOp): (SType, Name) = dequantify(typeOfBinOp(op), nnR)
-        (tyOp.retTy.retTy, constrL union constrR + (tyOp.argTy, tyL) +
-          (tyOp.retTy.argTy, tyR), nnOp)
-      }
+  ): (SType, ConstraintSet, Name) = e match {
+    case Variable    ( name          ) => (env(name), ConstraintSet.empty, nn)
+    case IntLiteral  ( value         ) => (SInt     , ConstraintSet.empty, nn)
+    case BoolLiteral ( value         ) => (SBool    , ConstraintSet.empty, nn)
+    case ChanLiteral ( name          ) => (SChan    , ConstraintSet.empty, nn)
+    case Pair        ( l    , r      ) => {
+      val (tyL, constrL, nnL): (SType, ConstraintSet, Name) =
+        constraintsExp(l, env, nn)
+      val (tyR, constrR, nnR): (SType, ConstraintSet, Name) =
+        constraintsExp(r, env, nnL)
+      (SPair(tyL, tyR), constrL union constrR, nnR)
     }
+    case UnExp       ( op   , of     ) => {
+      val (tyOf, constrOf, nnOf): (SType, ConstraintSet, Name) =
+        constraintsExp(of, env, nn)
+      val (tyOp, nnOp): (SType, Name) = dequantify(typeOfUnOp(op), nnOf)
+      (tyOp.retTy, constrOf + (tyOp.argTy, tyOf), nnOp)
+    }
+    case BinExp      ( op   , l  , r ) => {
+      val (tyL, constrL, nnL): (SType, ConstraintSet, Name) =
+        constraintsExp(l, env, nn)
+      val (tyR, constrR, nnR): (SType, ConstraintSet, Name) =
+        constraintsExp(r, env, nnL)
+      val (tyOp, nnOp): (SType, Name) = dequantify(typeOfBinOp(op), nnR)
+      (tyOp.retTy.retTy, constrL union constrR + (tyOp.argTy, tyL) +
+        (tyOp.retTy.argTy, tyR), nnOp)
+    }
+  }
 
   def typeOfBinOp(op: BinOp): SType = op match {
     case Add        => SFunc(SInt , SFunc(SInt , SInt ))
