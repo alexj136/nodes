@@ -295,11 +295,9 @@ object TypecheckProperties extends Properties("Typecheck") {
   property("unifyArbitraryExpNoCrash") = Prop.forAll { exp: Exp => {
     // Free variables are SInts in this typing environment
     val (_, constraints: ConstraintSet, _) = constraintsExp(exp,
-      ( exp.free map ( n => ( n , SInt ) ) ).toMap, new Name(0))
-    val unifyFn: Option[Function1[SType, SType]] = unify ( constraints )
-    unifyFn match {
-      case None       => true
-      case Some ( f ) => f.isInstanceOf[Function1[SType, SType]]
-    }
+      ((exp.free union exp.chanLiterals) map ( n => ( n , SInt ) ) ).toMap,
+      new Name(0))
+    unify ( constraints )
+    true
   }}
 }

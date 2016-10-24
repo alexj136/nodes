@@ -128,7 +128,7 @@ sealed abstract class Exp extends SyntaxElement {
     case BoolLiteral ( _         ) => Set.empty
     case ChanLiteral ( n         ) => Set(n)
     case Pair        ( l , r     ) => l.chanLiterals union r.chanLiterals
-    case UnExp       ( _ , e     ) => e.free
+    case UnExp       ( _ , e     ) => e.chanLiterals
     case BinExp      ( _ , l , r ) => l.chanLiterals union r.chanLiterals
   }
 

@@ -66,9 +66,10 @@ sealed abstract class SType {
     case _ => false
   }
 }
+case object SProc                          extends SType
 case object SInt                           extends SType
 case object SBool                          extends SType
-case object SChan                          extends SType
+case class  SChan  ( t: SType            ) extends SType
 case class  SPair  ( l: SType , r: SType ) extends SType
 case class  SVar   ( n: Name             ) extends SType
 case class  SQuant ( n: Name  , t: SType ) extends SType
@@ -128,14 +129,42 @@ object Typecheck {
     env: Map[Name, SType],
     nn: Name
   ): (SType, ConstraintSet, Name) = p match {
-    case Send       ( ch    , msg , p        ) => ???
-    case Receive    ( true  , ch  , bind , p ) => ???
-    case Receive    ( false , ch  , bind , p ) => ???
-    case LetIn      ( bind  , exp , p        ) => ???
-    case IfThenElse ( exp   , tP  , fP       ) => ???
-    case Parallel   ( p     , q              ) => ???
-    case New        ( name  , p              ) => ???
-    case End                                   => (??? , ConstraintSet.empty, nn)
+    case Send       ( ch   , msg , p        ) => ???
+      // ( ch , SChan ( something ) ) + ( msg , something )
+    case Receive    ( _    , ch  , bind , p ) => {
+      // ( ch , SChan ( something ) )
+      // env + ( bind -> something )
+      val (tyE, constrE, nnE): (SType, ConstraintSet, Name) =
+        ???//constraintsExp(exp, env, nn)
+      val (tyP, constrP, nnP): (SType, ConstraintSet, Name) =
+        constraintsProc(p, env + (bind -> tyE), nnE)
+      (SProc, constrE union constrP, nnE)
+    }
+    case LetIn      ( bind , exp , p        ) => {
+      val (tyE, constrE, nnE): (SType, ConstraintSet, Name) =
+        constraintsExp(exp, env, nn)
+      val (tyP, constrP, nnP): (SType, ConstraintSet, Name) =
+        constraintsProc(p, env + (bind -> tyE), nnE)
+      (SProc, constrE union constrP, nnE)
+    }
+    case IfThenElse ( exp  , p   , q        ) => {
+      val (tyE, constrE, nnE): (SType, ConstraintSet, Name) =
+        constraintsExp(exp, env, nn)
+      val (tyP, constrP, nnP): (SType, ConstraintSet, Name) =
+        constraintsProc(p, env, nnE)
+      val (tyQ, constrQ, nnQ): (SType, ConstraintSet, Name) =
+        constraintsProc(q, env, nnP)
+      (SProc, constrE union constrP union constrQ + (tyE, SBool), nnQ)
+    }
+    case Parallel   ( p    , q              ) => {
+      val (tyP, constrP, nnP): (SType, ConstraintSet, Name) =
+        constraintsProc(p, env, nn)
+      val (tyQ, constrQ, nnQ): (SType, ConstraintSet, Name) =
+        constraintsProc(q, env, nnP)
+      (SProc, constrP union constrQ, nnQ)
+    }
+    case New        ( name , p              ) => (SProc, ???                , ???)
+    case End                                  => (SProc, ConstraintSet.empty, nn )
   }
 
   def constraintsExp(
@@ -143,10 +172,10 @@ object Typecheck {
     env: Map[Name, SType],
     nn: Name
   ): (SType, ConstraintSet, Name) = e match {
-    case Variable    ( name          ) => (env(name), ConstraintSet.empty, nn)
-    case IntLiteral  ( value         ) => (SInt     , ConstraintSet.empty, nn)
-    case BoolLiteral ( value         ) => (SBool    , ConstraintSet.empty, nn)
-    case ChanLiteral ( name          ) => (SChan    , ConstraintSet.empty, nn)
+    case Variable    ( name          ) => (env(name)       , ConstraintSet.empty, nn)
+    case IntLiteral  ( value         ) => (SInt            , ConstraintSet.empty, nn)
+    case BoolLiteral ( value         ) => (SBool           , ConstraintSet.empty, nn)
+    case ChanLiteral ( name          ) => (SChan(env(name)), ConstraintSet.empty, nn)
     case Pair        ( l    , r      ) => {
       val (tyL, constrL, nnL): (SType, ConstraintSet, Name) =
         constraintsExp(l, env, nn)
@@ -200,9 +229,13 @@ object Typecheck {
    * the next globally available Name, before and after the dequantification.
    */
   def dequantify(ty: SType, nn: Name): (SType, Name) = ty match {
+    case SProc           => (SProc  , nn)
     case SInt            => (SInt   , nn)
     case SBool           => (SBool  , nn)
-    case SChan           => (SChan  , nn)
+    case SChan ( t     ) => {
+      val (deT, nnT): (SType, Name) = dequantify(t, nn)
+      (SChan(deT), nnT)
+    }
     case SVar  ( n     ) => (SVar(n), nn)
     case SPair ( l , r ) => {
       val (deL, nnL): (SType, Name) = dequantify(l, nn)
@@ -228,9 +261,13 @@ object Typecheck {
    */
   def sTVarSubst(ty: SType, from: Name, to: Name, nn: Name): (SType, Name) =
     ty match {
+      case SProc           => (SProc                          , nn)
       case SInt            => (SInt                           , nn)
       case SBool           => (SBool                          , nn)
-      case SChan           => (SChan                          , nn)
+      case SChan ( t     ) => {
+        val (subT, nnT): (SType, Name) = sTVarSubst(t, from, to, nn)
+        (SChan(subT), nnT)
+      }
       case SVar  ( n     ) => (SVar(if (n == from) to else n) , nn)
       case SPair ( l , r ) => {
         val (subL, nnL): (SType, Name) = sTVarSubst(l, from, to, nn)
