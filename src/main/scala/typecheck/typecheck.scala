@@ -95,7 +95,16 @@ case object ConstraintSet {
 
 object Typecheck {
 
-  def checkProc(p: Proc, env: Map[Name, SType]): SType = ???
+  def checkProc(p: Proc): Option[SType] = {
+    val (env, nn): (Map[Name, SType], Name) = initialEnv(p)
+    val (tyP, constrP, nnP): (SType, ConstraintSet, Name) =
+      constraintsProc(p, env, nn)
+    val unifyFn: Option[SType => SType] = unify(constrP)
+    if (unifyFn.isDefined)
+      Some((unifyFn.get)(tyP))
+    else
+      None
+  }
 
   /**
    * Constraint set unification
@@ -113,6 +122,8 @@ object Typecheck {
         case ( ty         , SVar ( n ) ) if ! ( ty hasOccurrenceOf n ) =>
           unify ( rest map ( _ sTypeSubst ( n , ty ) ) )
             . map ( _ compose ( _ sTypeSubst ( n , ty ) ) )
+        case ( SChan  ( t1        ) , SChan  ( t2        ) ) =>
+          unify ( rest + ( t1 , t2 ) )
         case ( SPair  ( t1l , t1r ) , SPair  ( t2l , t2r ) ) =>
           unify ( rest + ( t1l , t2l ) + ( t1r , t2r ) )
         case ( SFunc  ( t1a , t1r ) , SFunc  ( t2a , t2r ) ) =>

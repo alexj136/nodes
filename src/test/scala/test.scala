@@ -234,14 +234,15 @@ object TurnerMachineProperties extends Properties("TurnerMachineState") {
   property("addThreeNumbers") = {
 
     /* proc =
-     *
-     *  send a : x . end |
-     *  send a : y . end |
-     *  send a : z . end |
-     *  receive a : b . receive a : c . receive a : d . (
-     *    send a : b + c + d . end |
-     *    receive a : e . send a : e . end
-     *  )
+     *  [
+     *    send a : x . end |
+     *    send a : y . end |
+     *    send a : z . end |
+     *    receive a : b . receive a : c . receive a : d . [
+     *      send a : b + c + d . end |
+     *      receive a : e . send a : e . end
+     *    ]
+     *  ]
      *
      * should evaluate to =
      *
@@ -269,9 +270,11 @@ object TurnerMachineProperties extends Properties("TurnerMachineState") {
 }
 
 object TypecheckProperties extends Properties("Typecheck") {
+  import parser._
   import typecheck._
   import typecheck.Typecheck._
   import ArbitraryTypes._
+  import scala.io.Source
 
   property("dequantifyPLeft") = Prop.forAll { ( n: Int ) => { ( n > 1 ) ==> {
     dequantify(typeOfUnOp(PLeft), new Name(n)) ==
@@ -300,4 +303,18 @@ object TypecheckProperties extends Properties("Typecheck") {
     unify ( constraints )
     true
   }}
+
+  def checks(procStr: String): Boolean = checkProc ( lexAndParse (
+    Parser.proc , Source fromString procStr ).right.get._3 ).isDefined
+
+  property("reallyReallySimpleProcsTypeCheck") =
+    checks ( " end " ) &&
+    checks ( " [ end ] " ) &&
+    checks ( " [ end | end | end ] " )
+
+  property("reallySimpleProcTypeChecks") =
+    checks ( " receive $a : y . end " )
+
+  property("simpleProcTypeChecks") =
+    checks ( " [ receive $a : y . send y : y . end | send $a : $x . end ] " )
 }
