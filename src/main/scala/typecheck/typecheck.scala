@@ -139,8 +139,15 @@ object Typecheck {
     env: Map[Name, SType],
     nn: Name
   ): (SType, ConstraintSet, Name) = p match {
-    case Send       ( ch   , msg , p        ) => ???
-      // ( ch , SChan ( something ) ) + ( msg , something )
+    case Send       ( ch   , msg , p        ) => {
+      val (tyCh, constrCh, nnCh): (SType, ConstraintSet, Name) =
+        constraintsExp(ch, env, nn)
+      val (tyMsg, constrMsg, nnMsg): (SType, ConstraintSet, Name) =
+        constraintsExp(msg, env, nnCh)
+      val (tyP, constrP, nnP): (SType, ConstraintSet, Name) =
+        constraintsProc(p, env, nnMsg)
+      (SProc, constrCh union constrMsg union constrP + (tyCh, SChan(tyMsg)), nnP)
+    }
     case Receive    ( _    , ch  , bind , p ) => {
       val tyBind: SType = SVar(nn)
       val (tyCh, constrCh, nnCh): (SType, ConstraintSet, Name) =
