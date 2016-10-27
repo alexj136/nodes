@@ -69,7 +69,7 @@ sealed abstract class SType {
 case object SProc                          extends SType
 case object SInt                           extends SType
 case object SBool                          extends SType
-case class  SChan  ( t: SType            ) extends SType
+case class  SChan  ( val t: SType        ) extends SType
 case class  SPair  ( l: SType , r: SType ) extends SType
 case class  SVar   ( n: Name             ) extends SType
 case class  SQuant ( n: Name  , t: SType ) extends SType
@@ -124,6 +124,16 @@ object Typecheck {
     }
   }
 
+  def initialEnv(p: Proc): (Map[Name, SType], Name) = {
+    var map: Map[Name, SType] = Map.empty
+    var name: Name = new Name(0)
+    p.chanLiterals.foreach { c =>
+      map = map + (c -> SChan(SVar(name)))
+      name = name.next
+    }
+    (map, name)
+  }
+
   def constraintsProc(
     p: Proc,
     env: Map[Name, SType],
@@ -132,13 +142,12 @@ object Typecheck {
     case Send       ( ch   , msg , p        ) => ???
       // ( ch , SChan ( something ) ) + ( msg , something )
     case Receive    ( _    , ch  , bind , p ) => {
-      // ( ch , SChan ( something ) )
-      // env + ( bind -> something )
-      val (tyE, constrE, nnE): (SType, ConstraintSet, Name) =
-        ???//constraintsExp(exp, env, nn)
+      val tyBind: SType = SVar(nn)
+      val (tyCh, constrCh, nnCh): (SType, ConstraintSet, Name) =
+        constraintsExp(ch, env, nn.next)
       val (tyP, constrP, nnP): (SType, ConstraintSet, Name) =
-        constraintsProc(p, env + (bind -> tyE), nnE)
-      (SProc, constrE union constrP, nnE)
+        constraintsProc(p, env + (bind -> tyBind), nnCh)
+      (SProc, constrCh union constrP + (tyCh, SChan(tyBind)), nnP)
     }
     case LetIn      ( bind , exp , p        ) => {
       val (tyE, constrE, nnE): (SType, ConstraintSet, Name) =
