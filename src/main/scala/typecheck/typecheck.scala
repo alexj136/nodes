@@ -58,11 +58,14 @@ sealed abstract class SType {
    * recursion during unification.
    */
   def hasOccurrenceOf ( n: Name ) : Boolean = ( n , this ) match {
-    case ( x , SVar  ( y     ) ) => x == y
-    case ( x , SFunc ( a , r ) ) =>
+    case ( x , SVar   ( y     ) ) => x == y
+    case ( x , SChan  ( t     ) ) => ( t hasOccurrenceOf x )
+    case ( x , SFunc  ( a , r ) ) =>
       ( a hasOccurrenceOf x ) || ( r hasOccurrenceOf x )
-    case ( x , SPair ( l , r ) ) =>
+    case ( x , SPair  ( l , r ) ) =>
       ( l hasOccurrenceOf x ) || ( r hasOccurrenceOf x )
+    case ( x , SQuant ( _ , _ ) ) => throw new RuntimeException (
+      "SQuant not removed during occurrence check." )
     case _ => false
   }
 }

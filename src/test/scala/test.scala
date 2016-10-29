@@ -324,7 +324,7 @@ object TypecheckProperties extends Properties("Typecheck") {
     " server $a : y . end "          ) )
 
   property("simpleProcTypeChecks") =
-    checks ( " [ receive $a : y . send y : y . end | send $a : $x . end ] " )
+    checks ( " [ receive $a : y . send y : 12 . end | send $a : $x . end ] " )
 
   property("badProcsDontCheck") = noneCheck ( List (
     " [ receive $a : y . send y : y . end | send $a : 12 . end ] " ) )
