@@ -306,19 +306,26 @@ object TypecheckProperties extends Properties("Typecheck") {
 
   def checks(procStr: String): Boolean = checkProc ( lexAndParse (
     Parser.proc , Source fromString procStr ).right.get._3 ).isDefined
+  def allCheck(procStrs: List[String]): Boolean =
+    procStrs.map ( checks ).foldLeft ( true ) ( _ && _ )
+  def noneCheck(procStrs: List[String]): Boolean =
+    !procStrs.map ( checks ).foldLeft ( false ) ( _ || _ )
 
-  property("reallyReallySimpleProcsTypeCheck") =
-    checks ( " end " ) &&
-    checks ( " [ end ] " ) &&
-    checks ( " [ end | end | end ] " )
+  property("reallyReallySimpleProcsTypeCheck") = allCheck ( List (
+    " end "                 ,
+    " [ end ] "             ,
+    " [ end | end | end ] " ) )
 
-  property("reallySimpleProcsTypeCheck") =
-    checks ( " receive $a : y . end " ) &&
-    checks ( " send $a : 12 . end " ) &&
-    checks ( " new a . end " ) &&
-    checks ( " let x = -> { 10 , 11 } . end " ) &&
-    checks ( " server $a : y . end " )
+  property("reallySimpleProcsTypeCheck") = allCheck ( List (
+    " receive $a : y . end "         ,
+    " send $a : 12 . end "           ,
+    " new a . end "                  ,
+    " let x = -> { 10 , 11 } . end " ,
+    " server $a : y . end "          ) )
 
   property("simpleProcTypeChecks") =
     checks ( " [ receive $a : y . send y : y . end | send $a : $x . end ] " )
+
+  property("badProcsDontCheck") = noneCheck ( List (
+    " [ receive $a : y . send y : y . end | send $a : 12 . end ] " ) )
 }
