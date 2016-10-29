@@ -312,8 +312,12 @@ object TypecheckProperties extends Properties("Typecheck") {
     checks ( " [ end ] " ) &&
     checks ( " [ end | end | end ] " )
 
-  property("reallySimpleProcTypeChecks") =
-    checks ( " receive $a : y . end " )
+  property("reallySimpleProcsTypeCheck") =
+    checks ( " receive $a : y . end " ) &&
+    checks ( " send $a : 12 . end " ) &&
+    checks ( " new a . end " ) &&
+    checks ( " let x = -> { 10 , 11 } . end " ) &&
+    checks ( " server $a : y . end " )
 
   property("simpleProcTypeChecks") =
     checks ( " [ receive $a : y . send y : y . end | send $a : $x . end ] " )

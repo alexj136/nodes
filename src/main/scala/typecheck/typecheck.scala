@@ -122,8 +122,8 @@ object Typecheck {
         case ( ty         , SVar ( n ) ) if ! ( ty hasOccurrenceOf n ) =>
           unify ( rest map ( _ sTypeSubst ( n , ty ) ) )
             . map ( _ compose ( _ sTypeSubst ( n , ty ) ) )
-        case ( SChan  ( t1        ) , SChan  ( t2        ) ) =>
-          unify ( rest + ( t1 , t2 ) )
+        case ( SChan  ( t1m       ) , SChan  ( t2m       ) ) =>
+          unify ( rest + ( t1m , t2m ) )
         case ( SPair  ( t1l , t1r ) , SPair  ( t2l , t2r ) ) =>
           unify ( rest + ( t1l , t2l ) + ( t1r , t2r ) )
         case ( SFunc  ( t1a , t1r ) , SFunc  ( t2a , t2r ) ) =>
@@ -190,8 +190,10 @@ object Typecheck {
         constraintsProc(q, env, nnP)
       (SProc, constrP union constrQ, nnQ)
     }
-    case New        ( name , p              ) => (SProc, ???                , ???)
-    case End                                  => (SProc, ConstraintSet.empty, nn )
+    case New        ( bind , p              ) =>
+      constraintsProc(p, env + (bind -> SChan(SVar(nn))), nn.next)
+    case End                                  =>
+      (SProc, ConstraintSet.empty, nn)
   }
 
   def constraintsExp(
@@ -199,10 +201,10 @@ object Typecheck {
     env: Map[Name, SType],
     nn: Name
   ): (SType, ConstraintSet, Name) = e match {
-    case Variable    ( name          ) => (env(name)       , ConstraintSet.empty, nn)
-    case IntLiteral  ( value         ) => (SInt            , ConstraintSet.empty, nn)
-    case BoolLiteral ( value         ) => (SBool           , ConstraintSet.empty, nn)
-    case ChanLiteral ( name          ) => (SChan(env(name)), ConstraintSet.empty, nn)
+    case Variable    ( name          ) => (env(name), ConstraintSet.empty, nn)
+    case IntLiteral  ( value         ) => (SInt     , ConstraintSet.empty, nn)
+    case BoolLiteral ( value         ) => (SBool    , ConstraintSet.empty, nn)
+    case ChanLiteral ( name          ) => (env(name), ConstraintSet.empty, nn)
     case Pair        ( l    , r      ) => {
       val (tyL, constrL, nnL): (SType, ConstraintSet, Name) =
         constraintsExp(l, env, nn)
