@@ -90,8 +90,8 @@ case class ConstraintSet( val set: Set [ Constraint ] ) {
     ConstraintSet ( set + constr )
   def map ( f: SType => SType ) : ConstraintSet =
     ConstraintSet( set map ( _ map f ) )
-  override def toString: String = "Constraint set {\n" +
-    ( set.toList.map ( "  " + _ + "\n" ).foldLeft ( "" ) ( _ + _ ) ) + "}\n"
+  override def toString: String = "ConstraintSet (\n" +
+    ( set.toList.map ( "  " + _ + "\n" ).foldLeft ( "" ) ( _ + _ ) ) + " )"
 }
 
 case object ConstraintSet {
@@ -120,7 +120,7 @@ case class Constraint
   def trivial: Boolean = t1 == t2
 
   override def toString: String =
-    "Constraint " + t1 + " == " + t2 + " from " + origin.pos
+    "Constraint " + t1 + " == " + t2 + " from \"" + origin + "\""
 }
   
 object Typecheck {
@@ -129,29 +129,30 @@ object Typecheck {
     val (env, nn): (Map[Name, SType], Name) = initialEnv(p)
     val (tyP, constrP, nnP): (SType, ConstraintSet, Name) =
       constraintsProc(p, env, nn)
-    val unifyFn: Option[SType => SType] = unify(constrP)
-    if (unifyFn.isDefined)
-      Some((unifyFn.get)(tyP))
-    else
-      None
+    unify(constrP) match {
+      case Right(unifyFn) => Some(unifyFn(tyP))
+      case Left (_      ) => None
+    }
   }
 
   /**
    * Constraint set unification
    */
-  def unify(constrs: ConstraintSet): Option[SType => SType] = {
-    val exception =
-      new RuntimeException("SQuant not removed from type before unification")
+  def unify
+    ( constrs: ConstraintSet
+    ): Either [ Constraint , SType => SType ] = {
+    val exception = new RuntimeException (
+      "SQuant not removed from type before unification" )
     constrs.split match {
-      case ( None , _          )              => Some ( identity )
+      case ( None , _          )              => Right ( identity )
       case ( Some ( c ) , rest ) if c.trivial => unify ( rest )
       case ( Some ( c ) , rest )              => c.asPair match {
         case ( SVar ( n ) , ty         ) if ! ( ty hasOccurrenceOf n ) =>
           unify ( rest map ( _ sTypeSubst ( n , ty ) ) )
-            . map ( _ compose ( _ sTypeSubst ( n , ty ) ) )
+            . right . map ( _ compose ( _ sTypeSubst ( n , ty ) ) )
         case ( ty         , SVar ( n ) ) if ! ( ty hasOccurrenceOf n ) =>
           unify ( rest map ( _ sTypeSubst ( n , ty ) ) )
-            . map ( _ compose ( _ sTypeSubst ( n , ty ) ) )
+            . right . map ( _ compose ( _ sTypeSubst ( n , ty ) ) )
         case ( SChan  ( t1m       ) , SChan  ( t2m       ) ) =>
           unify ( rest + Constraint ( t1m , t2m , c.origin ) )
         case ( SPair  ( t1l , t1r ) , SPair  ( t2l , t2r ) ) =>
@@ -162,7 +163,7 @@ object Typecheck {
             Constraint ( t1r , t2r , c.origin ) )
         case ( SQuant ( _   , _   ) , _                    ) => throw exception
         case ( _                    , SQuant ( _   , _   ) ) => throw exception
-        case _                                               => None
+        case _                                               => Left ( c )
       }
     }
   }

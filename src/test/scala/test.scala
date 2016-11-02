@@ -292,7 +292,7 @@ object TypecheckProperties extends Properties("Typecheck") {
     val exp: Exp = UnExp(PLeft, IntLiteral(1))
     val (_, constraints: ConstraintSet, _) =
       constraintsExp(exp, Map.empty, new Name(0))
-    unify(constraints) == None
+    unify(constraints).isLeft
   }
 
   property("unifyArbitraryExpNoCrash") = Prop.forAll { exp: Exp => {

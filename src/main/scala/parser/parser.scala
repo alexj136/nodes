@@ -53,63 +53,41 @@ object Parser extends Parsers {
 
   override type Elem = PostToken
 
-  def name: Parser [ Name ] = positioned {
+  def name: Parser [ Name ] =
     accept ( "POSTIDENT" , { case POSTIDENT ( n ) => n } )
-  }
 
-  def proc: Parser [ Proc ] = positioned {
-    phrase ( seq )
-  }
+  def proc: Parser [ Proc ] = phrase ( seq )
 
-  def seq: Parser [ Proc ] = positioned {
-    end | snd | rcv | srv | res | let | ite | par
-  }
+  def seq: Parser [ Proc ] = end | snd | rcv | srv | res | let | ite | par
 
-  def par: Parser [ Proc ] = positioned {
+  def par: Parser [ Proc ] =
     LSQUARE ~> rep1sep ( seq , BAR ) <~ RSQUARE ^^ { Proc fromList _ }
+
+  def snd: Parser [ Proc ] = SEND ~ exp ~ COLON ~ exp ~ DOT ~ seq ^^ {
+    case _ ~ c ~ _ ~ m ~ _ ~ p => Send ( c , m , p )
   }
 
-  def snd: Parser [ Proc ] = positioned {
-    SEND ~ exp ~ COLON ~ exp ~ DOT ~ seq ^^ {
-      case _ ~ c ~ _ ~ m ~ _ ~ p => Send ( c , m , p )
-    }
+  def rcv: Parser [ Proc ] = RECEIVE ~ exp ~ COLON ~ name ~ DOT ~ seq ^^ {
+    case _ ~ c ~ _ ~ b ~ _ ~ p => Receive ( false , c , b , p )
   }
 
-  def rcv: Parser [ Proc ] = positioned {
-    RECEIVE ~ exp ~ COLON ~ name ~ DOT ~ seq ^^ {
-      case _ ~ c ~ _ ~ b ~ _ ~ p => Receive ( false , c , b , p )
-    }
+  def srv: Parser [ Proc ] = SERVER ~ exp ~ COLON ~ name ~ DOT ~ seq ^^ {
+    case _ ~ c ~ _ ~ b ~ _ ~ p => Receive ( true , c , b , p )
   }
 
-  def srv: Parser [ Proc ] = positioned {
-    SERVER ~ exp ~ COLON ~ name ~ DOT ~ seq ^^ {
-      case _ ~ c ~ _ ~ b ~ _ ~ p => Receive ( true , c , b , p )
-    }
+  def res: Parser [ Proc ] = NEW ~ name ~ DOT ~ seq ^^ {
+    case _ ~ n ~ _ ~ p => New ( n , p )
   }
 
-  def res: Parser [ Proc ] = positioned {
-    NEW ~ name ~ DOT ~ seq ^^ {
-      case _ ~ n ~ _ ~ p => New ( n , p )
-    }
+  def let: Parser [ Proc ] = LET ~ name ~ EQUAL ~ exp ~ DOT ~ seq ^^ {
+    case _ ~ n ~ _ ~ e ~ _ ~ p => LetIn ( n , e , p )
   }
 
-  def let: Parser [ Proc ] = positioned {
-    LET ~ name ~ EQUAL ~ exp ~ DOT ~ seq ^^ {
-      case _ ~ n ~ _ ~ e ~ _ ~ p => LetIn ( n , e , p )
-    }
+  def ite: Parser [ Proc ] = IF ~ exp ~ THEN ~ seq ~ ELSE ~ seq ~ ENDIF ^^ {
+    case _ ~ e ~ _ ~ p ~ _ ~ q ~ _ => IfThenElse ( e , p , q )
   }
 
-  def ite: Parser [ Proc ] = positioned {
-    IF ~ exp ~ THEN ~ seq ~ ELSE ~ seq ~ ENDIF ^^ {
-      case _ ~ e ~ _ ~ p ~ _ ~ q ~ _ => IfThenElse ( e , p , q )
-    }
-  }
-
-  def end: Parser [ Proc ] = positioned {
-    END ^^ {
-      _ => End
-    }
-  }
+  def end: Parser [ Proc ] = END ^^ { _ => End }
 
   /**
    * Combinator parsers for expressions. The only left-recursive production in
@@ -121,72 +99,55 @@ object Parser extends Parsers {
   def exp: Parser [ Exp ] = binExp | expNoBinExp
 
   def expNoBinExp: Parser [ Exp ] = variable | intLiteral | trueLiteral |
-    falseLiteral | chanLiteral | pair | unExp |
-    positioned { LPAREN ~> exp <~ RPAREN }
+    falseLiteral | chanLiteral | pair | unExp | LPAREN ~> exp <~ RPAREN
 
-  def binExp: Parser [ Exp ] = positioned {
-    expNoBinExp ~ binOpTy ~ exp ^^ {
-      case l ~ op ~ r => BinExp ( op , l , r )
-    }
+  def binExp: Parser [ Exp ] = expNoBinExp ~ binOpTy ~ exp ^^ {
+    case l ~ op ~ r => BinExp ( op , l , r )
   }
 
-  def variable: Parser [ Exp ] = positioned { name ^^ { Variable ( _ ) } }
+  def variable: Parser [ Exp ] = name ^^ { Variable ( _ ) }
 
-  def intLiteral: Parser [ Exp ] = positioned {
+  def intLiteral: Parser [ Exp ] =
     accept ( "POSTINT" , { case POSTINT ( i ) => IntLiteral ( i ) } )
+
+  def trueLiteral: Parser [ Exp ] = TRUE ^^ { _ => BoolLiteral ( true ) }
+
+  def falseLiteral: Parser [ Exp ] = FALSE ^^ { _ => BoolLiteral ( false ) }
+
+  def chanLiteral: Parser [ Exp ] =
+    accept ( "POSTCHAN" , { case POSTCHAN ( c ) => ChanLiteral ( c ) } )
+
+  def pair: Parser [ Exp ] = LCURLY ~ exp ~ COMMA ~ exp ~ RCURLY ^^ {
+    case _ ~ l ~ _ ~ r ~ _ => Pair ( l , r )
   }
 
-  def trueLiteral: Parser [ Exp ] = positioned {
-    TRUE ^^ { _ => BoolLiteral ( true ) }
+  def unExp: Parser [ Exp ] = unOpTy ~ exp ^^ {
+    case op ~ e => UnExp ( op , e )
   }
 
-  def falseLiteral: Parser [ Exp ] = positioned {
-    FALSE ^^ { _ => BoolLiteral ( false ) }
-  }
-
-  def chanLiteral: Parser [ Exp ] = positioned {
-    accept ( "POSTCHAN" , {
-      case POSTCHAN ( c ) => ChanLiteral ( c )
-    } )
-  }
-
-  def pair: Parser [ Exp ] = positioned {
-    LCURLY ~ exp ~ COMMA ~ exp ~ RCURLY ^^ {
-      case _ ~ l ~ _ ~ r ~ _ => Pair ( l , r )
-    }
-  }
-
-  def unExp: Parser [ Exp ] = positioned {
-    unOpTy ~ exp ^^ {
-      case op ~ e => UnExp ( op , e )
-    }
-  }
-
-  def uMinus: Parser [ Exp ] = positioned {
-    DASH ~ exp ^^ {
-      case _ ~ e => BinExp ( Sub , IntLiteral ( 0 ) , e )
-    }
+  def uMinus: Parser [ Exp ] = DASH ~ exp ^^ {
+    case _ ~ e => BinExp ( Sub , IntLiteral ( 0 ) , e )
   }
 
   def binOpTy: Parser [ BinOp ] =
-    positioned { PLUS   ^^ { _ => Add       } } |
-    positioned { DASH   ^^ { _ => Sub       } } |
-    positioned { STAR   ^^ { _ => Mul       } } |
-    positioned { FSLASH ^^ { _ => Div       } } |
-    positioned { PERC   ^^ { _ => Mod       } } |
-    positioned { EQEQ   ^^ { _ => Equal     } } |
-    positioned { NEQ    ^^ { _ => NotEqual  } } |
-    positioned { LESS   ^^ { _ => Less      } } |
-    positioned { LESSEQ ^^ { _ => LessEq    } } |
-    positioned { GRTR   ^^ { _ => Greater   } } |
-    positioned { GRTREQ ^^ { _ => GreaterEq } } |
-    positioned { AND    ^^ { _ => And       } } |
-    positioned { OR     ^^ { _ => Or        } }
+    PLUS   ^^ { _ => Add       } |
+    DASH   ^^ { _ => Sub       } |
+    STAR   ^^ { _ => Mul       } |
+    FSLASH ^^ { _ => Div       } |
+    PERC   ^^ { _ => Mod       } |
+    EQEQ   ^^ { _ => Equal     } |
+    NEQ    ^^ { _ => NotEqual  } |
+    LESS   ^^ { _ => Less      } |
+    LESSEQ ^^ { _ => LessEq    } |
+    GRTR   ^^ { _ => Greater   } |
+    GRTREQ ^^ { _ => GreaterEq } |
+    AND    ^^ { _ => And       } |
+    OR     ^^ { _ => Or        }
 
   def unOpTy: Parser [ UnOp ] =
-    positioned { BANG   ^^ { _ => Not    } } |
-    positioned { LARROW ^^ { _ => PLeft  } } |
-    positioned { RARROW ^^ { _ => PRight } }
+    BANG   ^^ { _ => Not    } |
+    LARROW ^^ { _ => PLeft  } |
+    RARROW ^^ { _ => PRight }
 }
 
 /** Reader for Tokens used to feed a List [ PostToken ] into the Parser.
