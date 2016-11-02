@@ -328,4 +328,22 @@ object TypecheckProperties extends Properties("Typecheck") {
 
   property("badProcsDontCheck") = noneCheck ( List (
     " [ receive $a : y . send y : y . end | send $a : 12 . end ] " ) )
+
+  property("simpleloopExampleTypechecks") =
+    checks ( Source.fromFile("examples/simpleloop"        ).mkString )
+
+  property("looping_functionsExampleTypechecks") =
+    checks ( Source.fromFile("examples/looping_functions" ).mkString )
+
+  property("functionsExampleTypechecks") =
+    checks ( Source.fromFile("examples/functions"         ).mkString )
+
+  property("unifyArbitraryProcNoCrash") = Prop.forAll { proc: Proc => {
+    // Free variables are SInts in this typing environment
+    val (_, constraints: ConstraintSet, _) = constraintsProc(proc,
+      ((proc.free union proc.chanLiterals) map ( n => ( n , SInt ) ) ).toMap,
+      new Name(0))
+    unify ( constraints )
+    true
+  }}
 }

@@ -184,7 +184,8 @@ object Typecheck {
         constraintsProc(p, env, nnE)
       val (tyQ, constrQ, nnQ): (SType, ConstraintSet, Name) =
         constraintsProc(q, env, nnP)
-      (SProc, constrE union constrP union constrQ + (tyE, SBool), nnQ)
+      (SProc, constrE union constrP union constrQ
+        + (tyE, SBool) + (tyP, tyQ), nnQ)
     }
     case Parallel   ( p    , q              ) => {
       val (tyP, constrP, nnP): (SType, ConstraintSet, Name) =
