@@ -3,6 +3,7 @@ import scala.util.parsing.input.Positional
 
 sealed trait SyntaxElement {
   var info: Info = NoInfo
+  def setInfo(i: Info): Unit = this.info = i
   def pstr(names: Map[Name, String]): String
   def free: Set[Name]
 }
@@ -15,7 +16,7 @@ case class Name(val id: Int) extends SyntaxElement {
 }
 
 abstract class Info
-case class SrcPosInfo(pos: (Int, Int, Int, Int)) extends Info
+case class SrcPosInfo(val lPos: (Int, Int), val rPos: (Int, Int)) extends Info
 case object NoInfo extends Info
 
 sealed abstract class Proc extends SyntaxElement {

@@ -51,6 +51,19 @@ object Parser extends Parsers {
         Left ( ParserError ( rest.pos.line , rest.pos.column , msg ) )
     }
 
+
+  /** Take a SyntaxElement and two PostTokens, assign the left source position 
+   *  of the SyntaxElement as the position of the first token, and the right
+   *  source position of the SyntaxElement as the position of the second token.
+   *  Return the SyntaxElement with reassigned positions.
+   */
+  def putPos [ T <: SyntaxElement ] ( elem: T , l: PostToken , r: PostToken
+  ): T = {
+    elem.setInfo ( SrcPosInfo ( ( l.pos.line , l.pos.column ) ,
+      ( r.pos.line, r.pos.column ) ) )
+    elem
+  }
+
   override type Elem = PostToken
 
   def name: Parser [ Name ] =
@@ -60,34 +73,42 @@ object Parser extends Parsers {
 
   def seq: Parser [ Proc ] = end | snd | rcv | srv | res | let | ite | par
 
-  def par: Parser [ Proc ] =
-    LSQUARE ~> rep1sep ( seq , BAR ) <~ RSQUARE ^^ { Proc fromList _ }
+  def par: Parser [ Proc ] = LSQUARE ~ rep1sep ( seq , BAR ) ~ RSQUARE ^^ {
+      case l ~ p ~ r =>
+        putPos ( Proc fromList p , l , r )
+    }
 
   def snd: Parser [ Proc ] = SEND ~ exp ~ COLON ~ exp ~ DOT ~ seq ^^ {
-    case _ ~ c ~ _ ~ m ~ _ ~ p => Send ( c , m , p )
+    case s ~ c ~ _ ~ m ~ d ~ p =>
+      putPos ( Send ( c , m , p ) , s , d )
   }
 
   def rcv: Parser [ Proc ] = RECEIVE ~ exp ~ COLON ~ name ~ DOT ~ seq ^^ {
-    case _ ~ c ~ _ ~ b ~ _ ~ p => Receive ( false , c , b , p )
+    case r ~ c ~ _ ~ b ~ d ~ p =>
+      putPos ( Receive ( false , c , b , p ) , r , d )
   }
 
   def srv: Parser [ Proc ] = SERVER ~ exp ~ COLON ~ name ~ DOT ~ seq ^^ {
-    case _ ~ c ~ _ ~ b ~ _ ~ p => Receive ( true , c , b , p )
+    case s ~ c ~ _ ~ b ~ d ~ p =>
+      putPos ( Receive ( true , c , b , p ) , s , d )
   }
 
   def res: Parser [ Proc ] = NEW ~ name ~ DOT ~ seq ^^ {
-    case _ ~ n ~ _ ~ p => New ( n , p )
+    case nu ~ n ~ d ~ p =>
+      putPos ( New ( n , p ) , nu , d )
   }
 
   def let: Parser [ Proc ] = LET ~ name ~ EQUAL ~ exp ~ DOT ~ seq ^^ {
-    case _ ~ n ~ _ ~ e ~ _ ~ p => LetIn ( n , e , p )
+    case l ~ n ~ _ ~ e ~ d ~ p =>
+      putPos ( LetIn ( n , e , p ) , l , d )
   }
 
   def ite: Parser [ Proc ] = IF ~ exp ~ THEN ~ seq ~ ELSE ~ seq ~ ENDIF ^^ {
-    case _ ~ e ~ _ ~ p ~ _ ~ q ~ _ => IfThenElse ( e , p , q )
+    case i ~ e ~ _ ~ p ~ _ ~ q ~ d =>
+      putPos ( IfThenElse ( e , p , q ) , i , d )
   }
 
-  def end: Parser [ Proc ] = END ^^ { _ => End }
+  def end: Parser [ Proc ] = END ^^ { case end => putPos ( End , end , end ) }
 
   /**
    * Combinator parsers for expressions. The only left-recursive production in
