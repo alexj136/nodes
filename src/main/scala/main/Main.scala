@@ -2,6 +2,7 @@ package main
 
 import syntax._
 import parser._
+import typecheck._
 import interpreter._
 import interpreter.concurrent._
 import interpreter.concurrent.forwarder_optimising.spawn_time._
@@ -36,8 +37,29 @@ object Main extends App {
 
     lexAndParse ( Parser.proc , Source fromFile args(0) ) match {
       case Right ( ( names , nextName , proc ) ) =>
+
+        // Get a typecheck environment
+        val (env: Map [ Name , SType ], nn: Name) =
+          Typecheck.initialEnv ( proc )
+
+        // Generate typing constraints
+        val ( _ , constr: ConstraintSet , _ ) =
+          Typecheck.constraintsProc ( proc , env , nn )
+
+        // Try to solve constraints. If it fails, print a warning
+        Typecheck.unify ( constr ) match {
+          case Left ( c ) => {
+            println ( s"Unsolvable constraint generated at ${c.origin.info}:" )
+            println ( s"    ${c.origin.pstr ( names.map ( _.swap ) )}" )
+            println ( s"Cannot unify ${c.t1} with ${c.t2}." )
+          }
+          case _          => Unit
+        }
+
+        // Run the program regardless of type check result
         new Launcher(proc, names("$print"), nextName, names.map(_.swap),
           { case _ => {} }, classOf[FwdOptProcRunner])
+
       case Left ( LexerError  ( row , col , msg ) ) => {
         println("Lexical error (" + row + ", " + col + "): " + msg)
       }

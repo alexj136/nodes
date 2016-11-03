@@ -156,15 +156,15 @@ object ParserProperties extends Properties("Parser") {
       case _ => true
     }
 
-  property("keywordNotIdent") = lexesAs ( "send" , List ( SEND ) )
+  property("keywordNotIdent") = lexesAs ( "send" , List ( SEND() ) )
 
   property("identNotTwoKeywords") =
     lexesAs ( "sendsend" , List ( PREIDENT ( "sendsend" ) ) )
 
   property("twoKeywordsNotIdent") =
-    lexesAs ( "send send" , List ( SEND , SEND ) ) &&
-    lexesAs ( "receive send" , List ( RECEIVE , SEND ) ) &&
-    lexesAs ( "receive end" , List ( RECEIVE , END ) )
+    lexesAs ( "send send" , List ( SEND() , SEND() ) ) &&
+    lexesAs ( "receive send" , List ( RECEIVE() , SEND() ) ) &&
+    lexesAs ( "receive end" , List ( RECEIVE() , END() ) )
 
   property("twoIdents") =
     lexesAs ( "a b" , List ( PREIDENT ( "a" ) , PREIDENT ( "b" ) ) )

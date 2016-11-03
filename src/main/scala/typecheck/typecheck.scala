@@ -68,6 +68,17 @@ sealed abstract class SType {
       "SQuant not removed during occurrence check." )
     case _ => false
   }
+
+  override def toString: String = this match {
+    case SProc            => "process"
+    case SInt             => "integer"
+    case SBool            => "boolean"
+    case SChan  ( t     ) => s"channel ( $t )"
+    case SPair  ( l , r ) => s"pair ( $l , $r )"
+    case SVar   ( n     ) => s"t${n.id}"
+    case SQuant ( n , t ) => s"forall t${n.id}: $t"
+    case SFunc  ( a , r ) => s"( $a => $r )"
+  }
 }
 case object SProc                          extends SType
 case object SInt                           extends SType
