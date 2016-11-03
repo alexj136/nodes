@@ -74,13 +74,11 @@ object Parser extends Parsers {
   def seq: Parser [ Proc ] = end | snd | rcv | srv | res | let | ite | par
 
   def par: Parser [ Proc ] = LSQUARE ~ rep1sep ( seq , BAR ) ~ RSQUARE ^^ {
-      case l ~ p ~ r =>
-        putPos ( Proc fromList p , l , r )
-    }
+    case l ~ p ~ r => putPos ( Proc fromList p , l , r )
+  }
 
   def snd: Parser [ Proc ] = SEND ~ exp ~ COLON ~ exp ~ DOT ~ seq ^^ {
-    case s ~ c ~ _ ~ m ~ d ~ p =>
-      putPos ( Send ( c , m , p ) , s , d )
+    case s ~ c ~ _ ~ m ~ d ~ p => putPos ( Send ( c , m , p ) , s , d )
   }
 
   def rcv: Parser [ Proc ] = RECEIVE ~ exp ~ COLON ~ name ~ DOT ~ seq ^^ {
@@ -94,13 +92,11 @@ object Parser extends Parsers {
   }
 
   def res: Parser [ Proc ] = NEW ~ name ~ DOT ~ seq ^^ {
-    case nu ~ n ~ d ~ p =>
-      putPos ( New ( n , p ) , nu , d )
+    case nu ~ n ~ d ~ p => putPos ( New ( n , p ) , nu , d )
   }
 
   def let: Parser [ Proc ] = LET ~ name ~ EQUAL ~ exp ~ DOT ~ seq ^^ {
-    case l ~ n ~ _ ~ e ~ d ~ p =>
-      putPos ( LetIn ( n , e , p ) , l , d )
+    case l ~ n ~ _ ~ e ~ d ~ p => putPos ( LetIn ( n , e , p ) , l , d )
   }
 
   def ite: Parser [ Proc ] = IF ~ exp ~ THEN ~ seq ~ ELSE ~ seq ~ ENDIF ^^ {
