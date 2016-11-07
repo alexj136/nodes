@@ -95,6 +95,7 @@ case class ConstraintSet( val set: Set [ Constraint ] ) {
       case ( c :: cs ) => ( Some ( c ) , ConstraintSet( cs.toSet ) )
       case Nil         => ( None       , this                      )
     }
+  def isEmpty: Boolean = set.isEmpty
   def union ( other: ConstraintSet ) : ConstraintSet =
     ConstraintSet ( set union other.set )
   def + ( constr: Constraint ) : ConstraintSet =
@@ -103,6 +104,8 @@ case class ConstraintSet( val set: Set [ Constraint ] ) {
     ConstraintSet( set map ( _ map f ) )
   override def toString: String = "ConstraintSet (\n" +
     ( set.toList.map ( "  " + _ + "\n" ).foldLeft ( "" ) ( _ + _ ) ) + " )"
+  def foreach ( f: Constraint => Unit ): Unit = set.foreach ( f )
+  def size: Int = set.size
 }
 
 case object ConstraintSet {
@@ -140,41 +143,54 @@ object Typecheck {
     val (env, nn): (Map[Name, SType], Name) = initialEnv(p)
     val (tyP, constrP, nnP): (SType, ConstraintSet, Name) =
       constraintsProc(p, env, nn)
-    unify(constrP) match {
+    unify(constrP, ConstraintSet.empty) match {
       case Right(unifyFn) => Some(unifyFn(tyP))
       case Left (_      ) => None
     }
   }
 
   /**
-   * Constraint set unification
+   * Constraint set unification. If a constraint is unsolvable, we add it to a
+   * set of unsolvable constraints, and continue substitution within those
+   * failed constraints. This allows for informative error messages.
    */
   def unify
     ( constrs: ConstraintSet
-    ): Either [ Constraint , SType => SType ] = {
+    , failed:  ConstraintSet
+    ): Either [ ConstraintSet , SType => SType ] = {
     val exception = new RuntimeException (
       "SQuant not removed from type before unification" )
     constrs.split match {
-      case ( None , _          )              => Right ( identity )
-      case ( Some ( c ) , rest ) if c.trivial => unify ( rest )
+      case ( None , _          )              =>
+        if ( failed.isEmpty ) Right ( identity ) else Left ( failed )
+      case ( Some ( c ) , rest ) if c.trivial => unify ( rest , failed )
       case ( Some ( c ) , rest )              => c.asPair match {
+
         case ( SVar ( n ) , ty         ) if ! ( ty hasOccurrenceOf n ) =>
-          unify ( rest map ( _ sTypeSubst ( n , ty ) ) )
+          unify ( rest map ( _ sTypeSubst ( n , ty ) ) ,
+            failed map ( _ sTypeSubst ( n , ty ) ) )
             . right . map ( _ compose ( _ sTypeSubst ( n , ty ) ) )
+
         case ( ty         , SVar ( n ) ) if ! ( ty hasOccurrenceOf n ) =>
-          unify ( rest map ( _ sTypeSubst ( n , ty ) ) )
+          unify ( rest map ( _ sTypeSubst ( n , ty ) ) ,
+            failed map ( _ sTypeSubst ( n , ty ) ) )
             . right . map ( _ compose ( _ sTypeSubst ( n , ty ) ) )
+
         case ( SChan  ( t1m       ) , SChan  ( t2m       ) ) =>
-          unify ( rest + Constraint ( t1m , t2m , c.origin ) )
+          unify ( rest + Constraint ( t1m , t2m , c.origin ) , failed )
+
         case ( SPair  ( t1l , t1r ) , SPair  ( t2l , t2r ) ) =>
           unify ( rest + Constraint ( t1l , t2l , c.origin ) +
-            Constraint ( t1r , t2r , c.origin ) )
+            Constraint ( t1r , t2r , c.origin ) , failed )
+
         case ( SFunc  ( t1a , t1r ) , SFunc  ( t2a , t2r ) ) =>
           unify ( rest + Constraint ( t1a , t2a , c.origin ) +
-            Constraint ( t1r , t2r , c.origin ) )
+            Constraint ( t1r , t2r , c.origin ) , failed )
+
         case ( SQuant ( _   , _   ) , _                    ) => throw exception
         case ( _                    , SQuant ( _   , _   ) ) => throw exception
-        case _                                               => Left ( c )
+        case _                                               =>
+          unify ( rest , failed + c )
       }
     }
   }

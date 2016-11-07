@@ -47,11 +47,14 @@ object Main extends App {
           Typecheck.constraintsProc ( proc , env , nn )
 
         // Try to solve constraints. If it fails, print a warning
-        Typecheck.unify ( constr ) match {
-          case Left ( c ) => {
-            println ( s"Unsolvable constraint generated at ${c.origin.info}:" )
-            println ( s"    ${c.origin.pstr ( names.map ( _.swap ) )}" )
-            println ( s"Cannot unify ${c.t1} with ${c.t2}." )
+        Typecheck.unify ( constr , ConstraintSet.empty ) match {
+          case Left ( cs ) => {
+            println ( s"${cs.size} type errors found:" )
+            cs.foreach ( { c =>
+              println ( s"At ${c.origin.info}:" )
+              println ( s"  ${c.origin.pstr ( names.map ( _.swap ) )}" )
+              println ( s"  Cannot unify ${c.t1} with ${c.t2}." )
+            } )
           }
           case _          => Unit
         }

@@ -292,7 +292,7 @@ object TypecheckProperties extends Properties("Typecheck") {
     val exp: Exp = UnExp(PLeft, IntLiteral(1))
     val (_, constraints: ConstraintSet, _) =
       constraintsExp(exp, Map.empty, new Name(0))
-    unify(constraints).isLeft
+    unify(constraints, ConstraintSet.empty).isLeft
   }
 
   property("unifyArbitraryExpNoCrash") = Prop.forAll { exp: Exp => {
@@ -300,7 +300,7 @@ object TypecheckProperties extends Properties("Typecheck") {
     val (_, constraints: ConstraintSet, _) = constraintsExp(exp,
       ((exp.free union exp.chanLiterals) map ( n => ( n , SInt ) ) ).toMap,
       new Name(0))
-    unify ( constraints )
+    unify ( constraints , ConstraintSet.empty )
     true
   }}
 
@@ -343,7 +343,7 @@ object TypecheckProperties extends Properties("Typecheck") {
     val (_, constraints: ConstraintSet, _) = constraintsProc(proc,
       ((proc.free union proc.chanLiterals) map ( n => ( n , SInt ) ) ).toMap,
       new Name(0))
-    unify ( constraints )
+    unify ( constraints , ConstraintSet.empty )
     true
   }}
 }
