@@ -51,16 +51,18 @@ object Main extends App {
           case Left ( cs ) => {
             println ( s"${cs.size} type errors found:" )
             cs.foreach ( { c =>
-              println ( s"At ${c.origin.info}:" )
-              println ( s"  ${c.origin.pstr ( names.map ( _.swap ) )}" )
-              println ( s"  Cannot unify ${c.t1} with ${c.t2}." )
+              println ( s"\n  Cannot unify ${c.t1} with ${c.t2}." )
+              c.origins.foreach ( { o =>
+                println ( s"    At ${o.info}:" )
+                println ( s"    ${o.pstr ( names.map ( _.swap ) )}" )
+              } )
             } )
           }
           case _          => Unit
         }
 
         // Run the program regardless of type check result
-        new Launcher(proc, names("$print"), nextName, names.map(_.swap),
+        new Launcher(proc, names get "$print", nextName, names.map(_.swap),
           { case _ => {} }, classOf[FwdOptProcRunner])
 
       case Left ( LexerError  ( row , col , msg ) ) => {

@@ -34,7 +34,7 @@ import interpreter._
 
 class Launcher(
     p: Proc,
-    printName: Name,
+    printName: Option[Name],
     nextName: Name,
     names: Map[Name, String],
     onCompletion: Function1[Proc, Unit],
@@ -56,10 +56,10 @@ class Launcher(
 
     val initChanMap: Map[Name, ActorRef] = (p.chanLiterals map {
 
-      case n if (n == printName) => (n, sys.actorOf(
+      case n if (Some(n) == printName) => (n, sys.actorOf(
         Props(classOf[PrintingChannel], names, procManager), s"LIT$$print"))
 
-      case n if (n != printName) => (n, sys.actorOf(
+      case n if (Some(n) != printName) => (n, sys.actorOf(
         Props(classOf[Channel], procManager), s"LIT${names(n)}"))
 
     }).toMap

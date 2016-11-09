@@ -323,6 +323,21 @@ object TypecheckProperties extends Properties("Typecheck") {
     " let x = -> { 10 , 11 } . end " ,
     " server $a : y . end "          ) )
 
+  property("letProcChecks") = checks (
+    " [                                " +
+    " let abc = { $a , { $b , $c } } . " +
+    " let a = <- abc                 . " +
+    " let b = <- -> abc              . " +
+    " let c = -> -> abc              . " +
+    " send a : b                     . " +
+    " send b : c                     . " +
+    " end                              " +
+    " |                                " +
+    " receive $a : bb                . " +
+    " receive bb : cc                . " +
+    " end                              " +
+    " ]                                " )
+
   property("simpleProcTypeChecks") =
     checks ( " [ receive $a : y . send y : 12 . end | send $a : $x . end ] " )
 

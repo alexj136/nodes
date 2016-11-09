@@ -41,11 +41,12 @@ sealed abstract class SType {
    * in this. Only defined over types that do not contain quantifiers.
    */
   def sTypeSubst ( from: Name , to: SType ) : SType = this match {
-    case SVar  ( n     ) if n == from => to
-    case SVar  ( n     ) if n != from => this
-    case SPair ( l , r )              =>
+    case SVar   ( n     ) if n == from => to
+    case SVar   ( n     ) if n != from => this
+    case SChan  ( t     )              => SChan ( t sTypeSubst ( from , to ) )
+    case SPair  ( l , r )              =>
       SPair ( l sTypeSubst ( from , to ) , r sTypeSubst ( from , to ) )
-    case SFunc ( a , r )              =>
+    case SFunc  ( a , r )              =>
       SFunc ( a sTypeSubst ( from , to ) , r sTypeSubst ( from , to ) )
     case SQuant ( _ , _ )             => throw new RuntimeException (
       "STypeSubst defined only over types that do not contain quantifiers." )
@@ -90,21 +91,32 @@ case class  SQuant ( n: Name  , t: SType ) extends SType
 case class  SFunc  ( a: SType , r: SType ) extends SType
 
 case class ConstraintSet( val set: Set [ Constraint ] ) {
+
   def split: ( Option [ Constraint ] , ConstraintSet ) =
     set.toList match {
       case ( c :: cs ) => ( Some ( c ) , ConstraintSet( cs.toSet ) )
       case Nil         => ( None       , this                      )
     }
+
   def isEmpty: Boolean = set.isEmpty
+
   def union ( other: ConstraintSet ) : ConstraintSet =
     ConstraintSet ( set union other.set )
+
   def + ( constr: Constraint ) : ConstraintSet =
-    ConstraintSet ( set + constr )
+    if ( set contains constr )
+      ConstraintSet ( set map ( _ combineIfCompatible constr ) )
+    else
+      ConstraintSet ( set + constr )
+
   def map ( f: SType => SType ) : ConstraintSet =
     ConstraintSet( set map ( _ map f ) )
+
   override def toString: String = "ConstraintSet (\n" +
     ( set.toList.map ( "  " + _ + "\n" ).foldLeft ( "" ) ( _ + _ ) ) + " )"
+
   def foreach ( f: Constraint => Unit ): Unit = set.foreach ( f )
+
   def size: Int = set.size
 }
 
@@ -113,9 +125,9 @@ case object ConstraintSet {
 }
 
 case class Constraint
-  ( val t1     : SType
-  , val t2     : SType
-  , val origin : SyntaxElement
+  ( val t1      : SType
+  , val t2      : SType
+  , val origins : List [ SyntaxElement ]
   ) {
 
   def asPair: ( SType , SType ) = ( t1 , t2 )
@@ -129,12 +141,17 @@ case class Constraint
     else false
 
   def map ( f: SType => SType ): Constraint =
-    Constraint ( f ( t1 ) , f ( t2 ) , origin )
+    Constraint ( f ( t1 ) , f ( t2 ) , origins )
 
   def trivial: Boolean = t1 == t2
 
-  override def toString: String =
-    "Constraint " + t1 + " == " + t2 + " from \"" + origin + "\""
+  def pstr ( nameMap: Map [ Name , String ] ): String =
+    s"Constraint $t1 == $t2 from:\n" +
+      ( origins map ( e => s"${e.pstr(nameMap)}\n    at ${e.info}" ) ).toString
+
+  def combineIfCompatible ( other: Constraint ): Constraint =
+    if ( ! ( other equals this ) ) this else
+      Constraint ( this.t1 , this.t2 , this.origins ++ other.origins )
 }
   
 object Typecheck {
@@ -167,25 +184,25 @@ object Typecheck {
       case ( Some ( c ) , rest )              => c.asPair match {
 
         case ( SVar ( n ) , ty         ) if ! ( ty hasOccurrenceOf n ) =>
-          unify ( rest map ( _ sTypeSubst ( n , ty ) ) ,
-            failed map ( _ sTypeSubst ( n , ty ) ) )
-            . right . map ( _ compose ( _ sTypeSubst ( n , ty ) ) )
+          val subFn: SType => SType = _ sTypeSubst ( n , ty )
+          unify ( rest map subFn , failed map subFn )
+            . right . map ( _ compose subFn )
 
         case ( ty         , SVar ( n ) ) if ! ( ty hasOccurrenceOf n ) =>
-          unify ( rest map ( _ sTypeSubst ( n , ty ) ) ,
-            failed map ( _ sTypeSubst ( n , ty ) ) )
-            . right . map ( _ compose ( _ sTypeSubst ( n , ty ) ) )
+          val subFn: SType => SType = _ sTypeSubst ( n , ty )
+          unify ( rest map subFn , failed map subFn )
+            . right . map ( _ compose subFn )
 
         case ( SChan  ( t1m       ) , SChan  ( t2m       ) ) =>
-          unify ( rest + Constraint ( t1m , t2m , c.origin ) , failed )
+          unify ( rest + Constraint ( t1m , t2m , c.origins ) , failed )
 
         case ( SPair  ( t1l , t1r ) , SPair  ( t2l , t2r ) ) =>
-          unify ( rest + Constraint ( t1l , t2l , c.origin ) +
-            Constraint ( t1r , t2r , c.origin ) , failed )
+          unify ( rest + Constraint ( t1l , t2l , c.origins ) +
+            Constraint ( t1r , t2r , c.origins ) , failed )
 
         case ( SFunc  ( t1a , t1r ) , SFunc  ( t2a , t2r ) ) =>
-          unify ( rest + Constraint ( t1a , t2a , c.origin ) +
-            Constraint ( t1r , t2r , c.origin ) , failed )
+          unify ( rest + Constraint ( t1a , t2a , c.origins ) +
+            Constraint ( t1r , t2r , c.origins ) , failed )
 
         case ( SQuant ( _   , _   ) , _                    ) => throw exception
         case ( _                    , SQuant ( _   , _   ) ) => throw exception
@@ -211,14 +228,16 @@ object Typecheck {
     nn: Name
   ): (SType, ConstraintSet, Name) = p match {
     case Send       ( ch   , msg , q        ) => {
+      val newVar: SType = SVar ( nn )
       val ( tyCh , constrCh , nnCh ): ( SType , ConstraintSet , Name ) =
-        constraintsExp ( ch , env , nn )
+        constraintsExp ( ch , env , nn.next )
       val ( tyMsg , constrMsg , nnMsg ): ( SType , ConstraintSet , Name ) =
         constraintsExp ( msg , env , nnCh )
       val ( tyQ , constrQ , nnQ ): ( SType , ConstraintSet , Name ) =
         constraintsProc ( q , env , nnMsg )
-      ( SProc , constrCh union constrMsg union constrQ +
-        Constraint ( tyCh , SChan ( tyMsg ) , p ) , nnQ )
+      ( SProc , constrCh union constrMsg union constrQ
+        + Constraint ( tyCh  , SChan ( newVar ) , List ( ch  ) )
+        + Constraint ( tyMsg , newVar           , List ( msg ) ) , nnQ.next )
     }
     case Receive    ( _    , ch  , bind , q ) => {
       val tyBind: SType = SVar ( nn )
@@ -226,8 +245,8 @@ object Typecheck {
         constraintsExp ( ch , env , nn.next )
       val ( tyQ , constrQ , nnQ ): ( SType , ConstraintSet , Name ) =
         constraintsProc ( q , env + ( bind -> tyBind ) , nnCh )
-      ( SProc , constrCh union constrQ +
-        Constraint ( tyCh , SChan ( tyBind ) , p ) , nnQ )
+      ( SProc , constrCh union constrQ
+        + Constraint ( tyCh , SChan ( tyBind ) , List ( p ) ) , nnQ )
     }
     case LetIn      ( bind , exp , p        ) => {
       val ( tyE , constrE , nnE ): ( SType , ConstraintSet , Name ) =
@@ -244,8 +263,8 @@ object Typecheck {
       val ( tyQ2 , constrQ2 , nnQ2 ): ( SType , ConstraintSet , Name ) =
         constraintsProc ( q2 , env , nnQ1 )
       ( SProc , constrE union constrQ1 union constrQ2
-        + Constraint ( tyE , SBool , p )
-        + Constraint ( tyQ1 , tyQ2 , p ) , nnQ2 )
+        + Constraint ( tyE , SBool , List ( exp ) )
+        + Constraint ( tyQ1 , tyQ2 , List ( p   ) ) , nnQ2 )
     }
     case Parallel   ( p    , q              ) => {
       val ( tyP , constrP , nnP ): ( SType , ConstraintSet , Name ) =
@@ -280,7 +299,7 @@ object Typecheck {
       val (tyOf, constrOf, nnOf): (SType, ConstraintSet, Name) =
         constraintsExp(of, env, nn)
       val (tyOp, nnOp): (SType, Name) = dequantify(typeOfUnOp(op), nnOf)
-      (tyOp.retTy, constrOf + Constraint(tyOp.argTy, tyOf, e), nnOp)
+      (tyOp.retTy, constrOf + Constraint(tyOp.argTy, tyOf, List(e)), nnOp)
     }
     case BinExp      ( op   , l  , r ) => {
       val (tyL, constrL, nnL): (SType, ConstraintSet, Name) =
@@ -289,8 +308,8 @@ object Typecheck {
         constraintsExp(r, env, nnL)
       val (tyOp, nnOp): (SType, Name) = dequantify(typeOfBinOp(op), nnR)
       (tyOp.retTy.retTy, constrL union constrR
-        + Constraint(tyOp.argTy      , tyL, e)
-        + Constraint(tyOp.retTy.argTy, tyR, e), nnOp)
+        + Constraint(tyOp.argTy      , tyL, List(e))
+        + Constraint(tyOp.retTy.argTy, tyR, List(e)), nnOp)
     }
   }
 
