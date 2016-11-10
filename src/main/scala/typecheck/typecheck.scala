@@ -253,7 +253,7 @@ object Typecheck {
         constraintsExp ( exp , env , nn )
       val ( tyP , constrP , nnP ): ( SType , ConstraintSet , Name ) =
         constraintsProc ( p , env + ( bind -> tyE ) , nnE )
-      ( SProc , constrE union constrP , nnE )
+      ( SProc , constrE union constrP , nnP )
     }
     case IfThenElse ( exp  , q1  , q2       ) => {
       val ( tyE , constrE , nnE ): ( SType , ConstraintSet , Name ) =
