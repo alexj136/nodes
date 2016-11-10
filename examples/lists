@@ -1,0 +1,22 @@
+[
+    let l = [ 1 , 2 , 3 , 4 , 5 , 6 ] .
+    new rch .
+    send $sumlist : { l , rch } .
+    receive rch : sum .
+    send $print : sum .
+    end
+|
+    server $sumlist : list_rch .
+    let list = <- list_rch .
+    let rch  = -> list_rch .
+    if ? list then
+        send rch : 0 .
+        end
+    else
+        new rch_recursive_call .
+        send $sumlist : { -** list , rch_recursive_call } .
+        receive rch_recursive_call : tailsum .
+        send rch : ( *-- list ) + tailsum .
+        end
+    endif
+]

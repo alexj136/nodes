@@ -138,7 +138,7 @@ object Parser extends Parsers {
   def exp: Parser [ Exp ] = binExp | expNoBinExp
 
   def expNoBinExp: Parser [ Exp ] = variable | intLiteral | trueLiteral |
-    falseLiteral | chanLiteral | pair | unExp | parens
+    falseLiteral | chanLiteral | pair | unExp | parens | emptyList | list
 
   def binExp: Parser [ Exp ] = expNoBinExp ~ binOpTy ~ exp ^^ {
     case l ~ op ~ r => putPos ( BinExp ( op , l , r ) , l , r )
@@ -180,6 +180,15 @@ object Parser extends Parsers {
     case d ~ e => putPos ( BinExp ( Sub , IntLiteral ( 0 ) , e ) , d , e )
   }
 
+  def emptyList: Parser [ Exp ] = LSQUARE() ~ RSQUARE() ^^ {
+    case l ~ r => putPos ( ListExp ( List.empty ) , l , r )
+  }
+
+  def list: Parser [ Exp ] =
+    LSQUARE() ~ rep1sep ( exp , COMMA() ) ~ RSQUARE() ^^ {
+      case l ~ es ~ r => putPos ( ListExp ( es ) , l , r )
+    }
+
   def binOpTy: Parser [ BinOp ] =
     PLUS   ( ) ^^ { case t  => putPos ( Add       , t , t ) } |
     DASH   ( ) ^^ { case t  => putPos ( Sub       , t , t ) } |
@@ -193,12 +202,16 @@ object Parser extends Parsers {
     GRTR   ( ) ^^ { case t  => putPos ( Greater   , t , t ) } |
     GRTREQ ( ) ^^ { case t  => putPos ( GreaterEq , t , t ) } |
     AND    ( ) ^^ { case t  => putPos ( And       , t , t ) } |
-    OR     ( ) ^^ { case t  => putPos ( Or        , t , t ) }
+    OR     ( ) ^^ { case t  => putPos ( Or        , t , t ) } |
+    CONS   ( ) ^^ { case t  => putPos ( Cons      , t , t ) }
 
   def unOpTy: Parser [ UnOp ] =
     BANG   ( ) ^^ { case t  => putPos ( Not    , t , t ) } |
     LARROW ( ) ^^ { case t  => putPos ( PLeft  , t , t ) } |
-    RARROW ( ) ^^ { case t  => putPos ( PRight , t , t ) }
+    RARROW ( ) ^^ { case t  => putPos ( PRight , t , t ) } |
+    QMARK  ( ) ^^ { case t  => putPos ( Empty  , t , t ) } |
+    HEAD   ( ) ^^ { case t  => putPos ( Head   , t , t ) } |
+    TAIL   ( ) ^^ { case t  => putPos ( Tail   , t , t ) }
 }
 
 /** Reader for Tokens used to feed a List [ PostToken ] into the Parser.
@@ -269,7 +282,11 @@ object Lexer extends RegexParsers {
     positioned { ">"                  ^^ { _ => GRTR    ( ) } } |||
     positioned { ">="                 ^^ { _ => GRTREQ  ( ) } } |||
     positioned { "&&"                 ^^ { _ => AND     ( ) } } |||
-    positioned { "||"                 ^^ { _ => OR      ( ) } } ) )
+    positioned { "||"                 ^^ { _ => OR      ( ) } } |||
+    positioned { "::"                 ^^ { _ => CONS    ( ) } } |||
+    positioned { "?"                  ^^ { _ => QMARK   ( ) } } |||
+    positioned { "*--"                ^^ { _ => HEAD    ( ) } } |||
+    positioned { "-**"                ^^ { _ => TAIL    ( ) } } ) )
 }
 
 /** Below we have the token classes. We have PreTokens and PostTokens to
@@ -402,3 +419,7 @@ case class GRTR    ( ) extends KeyWdToken { val text: String = ">"       }
 case class GRTREQ  ( ) extends KeyWdToken { val text: String = ">="      }
 case class AND     ( ) extends KeyWdToken { val text: String = "&&"      }
 case class OR      ( ) extends KeyWdToken { val text: String = "||"      }
+case class CONS    ( ) extends KeyWdToken { val text: String = "::"      }
+case class QMARK   ( ) extends KeyWdToken { val text: String = "?"       }
+case class HEAD    ( ) extends KeyWdToken { val text: String = "*--"     }
+case class TAIL    ( ) extends KeyWdToken { val text: String = "-**"     }

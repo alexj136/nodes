@@ -46,6 +46,7 @@ sealed abstract class SType {
     case SChan  ( t     )              => SChan ( t sTypeSubst ( from , to ) )
     case SPair  ( l , r )              =>
       SPair ( l sTypeSubst ( from , to ) , r sTypeSubst ( from , to ) )
+    case SList  ( t     )              => SList ( t sTypeSubst ( from , to ) )
     case SFunc  ( a , r )              =>
       SFunc ( a sTypeSubst ( from , to ) , r sTypeSubst ( from , to ) )
     case SQuant ( _ , _ )             => throw new RuntimeException (
@@ -65,6 +66,7 @@ sealed abstract class SType {
       ( a hasOccurrenceOf x ) || ( r hasOccurrenceOf x )
     case ( x , SPair  ( l , r ) ) =>
       ( l hasOccurrenceOf x ) || ( r hasOccurrenceOf x )
+    case ( x , SList  ( t     ) ) => ( t hasOccurrenceOf x )
     case ( x , SQuant ( _ , _ ) ) => throw new RuntimeException (
       "SQuant not removed during occurrence check." )
     case _ => false
@@ -75,6 +77,7 @@ sealed abstract class SType {
     case SInt             => "integer"
     case SBool            => "boolean"
     case SChan  ( t     ) => s"channel ( $t )"
+    case SList  ( t     ) => s"list ( $t )"
     case SPair  ( l , r ) => s"pair ( $l , $r )"
     case SVar   ( n     ) => s"t${n.id}"
     case SQuant ( n , t ) => s"forall t${n.id}: $t"
@@ -85,6 +88,7 @@ case object SProc                          extends SType
 case object SInt                           extends SType
 case object SBool                          extends SType
 case class  SChan  ( val t: SType        ) extends SType
+case class  SList  ( t: SType            ) extends SType
 case class  SPair  ( l: SType , r: SType ) extends SType
 case class  SVar   ( n: Name             ) extends SType
 case class  SQuant ( n: Name  , t: SType ) extends SType
@@ -196,6 +200,9 @@ object Typecheck {
         case ( SChan  ( t1m       ) , SChan  ( t2m       ) ) =>
           unify ( rest + Constraint ( t1m , t2m , c.origins ) , failed )
 
+        case ( SList  ( t1o       ) , SList  ( t2o       ) ) =>
+          unify ( rest + Constraint ( t1o , t2o , c.origins ) , failed )
+
         case ( SPair  ( t1l , t1r ) , SPair  ( t2l , t2r ) ) =>
           unify ( rest + Constraint ( t1l , t2l , c.origins ) +
             Constraint ( t1r , t2r , c.origins ) , failed )
@@ -288,6 +295,16 @@ object Typecheck {
     case IntLiteral  ( value         ) => (SInt     , ConstraintSet.empty, nn)
     case BoolLiteral ( value         ) => (SBool    , ConstraintSet.empty, nn)
     case ChanLiteral ( name          ) => (env(name), ConstraintSet.empty, nn)
+    case ListExp     ( Nil           ) =>
+      (SList(SVar(nn)), ConstraintSet.empty, nn.next)
+    case ListExp     ( exp :: exps   ) => {
+      val ( tyE , constrE , nnE ): ( SType , ConstraintSet , Name ) =
+        constraintsExp( exp , env , nn )
+      val ( tyES , constrES , nnES ): ( SType , ConstraintSet , Name ) =
+        constraintsExp( ListExp ( exps ) , env , nnE )
+      (tyES, constrE union constrES
+        + Constraint ( SList ( tyE ) , tyES , List ( e ) ) , nnES )
+    }
     case Pair        ( l    , r      ) => {
       val (tyL, constrL, nnL): (SType, ConstraintSet, Name) =
         constraintsExp(l, env, nn)
@@ -327,6 +344,9 @@ object Typecheck {
     case GreaterEq  => SFunc(SInt , SFunc(SInt , SBool))
     case And        => SFunc(SBool, SFunc(SBool, SBool))
     case Or         => SFunc(SBool, SFunc(SBool, SBool))
+    case Cons       => SQuant(new Name(0),
+      SFunc(SVar(new Name(0)),
+      SFunc(SList(SVar(new Name(0))),SList(SVar(new Name(0))))))
   }
 
   def typeOfUnOp(op: UnOp): SType = op match {
@@ -335,6 +355,11 @@ object Typecheck {
       SFunc(SPair(SVar(new Name(0)), SVar(new Name(1))), SVar(new Name(0)))))
     case PRight => SQuant(new Name(0), SQuant(new Name(1),
       SFunc(SPair(SVar(new Name(0)), SVar(new Name(1))), SVar(new Name(1)))))
+    case Empty  => SQuant(new Name(0), SFunc(SList(SVar(new Name(0))), SBool))
+    case Head   => SQuant(new Name(0),
+      SFunc(SList(SVar(new Name(0))), SVar(new Name(0))))
+    case Tail   => SQuant(new Name(0),
+      SFunc(SList(SVar(new Name(0))), SList(SVar(new Name(0)))))
   }
 
   /**
@@ -350,6 +375,10 @@ object Typecheck {
       (SChan(deT), nnT)
     }
     case SVar  ( n     ) => (SVar(n), nn)
+    case SList ( t     ) => {
+      val (deT, nnT): (SType, Name) = dequantify(t, nn)
+      (SList(deT), nnT)
+    }
     case SPair ( l , r ) => {
       val (deL, nnL): (SType, Name) = dequantify(l, nn)
       val (deR, nnR): (SType, Name) = dequantify(r, nnL)
@@ -382,6 +411,10 @@ object Typecheck {
         (SChan(subT), nnT)
       }
       case SVar  ( n     ) => (SVar(if (n == from) to else n) , nn)
+      case SList ( t     ) => {
+        val (subT, nnT): (SType, Name) = sTVarSubst(t, from, to, nn)
+        (SList(subT), nnT)
+      }
       case SPair ( l , r ) => {
         val (subL, nnL): (SType, Name) = sTVarSubst(l, from, to, nn)
         val (subR, nnR): (SType, Name) = sTVarSubst(r, from, to, nnL)

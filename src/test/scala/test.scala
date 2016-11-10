@@ -80,7 +80,10 @@ object ArbitraryTypes {
     op  <- oneOf(
       const( Not    ),
       const( PLeft  ),
-      const( PRight ))
+      const( PRight ),
+      const( Empty  ),
+      const( Head   ),
+      const( Tail   ))
     exp <- genExp
   } yield UnExp(op, exp)
 
@@ -98,10 +101,17 @@ object ArbitraryTypes {
       const ( Greater   ),
       const ( GreaterEq ),
       const ( And       ),
-      const ( Or        ))
+      const ( Or        ),
+      const ( Cons      ))
     l  <- genExp
     r  <- genExp
   } yield BinExp(op, l, r)
+
+  val genListExp: Gen[Exp] = for {
+    es <- listOfN(
+      Math.round(scala.util.Random.nextGaussian * 5).toInt.abs,
+      genExp)
+  } yield ListExp(es)
 
   def genExp: Gen[Exp] = lzy(frequency(
     ( 10 , genVariable    ) ,
@@ -110,7 +120,8 @@ object ArbitraryTypes {
     ( 10 , genChanLiteral ) ,
     (  3 , genPair        ) ,
     (  6 , genUnExp       ) ,
-    (  3 , genBinExp      ) )
+    (  3 , genBinExp      ) ,
+    (  3 , genListExp     ) )
   )
 
   def genName: Gen[Name] = for {
@@ -158,6 +169,10 @@ object ParserProperties extends Properties("Parser") {
 
   property("keywordNotIdent") = lexesAs ( "send" , List ( SEND() ) )
 
+  property("consNotTwoColons") = lexesAs ( "::" , List ( CONS() ) )
+
+  property("twoColonsNotCons") = lexesAs ( ": :" , List ( COLON() , COLON() ) )
+
   property("identNotTwoKeywords") =
     lexesAs ( "sendsend" , List ( PREIDENT ( "sendsend" ) ) )
 
@@ -203,7 +218,13 @@ object ParserProperties extends Properties("Parser") {
         BinExp ( Add , Variable ( Name ( 1 ) ) ,
           Variable ( Name ( 2 ) ) ) ) ) &&
     ( lexAndParse ( Parser.exp , Source fromString "a + b + c" ) ==
-      lexAndParse ( Parser.exp , Source fromString "a + ( b + c )" ) )
+      lexAndParse ( Parser.exp , Source fromString "a + ( b + c )" ) ) &&
+    parsesAs ( Parser.exp , "[]" , ListExp ( List.empty ) ) &&
+    parsesAs ( Parser.exp , "[ 10 ]" ,
+      ListExp ( List ( IntLiteral ( 10 ) ) ) ) &&
+    parsesAs ( Parser.exp , "[ 10 , 0 , 12 ]" ,
+      ListExp ( List ( IntLiteral ( 10 ) , IntLiteral ( 0 ) ,
+        IntLiteral ( 12 ) ) ) )
   }
 }
 
@@ -338,6 +359,18 @@ object TypecheckProperties extends Properties("Typecheck") {
     " end                              " +
     " ]                                " )
 
+  property("simpleListsCheck") = allCheck ( List (
+  " if ? [] then end else end endif "        ,
+  " send $a : *-- [ 1 , 2 , 3 , 4 ] . end "  ,
+  " send $a : 0 :: [ 1 , 2 , 3 , 4 ] . end " ,
+  " send $a : -** [ 1 , 2 , 3 , 4 ] . end "  ,
+  " send $a : [ 1 , 2 , 3 , 4 ] . end "      ) )
+
+  property("badListsDontCheck") = noneCheck ( List (
+  " send $a : true :: [ 1 , 2 , 3 , 4 ] . end " ,
+  " send $a : [ 1 , 2 , 3 , 4 , $q ] . end "    ,
+  " if [] then end else end endif "             ) )
+
   property("simpleProcTypeChecks") =
     checks ( " [ receive $a : y . send y : 12 . end | send $a : $x . end ] " )
 
@@ -352,6 +385,9 @@ object TypecheckProperties extends Properties("Typecheck") {
 
   property("functionsExampleTypechecks") =
     checks ( Source.fromFile("examples/functions"         ).mkString )
+
+  property("listsExampleTypechecks") =
+    checks ( Source.fromFile("examples/lists"             ).mkString )
 
   property("unifyArbitraryProcNoCrash") = Prop.forAll { proc: Proc => {
     // Free variables are SInts in this typing environment

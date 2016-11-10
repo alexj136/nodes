@@ -137,6 +137,9 @@ sealed abstract class Exp extends SyntaxElement {
     case Pair        ( l , r     ) => l.chanLiterals union r.chanLiterals
     case UnExp       ( _ , e     ) => e.chanLiterals
     case BinExp      ( _ , l , r ) => l.chanLiterals union r.chanLiterals
+    case ListExp     ( Nil       ) => Set.empty
+    case ListExp     ( e :: es   ) =>
+      e.chanLiterals union (ListExp(es).chanLiterals)
   }
 
   def free: Set[Name] = this match {
@@ -147,6 +150,8 @@ sealed abstract class Exp extends SyntaxElement {
     case Pair        ( l , r     ) => l.free union r.free
     case UnExp       ( _ , e     ) => e.free
     case BinExp      ( _ , l , r ) => l.free union r.free
+    case ListExp     ( Nil       ) => Set.empty
+    case ListExp     ( e :: es   ) => e.free union (ListExp(es).free)
   }
 
   def contains(n: Name): Boolean = this match {
@@ -157,6 +162,7 @@ sealed abstract class Exp extends SyntaxElement {
     case Pair        ( l , r     ) => (l contains n) || (r contains n)
     case UnExp       ( _ , e     ) => e contains n
     case BinExp      ( _ , l , r ) => (l contains n) || (r contains n)
+    case ListExp     ( es        ) => (es map (_ contains n)) exists identity
   }
 
   def pstr(names: Map[Name, String]): String = this match {
@@ -174,6 +180,8 @@ sealed abstract class Exp extends SyntaxElement {
       s"( ${ty.toString} ${of pstr names} )"
     case BinExp      ( ty   , l  , r ) =>
       s"( ${l pstr names} ${ty.toString} ${r pstr names} )"
+    case ListExp     ( es            ) =>
+      (es map (_ pstr names)).mkString("[ ", ",", " ]")
   }
 
   /** Alpha-equivalence for expressions
@@ -195,6 +203,10 @@ sealed abstract class Exp extends SyntaxElement {
         if (a == b) c alphaEquiv d else None
       case ( BinExp      ( a , c , e ) , BinExp      ( b , d , f ) ) =>
         if (a == b) alphaEquivCombine(c alphaEquiv d, e alphaEquiv f) else None
+      case ( ListExp     ( Nil       ) , ListExp     ( Nil       ) ) =>
+        Some(Map.empty)
+      case ( ListExp     ( e :: es   ) , ListExp     ( f :: fs   ) ) =>
+        alphaEquivCombine(e alphaEquiv f, ListExp(es) alphaEquiv ListExp(fs))
       case ( _                         , _                         ) => None
     }
   }
@@ -244,6 +256,7 @@ case class ChanLiteral ( name:      Name                          ) extends Exp
 case class Pair        ( lhs:       Exp     , rhs: Exp            ) extends Exp
 case class UnExp       ( unOpType:  UnOp    , of:  Exp            ) extends Exp
 case class BinExp      ( binOpType: BinOp   , lhs: Exp , rhs: Exp ) extends Exp
+case class ListExp     ( exps:      List[Exp]                     ) extends Exp
 
 sealed abstract class BinOp extends SyntaxElement {
 
@@ -264,6 +277,7 @@ sealed abstract class BinOp extends SyntaxElement {
     case GreaterEq  => ">="
     case And        => "&&"
     case Or         => "||"
+    case Cons       => "::"
   }
 }
 case object Add       extends BinOp
@@ -279,6 +293,7 @@ case object Greater   extends BinOp
 case object GreaterEq extends BinOp
 case object And       extends BinOp
 case object Or        extends BinOp
+case object Cons      extends BinOp
 
 sealed abstract class UnOp extends SyntaxElement {
 
@@ -289,8 +304,14 @@ sealed abstract class UnOp extends SyntaxElement {
     case Not    => "!"
     case PLeft  => "<-"
     case PRight => "->"
+    case Empty  => "?"
+    case Head   => "*--"
+    case Tail   => "-**"
   }
 }
 case object Not    extends UnOp
 case object PLeft  extends UnOp
 case object PRight extends UnOp
+case object Empty  extends UnOp
+case object Head   extends UnOp
+case object Tail   extends UnOp
