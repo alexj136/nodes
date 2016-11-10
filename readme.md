@@ -42,8 +42,8 @@ Akka, scala's concurrency library.
         | [ E1 , E2, ... , EN ]         List literals
         | []                            Empty list
         | ? E                           Is-empty list
-        | *--                           Head of list
-        | -**                           Tail of list
+        | *-- E                         Head of list
+        | -** E                         Tail of list
         | E :: F                        List constructor
         | (E)                           Parenthesised expression
 
