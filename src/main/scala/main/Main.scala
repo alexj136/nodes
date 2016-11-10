@@ -46,9 +46,15 @@ object Main extends App {
         val ( _ , constr: ConstraintSet , _ ) =
           Typecheck.constraintsProc ( proc , env , nn )
 
-        // Try to solve constraints. If it fails, print a warning
+        // Try to solve constraints
         Typecheck.unify ( constr , ConstraintSet.empty ) match {
-          case Left ( cs ) => {
+
+          // If constraints are solved, run the program
+          case Right ( _  ) =>
+            new Launcher(proc, names get "$print", nextName, names.map(_.swap),
+              { case _ => {} }, classOf[FwdOptProcRunner])
+
+          case Left  ( cs ) => {
             println ( s"${cs.size} type errors found:" )
             cs.foreach ( { c =>
               println ( s"\n  Cannot unify ${c.t1} with ${c.t2}." )
@@ -58,12 +64,8 @@ object Main extends App {
               } )
             } )
           }
-          case _          => Unit
-        }
 
-        // Run the program regardless of type check result
-        new Launcher(proc, names get "$print", nextName, names.map(_.swap),
-          { case _ => {} }, classOf[FwdOptProcRunner])
+        }
 
       case Left ( LexerError  ( row , col , msg ) ) => {
         println("Lexical error (" + row + ", " + col + "): " + msg)
@@ -77,6 +79,7 @@ object Main extends App {
 
     case ioe: IOException => {
       println("IO error.")
+      ioe.printStackTrace
       sys.exit(1)
     }
 
