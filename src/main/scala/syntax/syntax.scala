@@ -35,13 +35,13 @@ sealed abstract class Proc extends SyntaxElement {
     case Receive    ( false , ch  , bind , p ) =>
       s"receive ${ch pstr names} : ${names(bind)} . ${p pstr names}"
     case LetIn      ( bind  , exp , p        ) =>
-      s"let ${names(bind)} = ${exp.pstr(names)}.${p pstr names}"
+      s"let ${names(bind)} = ${exp.pstr(names)} . ${p pstr names}"
     case IfThenElse ( exp   , tP  , fP       ) =>
-      s"if ${exp pstr names} then ${tP pstr names} else ${fP pstr names}"
+      s"if ${exp pstr names} then ${tP pstr names} else ${fP pstr names} endif"
     case Parallel   ( p     , q              ) =>
-      s"(${p pstr names} | ${q pstr names})"
+      s"[ ${p pstr names} | ${q pstr names} ]"
     case New        ( name  , p              ) =>
-      s"new ${names(name)}.${p pstr names}"
+      s"new ${names(name)} . ${p pstr names}"
     case End                                   => "end"
   }
 
@@ -171,9 +171,9 @@ sealed abstract class Exp extends SyntaxElement {
     case Pair        ( l    , r      ) =>
       s"{ ${l pstr names} , ${r pstr names} }"
     case UnExp       ( ty   , of     ) =>
-      s"${ty.toString} ${of pstr names}"
+      s"( ${ty.toString} ${of pstr names} )"
     case BinExp      ( ty   , l  , r ) =>
-      s"${l pstr names} ${ty.toString} ${r pstr names}"
+      s"( ${l pstr names} ${ty.toString} ${r pstr names} )"
   }
 
   /** Alpha-equivalence for expressions
