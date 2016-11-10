@@ -39,6 +39,12 @@ Akka, scala's concurrency library.
         | { E , F }                     Tuple constructor
         | <- E                          Left-hand tuple destructor
         | -> E                          Right-hand tuple destructor
+        | [ E1 , E2, ... , EN ]         List literals
+        | []                            Empty list
+        | ? E                           Is-empty list
+        | *--                           Head of list
+        | -**                           Tail of list
+        | E :: F                        List constructor
         | (E)                           Parenthesised expression
 
 ## Dependencies
