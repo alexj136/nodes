@@ -198,6 +198,10 @@ object ParserProperties extends Properties("Parser") {
     lexAndParse ( production , Source fromString input ).right
       .map ( _._3 == expectedOutput ).right.getOrElse ( false )
 
+  property("charPreserved") = Prop.forAll { ( c: Char ) => 
+    parsesAs ( Parser.exp , s"'$c'" , List ( KharLiteral ( c ) ) )
+  }
+
   property("Procs") = {
     parsesAs ( Parser.proc , "end" , End ) &&
     parsesAs ( Parser.proc , "[ end | end | end ]" ,

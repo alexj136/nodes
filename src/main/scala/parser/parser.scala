@@ -156,6 +156,10 @@ object Parser extends Parsers {
     case p @ POSTINT ( i ) => putPos ( IntLiteral ( i ) , p , p )
   } )
 
+  def kharLiteral: Parser [ Exp ] = accept ( "POSTKHAR" , {
+    case p @ POSTKHAR ( c ) => putPos ( KharLiteral ( c ) , p , p )
+  } )
+
   def trueLiteral: Parser [ Exp ] = TRUE() ^^ {
     case t => putPos ( BoolLiteral ( true ) , t , t )
   }
@@ -244,6 +248,7 @@ object Lexer extends RegexParsers {
     positioned { """[a-z_]+""".r      ^^ { PREIDENT ( _ )   } } |||
     positioned { """\$[a-z_]+""".r    ^^ { PRECHAN  ( _ )   } } |||
     positioned { """(0|[1-9]\d*)""".r ^^ { PREINT   ( _ )   } } |||
+    positioned { """\'(.|\n)\'""".r   ^^ { PREKHAR  ( _ )   } } |||
     positioned { "!"                  ^^ { _ => BANG    ( ) } } |||
     positioned { "*"                  ^^ { _ => STAR    ( ) } } |||
     positioned { "."                  ^^ { _ => DOT     ( ) } } |||
@@ -364,12 +369,22 @@ case class PREINT   ( text: String ) extends PreInfoToken ( text ) {
     ( nameMap , nextName , POSTINT ( this.text.toInt ).setPos ( this.pos ) )
 }
 
-sealed trait PostToken extends Token
-sealed trait PostInfoToken extends PostToken
+case class PREKHAR  ( text: String ) extends PreInfoToken ( text ) {
+  /** To postlex an INT, we simply have to .toInt the string.
+   */
+  override def postLex (
+    nameMap: Map [ String , Name ] ,
+    nextName: Name
+  ): ( Map [ String , Name ] , Name , PostToken ) =
+    ( nameMap , nextName , POSTKHAR ( this.text.charAt ( 1 ) ).setPos ( this.pos ) )
+}
 
+sealed trait PostToken extends Token
+sealed trait PostInfoToken extends PostToken 
 case class POSTIDENT ( name: Name ) extends PostInfoToken
 case class POSTCHAN  ( name: Name ) extends PostInfoToken
 case class POSTINT   ( num:  Int  ) extends PostInfoToken
+case class POSTKHAR  ( khar: Char ) extends PostInfoToken
 
 sealed abstract class KeyWdToken extends PreToken with PostToken {
   val text: String
