@@ -77,7 +77,7 @@ sealed abstract class Proc extends SyntaxElement {
 
   /** Alpha-equivalence for processes. If the processes are alpha-equivalent, a
    *  Some of a map containing the 'name equlivalences' between this and that
-   *  arereturned in an Option. If they are not alpha equivalent, None is
+   *  are returned in an Option. If they are not alpha equivalent, None is
    *  returned.
    */
   def alphaEquiv(that: Proc): Option[Map[Name, Name]] = (this, that) match {
@@ -159,6 +159,7 @@ sealed abstract class Exp extends SyntaxElement {
     case IntLiteral  ( _         ) => false
     case BoolLiteral ( _         ) => false
     case ChanLiteral ( _         ) => false
+    case KharLiteral ( _         ) => false
     case Pair        ( l , r     ) => (l contains n) || (r contains n)
     case UnExp       ( _ , e     ) => e contains n
     case BinExp      ( _ , l , r ) => (l contains n) || (r contains n)
@@ -174,6 +175,8 @@ sealed abstract class Exp extends SyntaxElement {
       value.toString
     case ChanLiteral ( name          ) =>
       names getOrElse (name, s"$$<new ${name.id}>")
+    case KharLiteral ( value         ) =>
+      s"'$value'"
     case Pair        ( l    , r      ) =>
       s"{ ${l pstr names} , ${r pstr names} }"
     case UnExp       ( ty   , of     ) =>
@@ -197,6 +200,8 @@ sealed abstract class Exp extends SyntaxElement {
         if (a == b) Some(Map.empty) else None
       case ( ChanLiteral ( n         ) , ChanLiteral ( m         ) ) =>
         Some(Map(n -> m))
+      case ( KharLiteral ( a         ) , KharLiteral ( b         ) ) =>
+        if (a == b) Some(Map.empty) else None
       case ( Pair        ( a , c     ) , Pair        ( b , d     ) ) =>
         alphaEquivCombine(a alphaEquiv b, c alphaEquiv d)
       case ( UnExp       ( a , c     ) , UnExp       ( b , d     ) ) =>
@@ -212,6 +217,18 @@ sealed abstract class Exp extends SyntaxElement {
   }
 }
 
+/**
+ * Combine two alpha-equivalence maps, if compatible. For example, if we want to
+ * compute p | q === r | s, we compute p === r and q === s, and try to combine
+ * the resulting maps to check that they are compatible. alphaEquivCombine
+ * computes the compatibility of those two maps, by ensuring that the
+ * intersection of the keysets map to the same value in each map. If so, we
+ * return the union of the two maps, indicating the alpha equivalence
+ * p | q === r | s is true. If the intersection of the keysets do not share
+ * common mappings, the alpha equivalences are incompatible and thus
+ * p | q !=== r | s even though p === r and q === s. In this case None is
+ * returned.
+ */
 object alphaEquivCombine extends Function2[
     Option[Map[Name, Name]],
     Option[Map[Name, Name]],
@@ -229,6 +246,11 @@ object alphaEquivCombine extends Function2[
   }
 }
 
+/**
+ * Ensure that two names n and m represent equivalent binders in a given alpha
+ * equivalence mapping. They represent equivalent binders if
+ * (n notin keyset AND m notin valueset) OR (n in keyset AND n mapsto m)
+ */
 object alphaEquivEnsureBinding extends Function3[
     Option[Map[Name, Name]],
     Name,
@@ -253,6 +275,7 @@ case class Variable    ( name:      Name                          ) extends Exp
 case class IntLiteral  ( value:     Int                           ) extends Exp
 case class BoolLiteral ( value:     Boolean                       ) extends Exp
 case class ChanLiteral ( name:      Name                          ) extends Exp
+case class KharLiteral ( value:     Char                          ) extends Exp
 case class Pair        ( lhs:       Exp     , rhs: Exp            ) extends Exp
 case class UnExp       ( unOpType:  UnOp    , of:  Exp            ) extends Exp
 case class BinExp      ( binOpType: BinOp   , lhs: Exp , rhs: Exp ) extends Exp
