@@ -138,7 +138,8 @@ object Parser extends Parsers {
   def exp: Parser [ Exp ] = binExp | expNoBinExp
 
   def expNoBinExp: Parser [ Exp ] = variable | intLiteral | trueLiteral |
-    falseLiteral | chanLiteral | pair | unExp | parens | emptyList | list
+    falseLiteral | chanLiteral | kharLiteral | pair | unExp | parens |
+    emptyList | list
 
   def binExp: Parser [ Exp ] = expNoBinExp ~ binOpTy ~ exp ^^ {
     case l ~ op ~ r => putPos ( BinExp ( op , l , r ) , l , r )

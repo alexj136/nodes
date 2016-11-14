@@ -60,6 +60,7 @@ object substituteExp extends Function3[Exp, Name, EvalExp, Exp] {
       case Variable    ( n ) if n != from => exp
       case IntLiteral  ( x )              => exp
       case BoolLiteral ( x )              => exp
+      case KharLiteral ( c )              => exp
       case ChanLiteral ( c )              => exp
       case Pair        ( l  , r         ) => Pair(subE(l), subE(r))
       case UnExp       ( ty , e         ) => UnExp(ty, subE(e))
@@ -73,13 +74,15 @@ sealed abstract class EvalExp {
   def unEvalExp: Exp = this match {
     case EEInt  ( value  ) => IntLiteral  ( value                     )
     case EEBool ( value  ) => BoolLiteral ( value                     )
+    case EEKhar ( value  ) => KharLiteral ( value                     )
     case EEChan ( name   ) => ChanLiteral ( name                      )
     case EEPair ( l , r  ) => Pair        ( l.unEvalExp , r.unEvalExp )
     case EEList ( es     ) => ListExp     ( es map ( _.unEvalExp )    )
   }
   def channelName: Name = this match {
-    case EEInt  (value  ) => throw TypeError("integer")
-    case EEBool (value  ) => throw TypeError("boolean")
+    case EEInt  ( _     ) => throw TypeError("integer")
+    case EEBool ( _     ) => throw TypeError("boolean")
+    case EEKhar ( _     ) => throw TypeError("character")
     case EEChan (name   ) => name
     case EEPair ( _ , _ ) => throw TypeError("pair")
     case EEList ( _     ) => throw TypeError("list")
@@ -87,6 +90,7 @@ sealed abstract class EvalExp {
   def channelNames: Set[Name] = this match {
     case EEInt  ( _       ) => Set.empty
     case EEBool ( _       ) => Set.empty
+    case EEKhar ( _       ) => Set.empty
     case EEChan ( name    ) => Set(name)
     case EEPair ( l , r   ) => l.channelNames union r.channelNames
     case EEList ( Nil     ) => Set.empty
@@ -96,6 +100,7 @@ sealed abstract class EvalExp {
 }
 case class EEInt  ( value: Int                    ) extends EvalExp
 case class EEBool ( value: Boolean                ) extends EvalExp
+case class EEKhar ( value: Char                   ) extends EvalExp
 case class EEChan ( name:  Name                   ) extends EvalExp
 case class EEPair ( lhs:   EvalExp , rhs: EvalExp ) extends EvalExp
 case class EEList ( exps:  List[EvalExp]          ) extends EvalExp
@@ -106,6 +111,7 @@ object EvalExp {
     case Variable    ( n     ) => throw FreeVariableError(Variable(n))
     case IntLiteral  ( x     ) => EEInt(x)
     case BoolLiteral ( x     ) => EEBool(x)
+    case KharLiteral ( c     ) => EEKhar(c)
     case ChanLiteral ( c     ) => EEChan(c)
     case Pair        ( l , r ) => EEPair(EvalExp from l, EvalExp from r)
     case ListExp     ( es    ) => EEList(es map (EvalExp from _))

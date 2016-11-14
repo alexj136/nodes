@@ -76,6 +76,7 @@ sealed abstract class SType {
     case SProc            => "process"
     case SInt             => "integer"
     case SBool            => "boolean"
+    case SKhar            => "character"
     case SChan  ( t     ) => s"channel ( $t )"
     case SList  ( t     ) => s"list ( $t )"
     case SPair  ( l , r ) => s"pair ( $l , $r )"
@@ -87,6 +88,7 @@ sealed abstract class SType {
 case object SProc                          extends SType
 case object SInt                           extends SType
 case object SBool                          extends SType
+case object SKhar                          extends SType
 case class  SChan  ( val t: SType        ) extends SType
 case class  SList  ( t: SType            ) extends SType
 case class  SPair  ( l: SType , r: SType ) extends SType
@@ -295,6 +297,7 @@ object Typecheck {
     case IntLiteral  ( value         ) => (SInt     , ConstraintSet.empty, nn)
     case BoolLiteral ( value         ) => (SBool    , ConstraintSet.empty, nn)
     case ChanLiteral ( name          ) => (env(name), ConstraintSet.empty, nn)
+    case KharLiteral ( value         ) => (SKhar    , ConstraintSet.empty, nn)
     case ListExp     ( Nil           ) =>
       (SList(SVar(nn)), ConstraintSet.empty, nn.next)
     case ListExp     ( exp :: exps   ) => {
@@ -370,6 +373,7 @@ object Typecheck {
     case SProc           => (SProc  , nn)
     case SInt            => (SInt   , nn)
     case SBool           => (SBool  , nn)
+    case SKhar           => (SKhar  , nn)
     case SChan ( t     ) => {
       val (deT, nnT): (SType, Name) = dequantify(t, nn)
       (SChan(deT), nnT)
@@ -406,6 +410,7 @@ object Typecheck {
       case SProc           => (SProc                          , nn)
       case SInt            => (SInt                           , nn)
       case SBool           => (SBool                          , nn)
+      case SKhar           => (SKhar                          , nn)
       case SChan ( t     ) => {
         val (subT, nnT): (SType, Name) = sTVarSubst(t, from, to, nn)
         (SChan(subT), nnT)
