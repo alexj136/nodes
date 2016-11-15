@@ -138,8 +138,8 @@ object Parser extends Parsers {
   def exp: Parser [ Exp ] = binExp | expNoBinExp
 
   def expNoBinExp: Parser [ Exp ] = variable | intLiteral | trueLiteral |
-    falseLiteral | chanLiteral | kharLiteral | pair | unExp | parens |
-    emptyList | list
+    falseLiteral | chanLiteral | kharLiteral | strLiteral | pair | unExp |
+    parens | emptyList | list
 
   def binExp: Parser [ Exp ] = expNoBinExp ~ binOpTy ~ exp ^^ {
     case l ~ op ~ r => putPos ( BinExp ( op , l , r ) , l , r )
@@ -159,6 +159,10 @@ object Parser extends Parsers {
 
   def kharLiteral: Parser [ Exp ] = accept ( "POSTKHAR" , {
     case p @ POSTKHAR ( c ) => putPos ( KharLiteral ( c ) , p , p )
+  } )
+
+  def strLiteral: Parser [ Exp ] = accept ( "POSTSTR" , {
+    case p @ POSTSTR ( s ) => putPos ( s , p , p )
   } )
 
   def trueLiteral: Parser [ Exp ] = TRUE() ^^ {
@@ -246,53 +250,54 @@ object Lexer extends RegexParsers {
   override val whiteSpace = """[ \t\r\f\n]+""".r
 
   def lex : Parser [ List [ PreToken ] ] = phrase ( rep1 (
-    positioned { """[a-z_]+""".r      ^^ { PREIDENT ( _ )   } } |||
-    positioned { """\$[a-z_]+""".r    ^^ { PRECHAN  ( _ )   } } |||
-    positioned { """(0|[1-9]\d*)""".r ^^ { PREINT   ( _ )   } } |||
-    positioned { """\'(.|\n)\'""".r   ^^ { PREKHAR  ( _ )   } } |||
-    positioned { "!"                  ^^ { _ => BANG    ( ) } } |||
-    positioned { "*"                  ^^ { _ => STAR    ( ) } } |||
-    positioned { "."                  ^^ { _ => DOT     ( ) } } |||
-    positioned { ":"                  ^^ { _ => COLON   ( ) } } |||
-    positioned { "let"                ^^ { _ => LET     ( ) } } |||
-    positioned { "new"                ^^ { _ => NEW     ( ) } } |||
-    positioned { "if"                 ^^ { _ => IF      ( ) } } |||
-    positioned { "then"               ^^ { _ => THEN    ( ) } } |||
-    positioned { "else"               ^^ { _ => ELSE    ( ) } } |||
-    positioned { "endif"              ^^ { _ => ENDIF   ( ) } } |||
-    positioned { "send"               ^^ { _ => SEND    ( ) } } |||
-    positioned { "receive"            ^^ { _ => RECEIVE ( ) } } |||
-    positioned { "server"             ^^ { _ => SERVER  ( ) } } |||
-    positioned { "|"                  ^^ { _ => BAR     ( ) } } |||
-    positioned { "end"                ^^ { _ => END     ( ) } } |||
-    positioned { "("                  ^^ { _ => LPAREN  ( ) } } |||
-    positioned { ")"                  ^^ { _ => RPAREN  ( ) } } |||
-    positioned { "{"                  ^^ { _ => LCURLY  ( ) } } |||
-    positioned { "}"                  ^^ { _ => RCURLY  ( ) } } |||
-    positioned { "["                  ^^ { _ => LSQUARE ( ) } } |||
-    positioned { "]"                  ^^ { _ => RSQUARE ( ) } } |||
-    positioned { ","                  ^^ { _ => COMMA   ( ) } } |||
-    positioned { "<-"                 ^^ { _ => LARROW  ( ) } } |||
-    positioned { "->"                 ^^ { _ => RARROW  ( ) } } |||
-    positioned { "true"               ^^ { _ => TRUE    ( ) } } |||
-    positioned { "false"              ^^ { _ => FALSE   ( ) } } |||
-    positioned { "+"                  ^^ { _ => PLUS    ( ) } } |||
-    positioned { "-"                  ^^ { _ => DASH    ( ) } } |||
-    positioned { "/"                  ^^ { _ => FSLASH  ( ) } } |||
-    positioned { "%"                  ^^ { _ => PERC    ( ) } } |||
-    positioned { "="                  ^^ { _ => EQUAL   ( ) } } |||
-    positioned { "=="                 ^^ { _ => EQEQ    ( ) } } |||
-    positioned { "!="                 ^^ { _ => NEQ     ( ) } } |||
-    positioned { "<"                  ^^ { _ => LESS    ( ) } } |||
-    positioned { "<="                 ^^ { _ => LESSEQ  ( ) } } |||
-    positioned { ">"                  ^^ { _ => GRTR    ( ) } } |||
-    positioned { ">="                 ^^ { _ => GRTREQ  ( ) } } |||
-    positioned { "&&"                 ^^ { _ => AND     ( ) } } |||
-    positioned { "||"                 ^^ { _ => OR      ( ) } } |||
-    positioned { "::"                 ^^ { _ => CONS    ( ) } } |||
-    positioned { "?"                  ^^ { _ => QMARK   ( ) } } |||
-    positioned { "*--"                ^^ { _ => HEAD    ( ) } } |||
-    positioned { "-**"                ^^ { _ => TAIL    ( ) } } ) )
+    positioned { """[a-z_]+""".r         ^^ { PREIDENT ( _ )   } } |||
+    positioned { """\$[a-z_]+""".r       ^^ { PRECHAN  ( _ )   } } |||
+    positioned { """(0|[1-9]\d*)""".r    ^^ { PREINT   ( _ )   } } |||
+    positioned { """\'(.|\n)\'""".r      ^^ { PREKHAR  ( _ )   } } |||
+    positioned { """\"([^\"]|\n)*\"""".r ^^ { PRESTR   ( _ )   } } |||
+    positioned { "!"                     ^^ { _ => BANG    ( ) } } |||
+    positioned { "*"                     ^^ { _ => STAR    ( ) } } |||
+    positioned { "."                     ^^ { _ => DOT     ( ) } } |||
+    positioned { ":"                     ^^ { _ => COLON   ( ) } } |||
+    positioned { "let"                   ^^ { _ => LET     ( ) } } |||
+    positioned { "new"                   ^^ { _ => NEW     ( ) } } |||
+    positioned { "if"                    ^^ { _ => IF      ( ) } } |||
+    positioned { "then"                  ^^ { _ => THEN    ( ) } } |||
+    positioned { "else"                  ^^ { _ => ELSE    ( ) } } |||
+    positioned { "endif"                 ^^ { _ => ENDIF   ( ) } } |||
+    positioned { "send"                  ^^ { _ => SEND    ( ) } } |||
+    positioned { "receive"               ^^ { _ => RECEIVE ( ) } } |||
+    positioned { "server"                ^^ { _ => SERVER  ( ) } } |||
+    positioned { "|"                     ^^ { _ => BAR     ( ) } } |||
+    positioned { "end"                   ^^ { _ => END     ( ) } } |||
+    positioned { "("                     ^^ { _ => LPAREN  ( ) } } |||
+    positioned { ")"                     ^^ { _ => RPAREN  ( ) } } |||
+    positioned { "{"                     ^^ { _ => LCURLY  ( ) } } |||
+    positioned { "}"                     ^^ { _ => RCURLY  ( ) } } |||
+    positioned { "["                     ^^ { _ => LSQUARE ( ) } } |||
+    positioned { "]"                     ^^ { _ => RSQUARE ( ) } } |||
+    positioned { ","                     ^^ { _ => COMMA   ( ) } } |||
+    positioned { "<-"                    ^^ { _ => LARROW  ( ) } } |||
+    positioned { "->"                    ^^ { _ => RARROW  ( ) } } |||
+    positioned { "true"                  ^^ { _ => TRUE    ( ) } } |||
+    positioned { "false"                 ^^ { _ => FALSE   ( ) } } |||
+    positioned { "+"                     ^^ { _ => PLUS    ( ) } } |||
+    positioned { "-"                     ^^ { _ => DASH    ( ) } } |||
+    positioned { "/"                     ^^ { _ => FSLASH  ( ) } } |||
+    positioned { "%"                     ^^ { _ => PERC    ( ) } } |||
+    positioned { "="                     ^^ { _ => EQUAL   ( ) } } |||
+    positioned { "=="                    ^^ { _ => EQEQ    ( ) } } |||
+    positioned { "!="                    ^^ { _ => NEQ     ( ) } } |||
+    positioned { "<"                     ^^ { _ => LESS    ( ) } } |||
+    positioned { "<="                    ^^ { _ => LESSEQ  ( ) } } |||
+    positioned { ">"                     ^^ { _ => GRTR    ( ) } } |||
+    positioned { ">="                    ^^ { _ => GRTREQ  ( ) } } |||
+    positioned { "&&"                    ^^ { _ => AND     ( ) } } |||
+    positioned { "||"                    ^^ { _ => OR      ( ) } } |||
+    positioned { "::"                    ^^ { _ => CONS    ( ) } } |||
+    positioned { "?"                     ^^ { _ => QMARK   ( ) } } |||
+    positioned { "*--"                   ^^ { _ => HEAD    ( ) } } |||
+    positioned { "-**"                   ^^ { _ => TAIL    ( ) } } ) )
 }
 
 /** Below we have the token classes. We have PreTokens and PostTokens to
@@ -380,12 +385,28 @@ case class PREKHAR  ( text: String ) extends PreInfoToken ( text ) {
     ( nameMap , nextName , POSTKHAR ( this.text.charAt ( 1 ) ).setPos ( this.pos ) )
 }
 
+case class PRESTR   ( text: String ) extends PreInfoToken ( text ) {
+  /** To postlex an INT, we simply have to .toInt the string.
+   */
+  override def postLex (
+    nameMap: Map [ String , Name ] ,
+    nextName: Name
+  ): ( Map [ String , Name ] , Name , PostToken ) =
+    ( nameMap , nextName ,
+      POSTSTR  ( stringToCharList ( this.text.init.tail ) )
+      .setPos ( this.pos ) )
+
+  def stringToCharList ( str: String ): Exp =
+    ListExp ( str.toList.map ( KharLiteral ( _ ) ) )
+}
+
 sealed trait PostToken extends Token
 sealed trait PostInfoToken extends PostToken 
 case class POSTIDENT ( name: Name ) extends PostInfoToken
 case class POSTCHAN  ( name: Name ) extends PostInfoToken
 case class POSTINT   ( num:  Int  ) extends PostInfoToken
 case class POSTKHAR  ( khar: Char ) extends PostInfoToken
+case class POSTSTR   ( str:  Exp  ) extends PostInfoToken
 
 sealed abstract class KeyWdToken extends PreToken with PostToken {
   val text: String

@@ -1,0 +1,26 @@
+[
+    send $a : [ 'a' , 'b' , 'c' ] .
+    send $a : "def" .
+    end
+|
+    receive $a : first .
+    receive $a : second .
+    new rch_wrongcat .
+    send $wrongcat : { { first , second } , rch_wrongcat } .
+    receive rch_wrongcat : all .
+    send $print : all .
+    end
+|
+    server $wrongcat : first_second__rch .
+    let rch          = -> first_second__rch .
+    let first_second = <- first_second__rch .
+    let second       = -> first_second .
+    let first        = <- first_second .
+    if ? first then
+        send rch : second .
+        end
+    else
+        send $wrongcat : { { -** first , ( *-- first ) :: second } , rch } .
+        end
+    endif
+]

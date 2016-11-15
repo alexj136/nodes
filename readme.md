@@ -21,6 +21,8 @@ Akka, scala's concurrency library.
     E, F ::= X                          Variables ([a-z_]+)
         | C                             Channel literals ($[a-z_]+)
         | I                             Integers (0|[1-9][0-9]*)
+        | 'a'                           Character literals
+        | "abc"                         String literals
         | true | false                  Booleans
         | E + F                         Addition
         | E - F                         Subtraction

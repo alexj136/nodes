@@ -133,6 +133,7 @@ sealed abstract class Exp extends SyntaxElement {
     case Variable    ( _         ) => Set.empty
     case IntLiteral  ( _         ) => Set.empty
     case BoolLiteral ( _         ) => Set.empty
+    case KharLiteral ( _         ) => Set.empty
     case ChanLiteral ( n         ) => Set(n)
     case Pair        ( l , r     ) => l.chanLiterals union r.chanLiterals
     case UnExp       ( _ , e     ) => e.chanLiterals
@@ -147,6 +148,7 @@ sealed abstract class Exp extends SyntaxElement {
     case IntLiteral  ( _         ) => Set.empty
     case BoolLiteral ( _         ) => Set.empty
     case ChanLiteral ( _         ) => Set.empty
+    case KharLiteral ( _         ) => Set.empty
     case Pair        ( l , r     ) => l.free union r.free
     case UnExp       ( _ , e     ) => e.free
     case BinExp      ( _ , l , r ) => l.free union r.free
@@ -183,6 +185,10 @@ sealed abstract class Exp extends SyntaxElement {
       s"( ${ty.toString} ${of pstr names} )"
     case BinExp      ( ty   , l  , r ) =>
       s"( ${l pstr names} ${ty.toString} ${r pstr names} )"
+    case ListExp     ( es            )
+      if es.forall { case KharLiteral(_) => true case _ => false } =>
+        (es map (_.asInstanceOf[KharLiteral].value.toString))
+        .foldLeft("")(_ ++ _)
     case ListExp     ( es            ) =>
       (es map (_ pstr names)).mkString("[ ", ",", " ]")
   }

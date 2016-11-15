@@ -364,11 +364,12 @@ object TypecheckProperties extends Properties("Typecheck") {
     " ]                                " )
 
   property("simpleListsCheck") = allCheck ( List (
-  " if ? [] then end else end endif "        ,
-  " send $a : *-- [ 1 , 2 , 3 , 4 ] . end "  ,
-  " send $a : 0 :: [ 1 , 2 , 3 , 4 ] . end " ,
-  " send $a : -** [ 1 , 2 , 3 , 4 ] . end "  ,
-  " send $a : [ 1 , 2 , 3 , 4 ] . end "      ) )
+  " if ? [] then end else end endif "         ,
+  " send $a : *-- [ 1 , 2 , 3 , 4 ] . end "   ,
+  " send $a : 0 :: [ 1 , 2 , 3 , 4 ] . end "  ,
+  " send $a : -** [ 1 , 2 , 3 , 4 ] . end "   ,
+  " send $a : -** [ 'a' , 'b' , 'c' ] . end " ,
+  " send $a : [ 1 , 2 , 3 , 4 ] . end "       ) )
 
   property("badListsDontCheck") = noneCheck ( List (
   " send $a : true :: [ 1 , 2 , 3 , 4 ] . end " ,
@@ -392,6 +393,9 @@ object TypecheckProperties extends Properties("Typecheck") {
 
   property("listsExampleTypechecks") =
     checks ( Source.fromFile("examples/lists"             ).mkString )
+
+  property("strings_charsExampleTypechecks") =
+    checks ( Source.fromFile("examples/strings_chars"     ).mkString )
 
   property("unifyArbitraryProcNoCrash") = Prop.forAll { proc: Proc => {
     // Free variables are SInts in this typing environment
