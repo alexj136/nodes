@@ -260,9 +260,22 @@ object Typecheck {
     case LetIn      ( bind , exp , p        ) => {
       val ( tyE , constrE , nnE ): ( SType , ConstraintSet , Name ) =
         constraintsExp ( exp , env , nn )
-      val ( tyP , constrP , nnP ): ( SType , ConstraintSet , Name ) =
-        constraintsProc ( p , env + ( bind -> tyE ) , nnE )
-      ( SProc , constrE union constrP , nnP )
+      unify ( constrE , ConstraintSet.empty ) match {
+        case Left  ( unsatisfiableConstraints ) => ???
+        case Right ( ePrincipalSubst          ) => {
+          val principalTyE: SType = ePrincipalSubst ( tyE )
+          val envWithESub: Map[Name, SType] = env mapValues ePrincipalSubst
+          // TODO 1: Generalize principalTyE by quantifying its free type
+          // variables that do not occur in env or possibly envWithESub. TBC.
+          // TODO 2: add the generalized version of principalTyE to the
+          // environment as the binding for bind
+          // TODO 3: dequantify the type of bind wherever we use it to keep it
+          // polymorphic - a change at the point of use of variables
+          val ( tyP , constrP , nnP ): ( SType , ConstraintSet , Name ) =
+            constraintsProc ( p , env + ( bind -> tyE ) , nnE )
+          ( SProc , constrE union constrP , nnP )
+        }
+      }
     }
     case IfThenElse ( exp  , q1  , q2       ) => {
       val ( tyE , constrE , nnE ): ( SType , ConstraintSet , Name ) =
