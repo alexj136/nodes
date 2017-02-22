@@ -1,7 +1,7 @@
 package syntax
 import scala.util.parsing.input.Positional
 
-sealed trait SyntaxElement {
+trait SyntaxElement {
   var info: Info = NoInfo
   def setInfo(i: Info): Unit = this.info = i
   def pstr(names: Map[Name, String]): String

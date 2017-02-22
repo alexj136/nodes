@@ -379,8 +379,16 @@ object TypecheckProperties extends Properties("Typecheck") {
   property("simpleProcTypeChecks") =
     checks ( " [ receive $a : y . send y : 12 . end | send $a : $x . end ] " )
 
+  property("polymorphicProgChecks") = checks (
+    " [ server $id : r_x . send <- r_x : -> r_x . end " +
+    " | send $id : 10 . end                           " +
+    " | send $id : true . end                         " +
+    " ]                                               " )
+
   property("badProcsDontCheck") = noneCheck ( List (
-    " [ receive $a : y . send y : y . end | send $a : 12 . end ] " ) )
+    " [ receive $a : y . send y : y . end | send $a : 12 . end ] "  ,
+    " [ receive $a : y . send y : 3 . end | send $a : 12 . end ] " ,
+    " [ receive $a : y . send y : y . end ] "                       ) )
 
   property("simpleloopExampleTypechecks") =
     checks ( Source.fromFile("examples/simpleloop"        ).mkString )

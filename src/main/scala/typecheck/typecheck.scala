@@ -2,7 +2,7 @@ package typecheck
 
 import syntax._
 
-sealed abstract class SType {
+sealed abstract class SType extends SyntaxElement {
 
   /**
    * Given an SType assumed to be a function type (as would always be after
@@ -37,7 +37,7 @@ sealed abstract class SType {
 
   /**
    * Substitute type variables in a type expression, of a given name, to another
-   * given type expression. Only gives the correct result when n does not occur
+   * given type expression. Only terminates when the name 'from' does not occur
    * in this. Only defined over types that do not contain quantifiers.
    */
   def sTypeSubst ( from: Name , to: SType ) : SType = this match {
@@ -49,8 +49,14 @@ sealed abstract class SType {
     case SList  ( t     )              => SList ( t sTypeSubst ( from , to ) )
     case SFunc  ( a , r )              =>
       SFunc ( a sTypeSubst ( from , to ) , r sTypeSubst ( from , to ) )
-    case SQuant ( _ , _ )             => throw new RuntimeException (
-      "STypeSubst defined only over types that do not contain quantifiers." )
+    case SQuant ( n , t )              =>
+      if ( to.free ( n ) ) {
+        val fresh: Name =
+          Name ( ( ( to.free ++ this.free + from ) map ( _.id ) ).max ).next
+        SQuant ( fresh , ( t sTypeSubst ( n , SVar ( fresh ) ) ) )
+          .sTypeSubst ( from , to )
+      }
+      else SQuant ( n , t sTypeSubst ( from , to ) )
     case _                            => this
   }
 
@@ -67,12 +73,12 @@ sealed abstract class SType {
     case ( x , SPair  ( l , r ) ) =>
       ( l hasOccurrenceOf x ) || ( r hasOccurrenceOf x )
     case ( x , SList  ( t     ) ) => ( t hasOccurrenceOf x )
-    case ( x , SQuant ( _ , _ ) ) => throw new RuntimeException (
-      "SQuant not removed during occurrence check." )
+    case ( x , SQuant ( n , t ) ) =>
+      if ( n == x ) false else t hasOccurrenceOf x
     case _ => false
   }
 
-  override def toString: String = this match {
+  override def pstr(names: Map[Name, String]): String = this match {
     case SProc            => "process"
     case SInt             => "integer"
     case SBool            => "boolean"
@@ -80,9 +86,24 @@ sealed abstract class SType {
     case SChan  ( t     ) => s"channel ( $t )"
     case SList  ( t     ) => s"list ( $t )"
     case SPair  ( l , r ) => s"pair ( $l , $r )"
-    case SVar   ( n     ) => s"t${n.id}"
-    case SQuant ( n , t ) => s"forall t${n.id}: $t"
+    case SVar   ( n     ) =>
+      names getOrElse (n, s"$$<new ${{n.id}}>")
+    case SQuant ( n , t ) =>
+      s"forall ${names getOrElse (n, s"$$t${{n.id}}>")}: $t"
     case SFunc  ( a , r ) => s"( $a => $r )"
+  }
+
+  override def free: Set[Name] = this match {
+    case SProc            => Set.empty
+    case SInt             => Set.empty
+    case SBool            => Set.empty
+    case SKhar            => Set.empty
+    case SChan  ( t     ) => Set.empty
+    case SList  ( t     ) => t.free
+    case SPair  ( l , r ) => l.free union r.free
+    case SVar   ( n     ) => Set(n)
+    case SQuant ( n , t ) => t.free - n
+    case SFunc  ( a , r ) => a.free union r.free
   }
 }
 case object SProc                          extends SType
@@ -249,6 +270,7 @@ object Typecheck {
         + Constraint ( tyMsg , newVar           , List ( msg ) ) , nnQ.next )
     }
     case Receive    ( _    , ch  , bind , q ) => {
+      // TODO let-poly (see LetIn code)
       val tyBind: SType = SVar ( nn )
       val ( tyCh , constrCh , nnCh ): ( SType , ConstraintSet , Name ) =
         constraintsExp ( ch , env , nn.next )
@@ -258,21 +280,27 @@ object Typecheck {
         + Constraint ( tyCh , SChan ( tyBind ) , List ( p ) ) , nnQ )
     }
     case LetIn      ( bind , exp , p        ) => {
+      // Uses the efficient let-polymorphism typing rules described on pages 333
+      // and 334 of Ben Pierce's Types and Programming Languages.
       val ( tyE , constrE , nnE ): ( SType , ConstraintSet , Name ) =
         constraintsExp ( exp , env , nn )
       unify ( constrE , ConstraintSet.empty ) match {
-        case Left  ( unsatisfiableConstraints ) => ???
+        case Left  ( unsatisfiableConstraints ) =>
+          val ( tyP , constrP , nnP ): ( SType , ConstraintSet , Name ) =
+            constraintsProc ( p , env + ( bind -> tyE ) , nnE )
+          ( SProc , unsatisfiableConstraints union constrP , nnP )
         case Right ( ePrincipalSubst          ) => {
           val principalTyE: SType = ePrincipalSubst ( tyE )
           val envWithESub: Map[Name, SType] = env mapValues ePrincipalSubst
-          // TODO 1: Generalize principalTyE by quantifying its free type
-          // variables that do not occur in env or possibly envWithESub. TBC.
-          // TODO 2: add the generalized version of principalTyE to the
-          // environment as the binding for bind
-          // TODO 3: dequantify the type of bind wherever we use it to keep it
-          // polymorphic - a change at the point of use of variables
+          val generalisableVars: Set[Name] = principalTyE.free --
+            ( ( ( envWithESub.values ) map ( _.free ) )
+              .fold ( Set.empty ) ( _ union _ ) )
+          val generalisedPrincTyE: SType =
+            generalisableVars.foldRight ( principalTyE ) ( SQuant ( _ , _ ) )
+          val newEnv: Map[Name, SType] =
+            envWithESub + (bind -> generalisedPrincTyE)
           val ( tyP , constrP , nnP ): ( SType , ConstraintSet , Name ) =
-            constraintsProc ( p , env + ( bind -> tyE ) , nnE )
+            constraintsProc ( p , newEnv , nnE )
           ( SProc , constrE union constrP , nnP )
         }
       }
@@ -296,6 +324,7 @@ object Typecheck {
       ( SProc , constrP union constrQ , nnQ )
     }
     case New        ( bind , p              ) =>
+      // TODO let-poly (see LetIn code)
       constraintsProc ( p , env + ( bind -> SChan ( SVar ( nn ) ) ) , nn.next )
     case End                                  =>
       ( SProc , ConstraintSet.empty , nn )
@@ -306,10 +335,16 @@ object Typecheck {
     env: Map[Name, SType],
     nn: Name
   ): (SType, ConstraintSet, Name) = e match {
-    case Variable    ( name          ) => (env(name), ConstraintSet.empty, nn)
+    case Variable    ( name          ) => {
+      val (deqTyName, nnName): (SType, Name) = dequantify(env(name), nn)
+      (deqTyName, ConstraintSet.empty, nnName)
+    }
     case IntLiteral  ( value         ) => (SInt     , ConstraintSet.empty, nn)
     case BoolLiteral ( value         ) => (SBool    , ConstraintSet.empty, nn)
-    case ChanLiteral ( name          ) => (env(name), ConstraintSet.empty, nn)
+    case ChanLiteral ( name          ) => {
+      val (deqTyName, nnName): (SType, Name) = dequantify(env(name), nn)
+      (deqTyName, ConstraintSet.empty, nnName)
+    }
     case KharLiteral ( value         ) => (SKhar    , ConstraintSet.empty, nn)
     case ListExp     ( Nil           ) =>
       (SList(SVar(nn)), ConstraintSet.empty, nn.next)
