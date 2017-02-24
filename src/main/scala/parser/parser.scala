@@ -102,23 +102,28 @@ object Parser extends Parsers {
     case s ~ c ~ _ ~ m ~ d ~ p => putPos ( Send ( c , m , p ) , s , d )
   }
 
-  def rcv: Parser [ Proc ] = RECEIVE() ~ exp ~ COLON() ~ name ~ DOT() ~ seq ^^ {
-    case r ~ c ~ _ ~ b ~ d ~ p =>
-      putPos ( Receive ( false , c , b , p ) , r , d )
-  }
+  def rcv: Parser [ Proc ] =
+    RECEIVE() ~ exp ~ COLON() ~ name ~ OF() ~ qty ~ DOT() ~ seq ^^ {
+      case r ~ c ~ _ ~ b ~ _ ~ t ~ d ~ p =>
+        putPos ( Receive ( false , c , b , t , p ) , r , d )
+    }
 
-  def srv: Parser [ Proc ] = SERVER() ~ exp ~ COLON() ~ name ~ DOT() ~ seq ^^ {
-    case s ~ c ~ _ ~ b ~ d ~ p =>
-      putPos ( Receive ( true , c , b , p ) , s , d )
-  }
+  def srv: Parser [ Proc ] =
+    SERVER() ~ exp ~ COLON() ~ name ~ OF() ~ qty ~ DOT() ~ seq ^^ {
+      case s ~ c ~ _ ~ b ~ _ ~ t ~ d ~ p =>
+        putPos ( Receive ( true , c , b , t , p ) , s , d )
+    }
 
-  def res: Parser [ Proc ] = NEW() ~ name ~ DOT() ~ seq ^^ {
-    case nu ~ n ~ d ~ p => putPos ( New ( n , p ) , nu , d )
-  }
+  def res: Parser [ Proc ] =
+    NEW() ~ name ~ OF() ~ qty ~ DOT() ~ seq ^^ {
+      case nu ~ n ~ _ ~ t ~ d ~ p => putPos ( New ( n , t , p ) , nu , d )
+    }
 
-  def let: Parser [ Proc ] = LET() ~ name ~ EQUAL() ~ exp ~ DOT() ~ seq ^^ {
-    case l ~ n ~ _ ~ e ~ d ~ p => putPos ( LetIn ( n , e , p ) , l , d )
-  }
+  def let: Parser [ Proc ] =
+    LET() ~ name ~ OF() ~ qty ~ EQUAL() ~ exp ~ DOT() ~ seq ^^ {
+      case l ~ n ~ _ ~ t ~ _ ~ e ~ d ~ p =>
+        putPos ( LetIn ( n , t , e , p ) , l , d )
+    }
 
   def ite: Parser [ Proc ] =
     IF() ~ exp ~ THEN() ~ seq ~ ELSE() ~ seq ~ ENDIF() ^^ {
@@ -127,6 +132,55 @@ object Parser extends Parsers {
     }
 
   def end: Parser [ Proc ] = END() ^^ { case end => putPos ( End , end , end ) }
+
+  /**
+   * Combinator parsers for types. No left-recursion here so it's nice and
+   * straightforward. We only allow quantifiers at the top level and thus break
+   * the grammar down into qty and ty productions to acheive this.
+   */
+
+  def qty: Parser [ SType ] =
+    name ~ TILDE() ~ ty ^^ {
+      case n ~ _ ~ t => putPos ( SQuant ( n , t ) , n , t )
+    } |
+    name ~ COMMA() ~ qty ^^ {
+      case n ~ _ ~ t => putPos ( SQuant ( n , t ) , n , t )
+    } | ty
+    
+  def ty: Parser [ SType ] =
+    tyInt | tyBool | tyChar | tyStr | tyList | tyChan | tyPair | tyVar
+
+  def tyInt: Parser [ SType ] = TYINT() ^^ {
+    case ti => putPos ( SInt , ti , ti )
+  }
+
+  def tyBool: Parser [ SType ] = TYBOOL() ^^ {
+    case tb => putPos ( SBool , tb , tb )
+  }
+
+  def tyChar: Parser [ SType ] = TYCHAR() ^^ {
+    case tc => putPos ( SKhar , tc , tc )
+  }
+
+  def tyStr: Parser [ SType ] = TYSTR() ^^ {
+    case ts => putPos ( SList ( SKhar ) , ts , ts )
+  }
+
+  def tyList: Parser [ SType ] = LSQUARE() ~ ty ~ RSQUARE() ^^ {
+    case l ~ t ~ r => putPos ( SList ( t ) , l , r )
+  }
+
+  def tyChan: Parser [ SType ] = AT() ~ ty ^^ {
+    case a ~ t => putPos ( SChan ( t ) , a , t )
+  }
+
+  def tyPair: Parser [ SType ] = LCURLY() ~ ty ~ COMMA() ~ ty ~ RCURLY() ^^ {
+    case l ~ t1 ~ _ ~ t2 ~ r => putPos ( SPair ( t1 , t2 ) , l , r )
+  }
+
+  def tyVar: Parser [ SType ] = name ^^ {
+    case n => putPos ( SVar ( n ) , n , n )
+  }
 
   /**
    * Combinator parsers for expressions. The only left-recursive production in
@@ -259,6 +313,9 @@ object Lexer extends RegexParsers {
     positioned { "*"                     ^^ { _ => STAR    ( ) } } |||
     positioned { "."                     ^^ { _ => DOT     ( ) } } |||
     positioned { ":"                     ^^ { _ => COLON   ( ) } } |||
+    positioned { ";"                     ^^ { _ => SEMI    ( ) } } |||
+    positioned { "@"                     ^^ { _ => AT      ( ) } } |||
+    positioned { "~"                     ^^ { _ => TILDE   ( ) } } |||
     positioned { "let"                   ^^ { _ => LET     ( ) } } |||
     positioned { "new"                   ^^ { _ => NEW     ( ) } } |||
     positioned { "if"                    ^^ { _ => IF      ( ) } } |||
@@ -268,6 +325,7 @@ object Lexer extends RegexParsers {
     positioned { "send"                  ^^ { _ => SEND    ( ) } } |||
     positioned { "receive"               ^^ { _ => RECEIVE ( ) } } |||
     positioned { "server"                ^^ { _ => SERVER  ( ) } } |||
+    positioned { "of"                    ^^ { _ => OF      ( ) } } |||
     positioned { "|"                     ^^ { _ => BAR     ( ) } } |||
     positioned { "end"                   ^^ { _ => END     ( ) } } |||
     positioned { "("                     ^^ { _ => LPAREN  ( ) } } |||
@@ -297,7 +355,11 @@ object Lexer extends RegexParsers {
     positioned { "::"                    ^^ { _ => CONS    ( ) } } |||
     positioned { "?"                     ^^ { _ => QMARK   ( ) } } |||
     positioned { "*--"                   ^^ { _ => HEAD    ( ) } } |||
-    positioned { "-**"                   ^^ { _ => TAIL    ( ) } } ) )
+    positioned { "-**"                   ^^ { _ => TAIL    ( ) } } |||
+    positioned { "int"                   ^^ { _ => TYINT   ( ) } } |||
+    positioned { "bool"                  ^^ { _ => TYBOOL  ( ) } } |||
+    positioned { "char"                  ^^ { _ => TYCHAR  ( ) } } |||
+    positioned { "string"                ^^ { _ => TYSTR   ( ) } } ) )
 }
 
 /** Below we have the token classes. We have PreTokens and PostTokens to
@@ -421,6 +483,9 @@ case class BANG    ( ) extends KeyWdToken { val text: String = "!"       }
 case class STAR    ( ) extends KeyWdToken { val text: String = "*"       }
 case class DOT     ( ) extends KeyWdToken { val text: String = "."       }
 case class COLON   ( ) extends KeyWdToken { val text: String = ":"       }
+case class SEMI    ( ) extends KeyWdToken { val text: String = ";"       }
+case class AT      ( ) extends KeyWdToken { val text: String = "@"       }
+case class TILDE   ( ) extends KeyWdToken { val text: String = "~"       }
 case class LET     ( ) extends KeyWdToken { val text: String = "let"     }
 case class NEW     ( ) extends KeyWdToken { val text: String = "new"     }
 case class IF      ( ) extends KeyWdToken { val text: String = "if"      }
@@ -430,6 +495,7 @@ case class ENDIF   ( ) extends KeyWdToken { val text: String = "endif"   }
 case class SEND    ( ) extends KeyWdToken { val text: String = "send"    }
 case class RECEIVE ( ) extends KeyWdToken { val text: String = "receive" }
 case class SERVER  ( ) extends KeyWdToken { val text: String = "server"  }
+case class OF      ( ) extends KeyWdToken { val text: String = "of"      }
 case class BAR     ( ) extends KeyWdToken { val text: String = "|"       }
 case class END     ( ) extends KeyWdToken { val text: String = "end"     }
 case class LPAREN  ( ) extends KeyWdToken { val text: String = "("       }
@@ -460,3 +526,7 @@ case class CONS    ( ) extends KeyWdToken { val text: String = "::"      }
 case class QMARK   ( ) extends KeyWdToken { val text: String = "?"       }
 case class HEAD    ( ) extends KeyWdToken { val text: String = "*--"     }
 case class TAIL    ( ) extends KeyWdToken { val text: String = "-**"     }
+case class TYINT   ( ) extends KeyWdToken { val text: String = "int"     }
+case class TYBOOL  ( ) extends KeyWdToken { val text: String = "bool"    }
+case class TYCHAR  ( ) extends KeyWdToken { val text: String = "char"    }
+case class TYSTR   ( ) extends KeyWdToken { val text: String = "string"  }

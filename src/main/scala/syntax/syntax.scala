@@ -1,7 +1,7 @@
 package syntax
 import scala.util.parsing.input.Positional
 
-trait SyntaxElement {
+sealed trait SyntaxElement {
   var info: Info = NoInfo
   def setInfo(i: Info): Unit = this.info = i
   def pstr(names: Map[Name, String]): String
@@ -104,17 +104,17 @@ sealed abstract class Proc extends SyntaxElement {
   }
 }
 
-case class  Send      ( ch:   Exp     , msg: Exp  , p:    Proc           )
+case class  Send       ( c: Exp     , m: Exp   , p: Proc                      )
   extends Proc
-case class  Receive   ( repl: Boolean , ch:  Exp  , bind: Name , p: Proc )
+case class  Receive    ( r: Boolean , c: Exp   , n: Name , t: SType , p: Proc )
   extends Proc
-case class  LetIn     ( name: Name    , exp: Exp  , p:    Proc           )
+case class  LetIn      ( n: Name    , t: SType , e: Exp  , p: Proc            )
   extends Proc
-case class  IfThenElse( exp:  Exp     , tP:  Proc , fP:   Proc           )
+case class  IfThenElse ( c: Exp     , t: Proc  , f: Proc                      )
   extends Proc
-case class  Parallel  ( p:    Proc    , q:   Proc                        )
+case class  Parallel   ( p: Proc    , q: Proc                                 )
   extends Proc
-case class  New       ( name: Name    , p:   Proc                        )
+case class  New        ( n: Name    , t: SType , p: Proc                      )
   extends Proc
 case object End
   extends Proc
@@ -344,3 +344,118 @@ case object PRight extends UnOp
 case object Empty  extends UnOp
 case object Head   extends UnOp
 case object Tail   extends UnOp
+
+sealed abstract class SType extends SyntaxElement {
+
+  /**
+   * Given an SType assumed to be a function type (as would always be after
+   * dequantification of a UnOp or BinOp), get the argument type of the
+   * function.
+   */
+  def argTy: SType = this match {
+    case SFunc(a, _) => a
+    case _           => {
+      val errMsg: String =
+        "tried to get the argument type of a non-SFunc SType. SType.argTy() "  +
+        "may only be called on STypes known to be SFunc, such as those "       +
+        "returned from a call to dequantify()."
+      throw new RuntimeException(errMsg)
+    }
+  }
+
+  /**
+   * Given an SType assumed to be a function type (as would always be after
+   * dequantification of a UnOp or BinOp), get the return type of the function.
+   */
+  def retTy: SType = this match {
+    case SFunc(_, r) => r
+    case _           => {
+      val errMsg: String =
+        "tried to get the return type of a non-SFunc SType. SType.retTy() " +
+        "may only be called on STypes known to be SFunc, such as those "    +
+        "returned from a call to dequantify()."
+      throw new RuntimeException(errMsg)
+    }
+  }
+
+  /**
+   * Substitute type variables in a type expression, of a given name, to another
+   * given type expression. Only terminates when the name 'from' does not occur
+   * in this. Only defined over types that do not contain quantifiers.
+   */
+  def sTypeSubst ( from: Name , to: SType ) : SType = this match {
+    case SVar   ( n     ) if n == from => to
+    case SVar   ( n     ) if n != from => this
+    case SChan  ( t     )              => SChan ( t sTypeSubst ( from , to ) )
+    case SPair  ( l , r )              =>
+      SPair ( l sTypeSubst ( from , to ) , r sTypeSubst ( from , to ) )
+    case SList  ( t     )              => SList ( t sTypeSubst ( from , to ) )
+    case SFunc  ( a , r )              =>
+      SFunc ( a sTypeSubst ( from , to ) , r sTypeSubst ( from , to ) )
+    case SQuant ( n , t )              =>
+      if ( to.free ( n ) ) {
+        val fresh: Name =
+          Name ( ( ( to.free ++ this.free + from ) map ( _.id ) ).max ).next
+        SQuant ( fresh , ( t sTypeSubst ( n , SVar ( fresh ) ) ) )
+          .sTypeSubst ( from , to )
+      }
+      else SQuant ( n , t sTypeSubst ( from , to ) )
+    case _                            => this
+  }
+
+  /**
+   * Occurs check - check a type variable name does not occur within this type,
+   * with which it must be unified. Such a situation would cause infinite
+   * recursion during unification.
+   */
+  def hasOccurrenceOf ( n: Name ) : Boolean = ( n , this ) match {
+    case ( x , SVar   ( y     ) ) => x == y
+    case ( x , SChan  ( t     ) ) => ( t hasOccurrenceOf x )
+    case ( x , SFunc  ( a , r ) ) =>
+      ( a hasOccurrenceOf x ) || ( r hasOccurrenceOf x )
+    case ( x , SPair  ( l , r ) ) =>
+      ( l hasOccurrenceOf x ) || ( r hasOccurrenceOf x )
+    case ( x , SList  ( t     ) ) => ( t hasOccurrenceOf x )
+    case ( x , SQuant ( n , t ) ) =>
+      if ( n == x ) false else t hasOccurrenceOf x
+    case _ => false
+  }
+
+  override def pstr(names: Map[Name, String]): String = this match {
+    case SProc            => "process"
+    case SInt             => "integer"
+    case SBool            => "boolean"
+    case SKhar            => "character"
+    case SChan  ( t     ) => s"channel ( $t )"
+    case SList  ( t     ) => s"list ( $t )"
+    case SPair  ( l , r ) => s"pair ( $l , $r )"
+    case SVar   ( n     ) =>
+      names getOrElse (n, s"$$<new ${{n.id}}>")
+    case SQuant ( n , t ) =>
+      s"forall ${names getOrElse (n, s"$$t${{n.id}}>")}: $t"
+    case SFunc  ( a , r ) => s"( $a => $r )"
+  }
+
+  override def free: Set[Name] = this match {
+    case SProc            => Set.empty
+    case SInt             => Set.empty
+    case SBool            => Set.empty
+    case SKhar            => Set.empty
+    case SChan  ( t     ) => Set.empty
+    case SList  ( t     ) => t.free
+    case SPair  ( l , r ) => l.free union r.free
+    case SVar   ( n     ) => Set(n)
+    case SQuant ( n , t ) => t.free - n
+    case SFunc  ( a , r ) => a.free union r.free
+  }
+}
+case object SProc                          extends SType
+case object SInt                           extends SType
+case object SBool                          extends SType
+case object SKhar                          extends SType
+case class  SChan  ( val t: SType        ) extends SType
+case class  SList  ( t: SType            ) extends SType
+case class  SPair  ( l: SType , r: SType ) extends SType
+case class  SVar   ( n: Name             ) extends SType
+case class  SQuant ( n: Name  , t: SType ) extends SType
+case class  SFunc  ( a: SType , r: SType ) extends SType
