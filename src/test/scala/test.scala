@@ -18,13 +18,15 @@ object ArbitraryTypes {
     srv  <- arbitrary[Boolean]
     ch   <- genExp
     bind <- genName
+    ty   <- genSType
     next <- genProc
-  } yield Receive(srv, ch, bind, next)
+  } yield Receive(srv, ch, bind, ty, next)
 
   val genNew: Gen[Proc] = for {
     bind <- genName
+    ty   <- genSType
     next <- genProc
-  } yield New(bind, next)
+  } yield New(bind, ty, next)
 
   val genParallel: Gen[Proc] = for {
     l <- genProc
@@ -33,9 +35,10 @@ object ArbitraryTypes {
 
   val genLetIn: Gen[Proc] = for {
     bind <- genName
+    ty   <- genSType
     exp  <- genExp
     next <- genProc
-  } yield LetIn(bind, exp, next)
+  } yield LetIn(bind, ty, exp, next)
 
   val genIfThenElse: Gen[Proc] = for {
     cond <- genExp
@@ -124,6 +127,51 @@ object ArbitraryTypes {
     (  3 , genListExp     ) )
   )
 
+  val genSProc: Gen[SType] = const(SProc)
+  val genSInt:  Gen[SType] = const(SInt)
+  val genSBool: Gen[SType] = const(SBool)
+  val genSKhar: Gen[SType] = const(SKhar)
+
+  val genSChan: Gen[SType] = for {
+    t <- genSType
+  } yield SChan(t)
+
+  val genSList: Gen[SType] = for {
+    t <- genSType
+  } yield SList(t)
+
+  val genSPair: Gen[SType] = for {
+    l <- genSType
+    r <- genSType
+  } yield SPair(l, r)
+
+  val genSVar: Gen[SType] = for {
+    x <- genName
+  } yield SVar(x)
+
+  val genSQuant: Gen[SType] = for {
+    x <- genName
+    t <- genSType
+  } yield SQuant(x, t)
+
+  val genSFunc: Gen[SType] = for {
+    a <- genSType
+    r <- genSType
+  } yield SFunc(a, r)
+
+  def genSType: Gen[SType] = lzy(frequency(
+    ( 10 , genSProc       ) ,
+    ( 10 , genSInt        ) ,
+    ( 10 , genSBool       ) ,
+    ( 10 , genSKhar       ) ,
+    (  6 , genSChan       ) ,
+    (  6 , genSList       ) ,
+    (  3 , genSPair       ) ,
+    ( 10 , genSVar        ) ,
+    (  6 , genSQuant      ) ,
+    (  3 , genSFunc       ) )
+  )
+
   def genName: Gen[Name] = for {
     id <- lzy(arbitrary[Int])
   } yield Name(id)
@@ -208,9 +256,10 @@ object ParserProperties extends Properties("Parser") {
       Parallel ( End , Parallel ( End , End ) ) ) &&
     parsesAs ( Parser.proc , "send 1 : 2 . end" ,
       Send ( IntLiteral ( 1 ) , IntLiteral ( 2 ) , End ) ) &&
-    parsesAs ( Parser.proc , " [ send 1 : 2 . end | receive 1 : a . end ] " ,
+    parsesAs ( Parser.proc , " [ send 1 : 2 . end | receive 1 : a of t . end ] " ,
       Parallel ( Send ( IntLiteral ( 1 ) , IntLiteral ( 2 ) , End ) ,
-        Receive ( false , IntLiteral ( 1 ) , Name ( 0 ) , End ) ) )
+        Receive ( false , IntLiteral ( 1 ) ,
+          Name ( 0 ) , SVar ( Name ( 1 ) ) , End ) ) )
   }
 
   property("Exps") = {
@@ -263,9 +312,9 @@ object TurnerMachineProperties extends Properties("TurnerMachineState") {
      *    send a : x . end |
      *    send a : y . end |
      *    send a : z . end |
-     *    receive a : b . receive a : c . receive a : d . [
+     *    receive a : b of int . receive a : c of int . receive a : d of int . [
      *      send a : b + c + d . end |
-     *      receive a : e . send a : e . end
+     *      receive a : e of int . send a : e . end
      *    ]
      *  ]
      *
@@ -278,12 +327,12 @@ object TurnerMachineProperties extends Properties("TurnerMachineState") {
         Send(ChanLiteral(Name(0)), IntLiteral(x), End),
         Send(ChanLiteral(Name(0)), IntLiteral(y), End),
         Send(ChanLiteral(Name(0)), IntLiteral(z), End),
-        Receive(false, ChanLiteral(Name(0)), Name(1),
-          Receive(false, ChanLiteral(Name(0)), Name(2),
-          Receive(false, ChanLiteral(Name(0)), Name(3),
+        Receive(false, ChanLiteral(Name(0)), Name(1), SInt,
+          Receive(false, ChanLiteral(Name(0)), Name(2), SInt,
+          Receive(false, ChanLiteral(Name(0)), Name(3), SInt,
           Send(ChanLiteral(Name(4)), BinExp(Add, BinExp(Add, Variable(Name(1)),
             Variable(Name(2))), Variable(Name(3))), End)))),
-        Receive(false, ChanLiteral(Name(4)), Name(5),
+        Receive(false, ChanLiteral(Name(4)), Name(5), SInt,
           Send(ChanLiteral(Name(0)), Variable(Name(5)), End))))
     Prop.forAll { ( x: Int, y: Int, z: Int ) => {
       val procPost: Proc = runWithTurnerMachine(proc(x, y, z), names, next)._1
@@ -342,26 +391,26 @@ object TypecheckProperties extends Properties("Typecheck") {
     " [ end | end | end ] " ) )
 
   property("reallySimpleProcsTypeCheck") = allCheck ( List (
-    " receive $a : y . end "         ,
-    " send $a : 12 . end "           ,
-    " new a . end "                  ,
-    " let x = -> { 10 , 11 } . end " ,
-    " server $a : y . end "          ) )
+    " receive $a : y of int . end "         ,
+    " send $a : 12 . end "                  ,
+    " new a of @bool. end "                 ,
+    " let x of int = -> { 10 , 11 } . end " ,
+    " server $a : y . end "                 ) )
 
   property("letProcChecks") = checks (
     " [                                " +
-    " let abc = { $a , { $b , $c } } . " +
-    " let a = <- abc                 . " +
-    " let b = <- -> abc              . " +
-    " let c = -> -> abc              . " +
-    " send a : b                     . " +
-    " send b : c                     . " +
-    " end                              " +
-    " |                                " +
-    " receive $a : bb                . " +
-    " receive bb : cc                . " +
-    " end                              " +
-    " ]                                " )
+    " let abc of d ~ { @@d , { @d , d } } = { $a , { $b , $c } } . " +
+    " let a of d ~ @@d = <- abc                                  . " +
+    " let b of d ~ @d  = <- -> abc                               . " +
+    " let c of d ~ d   = -> -> abc                               . " +
+    " send a : b                                                 . " +
+    " send b : c                                                 . " +
+    " end                                                          " +
+    " |                                                            " +
+    " receive $a : bb of d ~ @d                                  . " +
+    " receive bb : cc of d ~ d                                   . " +
+    " end                                                          " +
+    " ]                                                            " )
 
   property("simpleListsCheck") = allCheck ( List (
   " if ? [] then end else end endif "         ,
@@ -376,8 +425,13 @@ object TypecheckProperties extends Properties("Typecheck") {
   " send $a : [ 1 , 2 , 3 , 4 , $q ] . end "    ,
   " if [] then end else end endif "             ) )
 
-  property("simpleProcTypeChecks") =
-    checks ( " [ receive $a : y . send y : 12 . end | send $a : $x . end ] " )
+  property("simpleProcTypeChecks") = checks (
+    " [ receive $a : y of @int . " +
+    "     send y : 12          . " +
+    "     end                    " +
+    " | send $a : $x           . " +
+    "     end                    " +
+    " ]                          " )
 
   property("polymorphicProgChecks") = checks (
     " [ server $id : r_x . send <- r_x : -> r_x . end " +

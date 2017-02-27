@@ -142,7 +142,7 @@ object Typecheck {
     env: Map[Name, SType],
     nn: Name
   ): (SType, ConstraintSet, Name) = p match {
-    case Send       ( ch   , msg , q        ) => {
+    case Send ( ch , msg , q ) => {
       val newVar: SType = SVar ( nn )
       val ( tyCh , constrCh , nnCh ): ( SType , ConstraintSet , Name ) =
         constraintsExp ( ch , env , nn.next )
@@ -154,7 +154,7 @@ object Typecheck {
         + Constraint ( tyCh  , SChan ( newVar ) , List ( ch  ) )
         + Constraint ( tyMsg , newVar           , List ( msg ) ) , nnQ.next )
     }
-    case Receive    ( _    , ch  , bind , q ) => {
+    case Receive ( _ , ch , bind , ty , q ) => {
       // TODO let-poly (see LetIn code)
       val tyBind: SType = SVar ( nn )
       val ( tyCh , constrCh , nnCh ): ( SType , ConstraintSet , Name ) =
@@ -164,7 +164,7 @@ object Typecheck {
       ( SProc , constrCh union constrQ
         + Constraint ( tyCh , SChan ( tyBind ) , List ( p ) ) , nnQ )
     }
-    case LetIn      ( bind , exp , p        ) => {
+    case LetIn ( bind , ty , exp , p ) => {
       // Uses the efficient let-polymorphism typing rules described on pages 333
       // and 334 of Ben Pierce's Types and Programming Languages.
       val ( tyE , constrE , nnE ): ( SType , ConstraintSet , Name ) =
@@ -190,7 +190,7 @@ object Typecheck {
         }
       }
     }
-    case IfThenElse ( exp  , q1  , q2       ) => {
+    case IfThenElse ( exp , q1  , q2 ) => {
       val ( tyE , constrE , nnE ): ( SType , ConstraintSet , Name ) =
         constraintsExp( exp , env , nn )
       val ( tyQ1 , constrQ1 , nnQ1 ): ( SType , ConstraintSet , Name ) =
@@ -201,17 +201,17 @@ object Typecheck {
         + Constraint ( tyE , SBool , List ( exp ) )
         + Constraint ( tyQ1 , tyQ2 , List ( p   ) ) , nnQ2 )
     }
-    case Parallel   ( p    , q              ) => {
+    case Parallel ( p , q ) => {
       val ( tyP , constrP , nnP ): ( SType , ConstraintSet , Name ) =
         constraintsProc ( p , env , nn )
       val ( tyQ , constrQ , nnQ ): ( SType , ConstraintSet , Name ) =
         constraintsProc ( q , env , nnP )
       ( SProc , constrP union constrQ , nnQ )
     }
-    case New        ( bind , p              ) =>
+    case New ( bind , ty , p ) =>
       // TODO let-poly (see LetIn code)
       constraintsProc ( p , env + ( bind -> SChan ( SVar ( nn ) ) ) , nn.next )
-    case End                                  =>
+    case End =>
       ( SProc , ConstraintSet.empty , nn )
   }
 

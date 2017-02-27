@@ -14,8 +14,8 @@ class RunTCondFwdOptProcRunner(
   import Transformations._
 
   def isServer: Boolean = this.proc match {
-    case Receive(true, _, _, _) => true
-    case _                      => false
+    case Receive(true, _, _, _, _) => true
+    case _                         => false
   }
 
   override def handleMetaMessageReceived(
@@ -45,11 +45,11 @@ object Transformations {
     case Send(chExp, msg, p) =>
       forwarderRewrite(p) map (p => Send(chExp, msg, p))
 
-    case Receive(repl, chExp, bind, p) =>
-      forwarderRewrite(p) map (p => Receive(repl, chExp, bind, p))
+    case Receive(repl, chExp, bind, ty, p) =>
+      forwarderRewrite(p) map (p => Receive(repl, chExp, bind, ty, p))
 
-    case LetIn(bind, exp, p) =>
-      forwarderRewrite(p) map (p => LetIn(bind, exp, p))
+    case LetIn(bind, ty, exp, p) =>
+      forwarderRewrite(p) map (p => LetIn(bind, ty, exp, p))
 
     case IfThenElse(exp, p, q) => for {
       newP <- forwarderRewrite(p)
@@ -66,9 +66,9 @@ object Transformations {
      * Hence the outgoing message msg0 must be an expression containing the new
      * channel nrch0.
      */
-    case New(nrch0,
+    case New(nrch0, _,
          Send(chExp0, msg0,
-         Receive(false, Variable(nrch1), reply0,
+         Receive(false, Variable(nrch1), reply0, _,
          IfThenElse(condExp,
            Send(orch0, Variable(reply1), End),
            Send(orch1, Variable(reply2), End)))))
@@ -79,7 +79,7 @@ object Transformations {
              && (reply0 == reply2))
                => (Some(???): Option[Proc])
 
-    case New(bind, p) => forwarderRewrite(p) map (p => New(bind, p))
+    case New(bind, ty, p) => forwarderRewrite(p) map (p => New(bind, ty, p))
 
     case End => (None: Option[Proc])
   }
@@ -88,19 +88,19 @@ object Transformations {
     val renameP: Function1[Proc, Proc] = p => renameChannelInProc(p, from, to)
     val renameE: Function1[Exp , Exp ] = e => renameChannelInExp (e, from, to)
     proc match {
-      case Send       ( c , e , p     ) =>
+      case Send       ( c , e , p         ) =>
         Send(renameE(c), renameE(e), renameP(p))
-      case Receive    ( s , c , n , p ) =>
-        Receive(s, renameE(c), n, if (n != from) renameP(p) else p)
-      case LetIn      ( n , e , p     ) =>
-        LetIn(n, renameE(e), if (n != from) renameP(p) else p)
-      case IfThenElse ( e , p , q     ) =>
+      case Receive    ( s , c , n , t , p ) =>
+        Receive(s, renameE(c), n, t, if (n != from) renameP(p) else p)
+      case LetIn      ( n , t , e , p     ) =>
+        LetIn(n, t, renameE(e), if (n != from) renameP(p) else p)
+      case IfThenElse ( e , p , q         ) =>
         IfThenElse(renameE(e), renameP(p), renameP(q))
-      case Parallel   ( p , q         ) =>
+      case Parallel   ( p , q             ) =>
         Parallel(renameP(p), renameP(q))
-      case New        ( n , p         ) =>
-        New(n, if (n != from) renameP(p) else p)
-      case End                          => End
+      case New        ( n , t , p         ) =>
+        New(n, t, if (n != from) renameP(p) else p)
+      case End                              => End
     }
   }
 

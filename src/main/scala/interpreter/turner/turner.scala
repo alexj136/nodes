@@ -72,11 +72,11 @@ class TurnerMachineState(
     case Send(chExp, msg, p) :: runTail =>
       this.withRun(runTail).handleSend(Send(chExp, msg, p))
 
-    case Receive(repl, chExp, bind, p) :: runTail =>
-      this.withRun(runTail).handleReceive(Receive(repl, chExp, bind, p))
+    case Receive(repl, chExp, bind, ty, p) :: runTail =>
+      this.withRun(runTail).handleReceive(Receive(repl, chExp, bind, ty, p))
 
-    case LetIn(name, exp, p) :: runTail =>
-      this.withRun(runTail).handleLetIn(LetIn(name, exp, p))
+    case LetIn(name, ty, exp, p) :: runTail =>
+      this.withRun(runTail).handleLetIn(LetIn(name, ty, exp, p))
 
     case IfThenElse(exp, tP, fP) :: runTail =>
       this.withRun(runTail).handleIfThenElse(IfThenElse(exp, tP, fP))
@@ -84,8 +84,8 @@ class TurnerMachineState(
     case Parallel(p, q) :: runTail =>
       this.withRun(runTail).handleParallel(Parallel(p, q))
 
-    case New(name, p) :: runTail =>
-      this.withRun(runTail).handleNew(New(name, p))
+    case New(name, ty, p) :: runTail =>
+      this.withRun(runTail).handleNew(New(name, ty, p))
 
     case End :: runTail => this.withRun(runTail).someOf
   }
@@ -102,13 +102,13 @@ class TurnerMachineState(
         this.splitWait(ch)
       nextWait match {
 
-      case Some(Receive(repl, ChanLiteral(_), bind, q)) => {
+      case Some(Receive(repl, ChanLiteral(_), bind, ty, q)) => {
         val qSub: Proc = substituteProc(q, bind, EvalExp from msg)
         if (repl)
           thisWithoutNextWait
             .runPrepend(p)
             .runAppend(qSub)
-            .waitAppend(ch, Receive(true, ChanLiteral(ch), bind, q))
+            .waitAppend(ch, Receive(true, ChanLiteral(ch), bind, ty, q))
             .someOf
         else
           thisWithoutNextWait
@@ -126,7 +126,7 @@ class TurnerMachineState(
   }
 
   def handleReceive(receive: Receive): Option[MachineState] = receive match {
-    case Receive(repl, ChanLiteral(ch), bind, p) =>
+    case Receive(repl, ChanLiteral(ch), bind, ty, p) =>
       val (nextWait, thisWithoutNextWait): (Option[Proc], TurnerMachineState) =
         this.splitWait(ch)
       nextWait match {
@@ -148,15 +148,15 @@ class TurnerMachineState(
         case _ => this.waitAppend(ch, receive).someOf
       }
 
-    case Receive(repl, chExp, bind, p) => EvalExp from chExp match {
+    case Receive(repl, chExp, bind, ty, p) => EvalExp from chExp match {
       case EEChan(ch) =>
-        this.runPrepend(Receive(repl, ChanLiteral(ch), bind, p)).someOf
+        this.runPrepend(Receive(repl, ChanLiteral(ch), bind, ty, p)).someOf
       case _          => throw FreeVariableError(receive)
     }
   }
 
   def handleLetIn(letIn: LetIn): Option[MachineState] = letIn match {
-    case LetIn(name, exp, p) =>
+    case LetIn(name, _, exp, p) =>
       this.runPrepend(substituteProc(p, name, EvalExp from exp)).someOf
   }
 
@@ -172,7 +172,7 @@ class TurnerMachineState(
   }
 
   def handleNew(nu: New): Option[MachineState] = nu match {
-    case New(name, p) => {
+    case New(name, _, p) => {
       val (nuV, thisWithNewName): (Name, TurnerMachineState) = this.makeName
       thisWithNewName
         .withWait(nuV, Nil)

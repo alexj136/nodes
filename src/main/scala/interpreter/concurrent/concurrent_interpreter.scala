@@ -241,20 +241,20 @@ class ProcRunner(
   }
 
   def handleCurrentProcess: Unit = this.proc match {
-    case    Send       ( chExp , msg   , p        ) =>
-      handleSend       ( chExp , msg   , p        )
-    case    Receive    ( false , chExp , bind , p ) =>
-      handleReceive    (         chExp , bind , p )
-    case    Receive    ( true  , chExp , bind , p ) =>
-      handleServer     (         chExp , bind , p )
-    case    LetIn      ( bind  , exp   , p        ) =>
-      handleLetIn      ( bind  , exp   , p        )
-    case    IfThenElse ( exp   , p     , q        ) =>
-      handleIfThenElse ( exp   , p     , q        )
-    case    Parallel   ( p     , q                ) =>
-      handleParallel   ( p     , q                )
-    case    New        ( name  , p                ) =>
-      handleNew        ( name  , p                )
+    case    Send       ( chExp , msg   , p            ) =>
+      handleSend       ( chExp , msg   , p            )
+    case    Receive    ( false , chExp , bind , _ , p ) =>
+      handleReceive    (         chExp , bind ,     p )
+    case    Receive    ( true  , chExp , bind , _ , p ) =>
+      handleServer     (         chExp , bind ,     p )
+    case    LetIn      ( bind  , _     , exp  , p     ) =>
+      handleLetIn      ( bind  ,         exp  , p     )
+    case    IfThenElse ( exp   , p     , q            ) =>
+      handleIfThenElse ( exp   , p     , q            )
+    case    Parallel   ( p     , q                    ) =>
+      handleParallel   ( p     , q                    )
+    case    New        ( name  , _     , p            ) =>
+      handleNew        ( name  ,         p            )
     case End => this.procManager ! ReportStop(None)
   }
 

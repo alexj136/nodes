@@ -29,19 +29,19 @@ object fwdOptRewrite extends Function1[Proc, Proc] {
   override def apply(p: Proc): Proc = p match {
     case Send(chExp, msg, p) => Send(chExp, msg, fwdOptRewrite(p))
 
-    case Receive(repl, chExp, bind, p) =>
-      Receive(repl, chExp, bind, fwdOptRewrite(p))
+    case Receive(repl, chExp, bind, ty, p) =>
+      Receive(repl, chExp, bind, ty, fwdOptRewrite(p))
 
-    case LetIn(bind, exp, p) => LetIn(bind, exp, fwdOptRewrite(p))
+    case LetIn(bind, ty, exp, p) => LetIn(bind, ty, exp, fwdOptRewrite(p))
 
     case IfThenElse(exp, p, q) =>
       IfThenElse(exp, fwdOptRewrite(p), fwdOptRewrite(q))
 
     case Parallel(p, q) => Parallel(fwdOptRewrite(p), fwdOptRewrite(q))
 
-    case New(rch0,
+    case New(rch0, ty,
          Send(chExp0, msg0,
-         Receive(false, Variable(rch1), reply0,
+         Receive(false, Variable(rch1), reply0, _,
          Send(orch, Variable(reply1), p))))
            if ((msg0 contains rch0)
            && (rch0 == rch1)
@@ -64,12 +64,12 @@ object fwdOptRewrite extends Function1[Proc, Proc] {
       }
 
       if (p.free apply rch0)
-        Send(chExp0, returnChanSub(msg0, rch0, orch), New(rch0, p))
+        Send(chExp0, returnChanSub(msg0, rch0, orch), New(rch0, ty, p))
       else
         Send(chExp0, returnChanSub(msg0, rch0, orch), p)
     }
 
-    case New(bind, p) => New(bind, fwdOptRewrite(p))
+    case New(bind, ty, p) => New(bind, ty, fwdOptRewrite(p))
 
     case End => End
   }

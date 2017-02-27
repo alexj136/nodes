@@ -28,14 +28,14 @@ object substituteProc extends Function3[Proc, Name, EvalExp, Proc] {
 
       case Send(ch, msg, q) => Send(subE(ch), subE(msg), subP(q))
 
-      case Receive(repl, ch, bind, q) => {
+      case Receive(repl, ch, bind, ty, q) => {
         val newQ = if (bind == from) q else subP(q)
-        Receive(repl, subE(ch), bind, newQ)
+        Receive(repl, subE(ch), bind, ty, newQ)
       }
 
-      case LetIn(name, exp, q) => {
+      case LetIn(name, ty, exp, q) => {
         val newQ = if (name == from) q else subP(q)
-        LetIn(name, subE(exp), newQ)
+        LetIn(name, ty, subE(exp), newQ)
       }
 
       case IfThenElse(exp, tP, fP) =>
@@ -43,8 +43,8 @@ object substituteProc extends Function3[Proc, Name, EvalExp, Proc] {
 
       case Parallel(q, r) => Parallel(subP(q), subP(r))
 
-      case New(name, q) =>
-        New(name, if(name == from) q else subP(q))
+      case New(name, ty, q) =>
+        New(name, ty, if(name == from) q else subP(q))
 
       case End => End
     }
