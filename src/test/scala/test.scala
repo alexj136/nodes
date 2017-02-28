@@ -288,7 +288,7 @@ object TurnerMachineProperties extends Properties("TurnerMachineState") {
 
   val names: Map[Name, String] = (((0 to 51) map (n => Name(n)))
     .zip(((('a' to 'z') ++ ('A' to 'Z')) map (s => s.toString)))).toMap
-    
+
   val next: Name = Name(52)
 
   property("simpleProcess") = {
@@ -437,10 +437,11 @@ object TypecheckProperties extends Properties("Typecheck") {
     " ]                          " )
 
   property("polymorphicProgChecks") = checks (
-    " [ server $id : r_x of d ~ { @d , d } . send <- r_x : -> r_x . end " +
-    " | send $id : { $ri , 10   } . end                                 " +
-    " | send $id : { $rb , true } . end                                 " +
-    " ]                                                                 " )
+    " new id of d ~ @{ @d , d } .                                        " +
+    "   [ server id : r_x of d ~ { @d , d } . send <- r_x : -> r_x . end " +
+    "   | send id : { $ri , 10   } . end                                 " +
+    "   | send id : { $rb , true } . end                                 " +
+    "   ]                                                                " )
 
   property("badProcsDontCheck") = noneCheck ( List (
     " [ receive $a : y of @int  . send y : y . end | send $a : 12 . end ] " ,

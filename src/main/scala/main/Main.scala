@@ -38,13 +38,16 @@ object Main extends App {
     lexAndParse ( Parser.proc , Source fromFile args(0) ) match {
       case Right ( ( names , nextName , proc ) ) =>
 
+        // 'flip' the name map from the lexer such that we can easily use it to
+        // print terms.
+        val namesF: Map [ Name , String ] = names.map ( _.swap )
+
         // Get a typecheck environment
-        val (env: Map [ Name , SType ], nn: Name) =
-          Typecheck.initialEnv ( proc )
+        val env: Map [ Name , SType ] = Typecheck.initialEnv ( proc )
 
         // Generate typing constraints
         val ( _ , constr: ConstraintSet , _ ) =
-          Typecheck.constraintsProc ( proc , env , nn )
+          Typecheck.constraintsProc ( proc , env , Name ( 0 ) )
 
         // Try to solve constraints
         Typecheck.unify ( constr , ConstraintSet.empty ) match {
@@ -57,10 +60,12 @@ object Main extends App {
           case Left  ( cs ) => {
             println ( s"${cs.size} type errors found:" )
             cs.foreach ( { c =>
-              println ( s"\n  Cannot unify ${c.t1} with ${c.t2}." )
+              println (
+                s"\n  Cannot unify ${c.t1 pstr namesF} " +
+                s"with ${c.t2 pstr namesF}." )
               c.origins.foreach ( { o =>
                 println ( s"    At ${o.info}:" )
-                println ( s"    ${o.pstr ( names.map ( _.swap ) )}" )
+                println ( s"    ${o pstr namesF}" )
               } )
             } )
           }
