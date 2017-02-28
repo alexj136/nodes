@@ -3,19 +3,19 @@
     send $a : "def" .
     end
 |
-    receive $a : first .
-    receive $a : second .
-    new rch_wrongcat .
+    receive $a : first  of string .
+    receive $a : second of string .
+    new rch_wrongcat of @string .
     send $wrongcat : { { first , second } , rch_wrongcat } .
-    receive rch_wrongcat : all .
+    receive rch_wrongcat : all of string .
     send $print : all .
     end
 |
-    server $wrongcat : first_second__rch .
-    let rch          = -> first_second__rch .
-    let first_second = <- first_second__rch .
-    let second       = -> first_second .
-    let first        = <- first_second .
+    server $wrongcat : first_second__rch of { { string , string } , @string } .
+    let rch          of @string             = -> first_second__rch .
+    let first_second of { string , string } = <- first_second__rch .
+    let second       of string              = -> first_second .
+    let first        of string              = <- first_second .
     if ? first then
         send rch : second .
         end

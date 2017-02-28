@@ -1,21 +1,21 @@
 [
-    let l = [ 1 , 2 , 3 , 4 , 5 , 6 ] .
-    new rch .
+    let l of [int] = [ 1 , 2 , 3 , 4 , 5 , 6 ] .
+    new rch of @int .
     send $sumlist : { l , rch } .
-    receive rch : sum .
+    receive rch : sum of int .
     send $print : sum .
     end
 |
-    server $sumlist : list_rch .
-    let list = <- list_rch .
-    let rch  = -> list_rch .
+    server $sumlist : list_rch of { [int], @int } .
+    let list of [int] = <- list_rch .
+    let rch  of @int  = -> list_rch .
     if ? list then
         send rch : 0 .
         end
     else
-        new rch_recursive_call .
+        new rch_recursive_call of @int .
         send $sumlist : { -** list , rch_recursive_call } .
-        receive rch_recursive_call : tailsum .
+        receive rch_recursive_call : tailsum of int .
         send rch : ( *-- list ) + tailsum .
         end
     endif

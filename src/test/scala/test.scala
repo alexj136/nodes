@@ -292,14 +292,14 @@ object TurnerMachineProperties extends Properties("TurnerMachineState") {
   val next: Name = Name(52)
 
   property("simpleProcess") = {
-    val procStr: String = " [ receive $a : y . send y : y . end | " +
-      "send $a : $x . end ] "
+    val procStr: String = " [ receive $a : y of int . send $b : y . end | " +
+      "send $a : 10 . end ] "
     lexAndParse ( Parser.proc , Source fromString procStr ) match {
       case Right ( ( nmap , nn , proc ) ) => {
         runWithTurnerMachine ( proc , nmap.map ( _.swap ) , nn )._1.listify
           .filter( _ != End )
-          .==( List ( Send ( ChanLiteral ( nmap ( "$x" ) ) ,
-            ChanLiteral ( nmap ( "$x" ) ) , End ) ) )
+          .==( List ( Send ( ChanLiteral ( nmap ( "$b" ) ) ,
+            IntLiteral ( 10 ) , End ) ) )
       }
       case Left ( _ ) => false
     }
@@ -378,8 +378,11 @@ object TypecheckProperties extends Properties("Typecheck") {
     true
   }}
 
-  def checks(procStr: String): Boolean = checkProc ( lexAndParse (
-    Parser.proc , Source fromString procStr ).right.get._3 ).isDefined
+  def checks(procStr: String): Boolean =
+    lexAndParse ( Parser.proc , Source fromString procStr ) match {
+      case Right ( ( nmap , nn , proc ) ) => checkProc ( proc ).isDefined
+      case Left  ( _                    ) => false
+    }
   def allCheck(procStrs: List[String]): Boolean =
     procStrs.map ( checks ).foldLeft ( true ) ( _ && _ )
   def noneCheck(procStrs: List[String]): Boolean =
@@ -395,7 +398,7 @@ object TypecheckProperties extends Properties("Typecheck") {
     " send $a : 12 . end "                  ,
     " new a of @bool. end "                 ,
     " let x of int = -> { 10 , 11 } . end " ,
-    " server $a : y . end "                 ) )
+    " server $a : y of int . end "          ) )
 
   property("letProcChecks") = checks (
     " [                                " +
@@ -434,15 +437,15 @@ object TypecheckProperties extends Properties("Typecheck") {
     " ]                          " )
 
   property("polymorphicProgChecks") = checks (
-    " [ server $id : r_x . send <- r_x : -> r_x . end " +
-    " | send $id : 10 . end                           " +
-    " | send $id : true . end                         " +
-    " ]                                               " )
+    " [ server $id : r_x of d ~ { @d , d } . send <- r_x : -> r_x . end " +
+    " | send $id : { $ri , 10   } . end                                 " +
+    " | send $id : { $rb , true } . end                                 " +
+    " ]                                                                 " )
 
   property("badProcsDontCheck") = noneCheck ( List (
-    " [ receive $a : y . send y : y . end | send $a : 12 . end ] "  ,
-    " [ receive $a : y . send y : 3 . end | send $a : 12 . end ] " ,
-    " [ receive $a : y . send y : y . end ] "                       ) )
+    " [ receive $a : y of @int  . send y : y . end | send $a : 12 . end ] " ,
+    " [ receive $a : y of @bool . send y : 3 . end | send $a : 12 . end ] " ,
+    " [ receive $a : y of @char . send y : y . end ] "                      ) )
 
   property("simpleloopExampleTypechecks") =
     checks ( Source.fromFile("examples/simpleloop"        ).mkString )

@@ -1,40 +1,40 @@
 [
-    server $subten : n_rch .
-    let n   = <- n_rch .
-    let rch = -> n_rch .
+    server $subten : n_rch of { int , @int } .
+    let n   of  int = <- n_rch .
+    let rch of @int = -> n_rch .
     send rch : n - 10 .
     end
 
 |
 
-    server $double_subten : n_rch .
-    let n   = <- n_rch .
-    let rch = -> n_rch .
-    new rch_d .
+    server $double_subten : n_rch of { int , @int } .
+    let n   of  int = <- n_rch .
+    let rch of @int = -> n_rch .
+    new rch_d of @int .
     send $subten : { n * 2 , rch_d } .
-    receive rch_d : res .
+    receive rch_d : res of int .
     send rch : res .
     end
 
 |
 
-    server $addone_double_subten : n_rch .
-    let n   = <- n_rch .
-    let rch = -> n_rch .
-    new rch_d .
+    server $addone_double_subten : n_rch of { int , @int } .
+    let n   of  int = <- n_rch .
+    let rch of @int = -> n_rch .
+    new rch_d of @int .
     send $double_subten : { n + 1 , rch_d } .
-    receive rch_d : res .
+    receive rch_d : res of int .
     send rch : res .
     end
 
 |
 
-    server $loop : x .
+    server $loop : x of int .
     if x < 1000000000 then
         send $print : { $looping_with , x } .
-        new rch .
+        new rch of @int .
         send $addone_double_subten : { x , rch } .
-        receive rch : n .
+        receive rch : n of int .
         send $loop : n .
         end
     else
