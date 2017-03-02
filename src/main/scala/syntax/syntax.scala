@@ -34,48 +34,65 @@ case object NoInfo extends Info
 sealed abstract class Proc extends SyntaxElement {
 
   def pstr(names: Map[Name, String]): String = this match {
-    case Send       ( ch    , msg , p            ) =>
-      s"send ${ch pstr names} : ${msg pstr names} . ${p pstr names}"
-    case Receive    ( true  , ch  , bind , t , p ) =>
-      s"server ${ch pstr names} : ${bind pstr names} of " +
-      s"${t pstr names} . ${p pstr names}"
-    case Receive    ( false , ch  , bind , t , p ) =>
-      s"receive ${ch pstr names} : ${bind pstr names} of " +
-      s"${t pstr names} . ${p pstr names}"
-    case LetIn      ( bind  , t , exp , p        ) =>
-      s"let ${names(bind)} of ${t pstr names} = " +
+    case Send       ( c     , ts  , ms   , p      ) =>
+      "send " + (c pstr names) + "; " +
+      ((ts map (_ pstr names)) mkString ", ") +
+      "; " + ((ms map (_ pstr names)) mkString ", ") + ". " + (p pstr names)
+    case Receive    ( r     , c   , qs   , as , p ) =>
+      (if (r) "server" else "receive") + " " + (c pstr names) + "; " +
+      ((qs map (_ pstr names)) mkString ", ") + "; " + ((as map {
+        case (n, t) => s"${n pstr names}: ${t pstr names}"
+      }) mkString ", ") + ". " + (p pstr names)
+    case LetIn      ( bind  , t , exp , p         ) =>
+      s"let ${bind pstr names}: ${t pstr names} = " +
       s"${exp pstr names} . ${p pstr names}"
-    case IfThenElse ( exp   , tP  , fP           ) =>
+    case IfThenElse ( exp   , tP  , fP            ) =>
       s"if ${exp pstr names} then ${tP pstr names} else ${fP pstr names} endif"
-    case Parallel   ( p     , q                  ) =>
+    case Parallel   ( p     , q                   ) =>
       s"[ ${p pstr names} | ${q pstr names} ]"
-    case New        ( name  , t , p              ) =>
-      s"new ${name pstr names} of ${t pstr names} . ${p pstr names}"
+    case New        ( name  , t , p               ) =>
+      s"new ${name pstr names}: ${t pstr names} . ${p pstr names}"
     case End                                       => "end"
   }
 
   def chanLiterals: Set[Name] = this match {
-    case Send       ( e , m , p         ) =>
-      e.chanLiterals union m.chanLiterals union p.chanLiterals
-    case IfThenElse ( e , p , q         ) =>
+    case Send       ( c , _ , ms , p     ) =>
+      c.chanLiterals union p.chanLiterals union
+        ( ms map ( _.chanLiterals ) ).fold ( Set.empty ) ( _ union _ )
+    case Receive    ( _ , e , _  , _ , p ) =>
+      e.chanLiterals union p.chanLiterals
+    case LetIn      ( _ , _ , e  , p     ) =>
+      e.chanLiterals union p.chanLiterals
+    case IfThenElse ( e , p , q          ) =>
       e.chanLiterals union p.chanLiterals union q.chanLiterals
-    case Receive    ( _ , e , _ , _ , p ) => e.chanLiterals union p.chanLiterals
-    case LetIn      ( _ , _ , e , p     ) => e.chanLiterals union p.chanLiterals
-    case Parallel   ( p , q             ) => p.chanLiterals union q.chanLiterals
-    case New        ( _ , _ , p         ) => p.chanLiterals
-    case End                              => Set.empty
+    case Parallel   ( p , q              ) =>
+      p.chanLiterals union q.chanLiterals
+    case New        ( _ , _ , p          ) =>
+      p.chanLiterals
+    case End                               =>
+      Set.empty
   }
 
   def free: Set[Name] = this match {
-    case Send       ( e , m , p         ) => e.free union m.free union p.free
-    case IfThenElse ( e , p , q         ) => e.free union p.free union q.free
-    case Parallel   ( p , q             ) => p.free union q.free
-    case New        ( n , t , p         ) => (p.free - n) union t.free
-    case End                              => Set.empty
-    case Receive    ( _ , e , n , t , p ) =>
+    case IfThenElse ( e , p  , q           ) => e.free union p.free union q.free
+    case Parallel   ( p , q                ) => p.free union q.free
+    case New        ( n , t  , p           ) => (p.free - n) union t.free
+    case End                                 => Set.empty
+    case LetIn      ( n , t  , e  , p      ) =>
       e.free union (p.free - n) union t.free
-    case LetIn      ( n , t , e , p     ) =>
-      e.free union (p.free - n) union t.free
+    case Send       ( c , ts , ms , p      ) => c.free union p.free union
+      ( ( ms map ( ( e: Exp ) => e.free ) ) ++
+        ( ts map ( ( t: SType ) => t.free ) ) )
+          .fold ( Set.empty ) ( _ union _ )
+    case Receive    ( _ , c  , qs , as , p ) => {
+      val freeInP: Set [ Name ] =
+        p.free -- ( as map ( ( nt: ( Name, SType ) ) => nt._1 ) )
+      val freeInAs: Set [ Name ] =
+        ( ( ( as map ( ( nt: ( Name, SType ) ) => nt._2 ) )
+          .map ( ( ( t: SType ) => t.free ) ) )
+          .fold ( Set.empty ) ( _ union _ ) ) -- qs
+      c.free union freeInP union freeInAs
+    }
   }
 
   /** Decompose top-level parallel compositions into a list of processes.
@@ -92,48 +109,88 @@ sealed abstract class Proc extends SyntaxElement {
    *  returned.
    */
   def alphaEquiv(that: Proc): Option[Map[Name, Name]] = (this, that) match {
-    case ( Send      (c, e, p      ) , Send      (d, f, q      ) ) =>
-      alphaEquivCombine(alphaEquivCombine(
-        c alphaEquiv d, e alphaEquiv f), p alphaEquiv q)
-    case ( Receive   (r, c, n, t, p) , Receive   (s, d, m, u, q) ) =>
-      if (r == s)
-        alphaEquivCombine(c alphaEquiv d,
-        alphaEquivCombine(t alphaEquiv u,
-        alphaEquivEnsureBinding(p alphaEquiv q, n, m)))
-      else None
-    case ( LetIn     (n, t, x, p   ) , LetIn     (m, u, y, q   ) ) =>
-      alphaEquivCombine(x alphaEquiv y,
-      alphaEquivCombine(t alphaEquiv u,
-      alphaEquivEnsureBinding(p alphaEquiv q, n, m)))
-    case ( IfThenElse(a, p, r      ) , IfThenElse(b, q, s      ) ) =>
-      alphaEquivCombine(alphaEquivCombine(
-        a alphaEquiv b, p alphaEquiv q), r alphaEquiv s)
-    case ( Parallel  (p, r         ) , Parallel  (q, s         ) ) =>
+    case ( Send      (c, ts, ms, p      ) , Send      (d, us, ns, q    ) ) =>
+      alphaEquivCombineMany(List(
+        c alphaEquiv d,
+        p alphaEquiv q,
+        alphaEquivCombineMany((ts, us).zipped map ( _ alphaEquiv _ ))
+      ))
+    case ( Receive   (r, c , qs, as, p  ) , Receive   (s, d , rs, bs, q) ) =>
+      if (r != s) None else
+        alphaEquivCombineMany(List(
+          c alphaEquiv d,
+          alphaEquivCombineMany(
+            ((as map (_._2), bs map (_._2)).zipped map ( _ alphaEquiv _ ))
+              .map ( alphaEquivEnsureManyBindings ( _ , qs zip rs ) )
+          ),
+          alphaEquivEnsureManyBindings(
+            p alphaEquiv q, (as map (_._1)) zip (bs map (_._1))
+          )
+        ))
+    case ( LetIn     (n, t , x , p      ) , LetIn     (m, u , y , q    ) ) =>
+      alphaEquivCombineMany(List(
+        x alphaEquiv y,
+        t alphaEquiv u,
+        alphaEquivEnsureBinding(p alphaEquiv q, n, m)
+      ))
+    case ( IfThenElse(a, p , r          ) , IfThenElse(b, q , s        ) ) =>
+      alphaEquivCombineMany(List(
+        a alphaEquiv b,
+        p alphaEquiv q,
+        r alphaEquiv s
+      ))
+    case ( Parallel  (p, r              ) , Parallel  (q, s            ) ) =>
       alphaEquivCombine(p alphaEquiv q, r alphaEquiv s)
-    case ( New       (n, t, p      ) , New       (m, u, q      ) ) =>
+    case ( New       (n, t, p           ) , New       (m, u, q         ) ) =>
       alphaEquivCombine(t alphaEquiv u,
-      alphaEquivEnsureBinding(p alphaEquiv q, n, m))
-    case ( End                       , End                       ) =>
+        alphaEquivEnsureBinding(p alphaEquiv q, n, m))
+    case ( End                            , End                          ) =>
       Some(Map.empty)
-    case ( _                         , _                         ) =>
+    case ( _                              , _                            ) =>
       None
   }
 }
 
-case class  Send       ( c: Exp     , m: Exp   , p: Proc                      )
-  extends Proc
-case class  Receive    ( r: Boolean , c: Exp   , n: Name , t: SType , p: Proc )
-  extends Proc
-case class  LetIn      ( n: Name    , t: SType , e: Exp  , p: Proc            )
-  extends Proc
-case class  IfThenElse ( c: Exp     , t: Proc  , f: Proc                      )
-  extends Proc
-case class  Parallel   ( p: Proc    , q: Proc                                 )
-  extends Proc
-case class  New        ( n: Name    , t: SType , p: Proc                      )
-  extends Proc
-case object End
-  extends Proc
+case class Send
+  ( chan  : Exp
+  , types : List [ SType ]
+  , msgs  : List [ Exp   ]
+  , p     : Proc
+  ) extends Proc
+
+case class Receive
+  ( repl   : Boolean
+  , chan   : Exp
+  , tyArgs : List [ Name ]
+  , args   : List [ ( Name , SType ) ]
+  , p      : Proc
+  ) extends Proc
+
+case class LetIn
+  ( name : Name
+  , ty   : SType
+  , exp  : Exp
+  , p    : Proc
+  ) extends Proc
+
+case class IfThenElse
+  ( cond   : Exp
+  , trueP  : Proc
+  , falseP : Proc
+  ) extends Proc
+
+case class Parallel
+  ( p : Proc
+  , q : Proc
+  ) extends Proc
+
+case class New
+  ( name : Name
+  , ty   : SType
+  , p    : Proc
+  ) extends Proc
+
+case object End extends Proc
 
 object Proc {
   def fromList(ps: List[Proc]): Proc = ps match {
@@ -347,7 +404,7 @@ sealed abstract class SType extends SyntaxElement {
   /**
    * Substitute type variables in a type expression, of a given name, to another
    * given type expression. Only terminates when the name 'from' does not occur
-   * in this. Only defined over types that do not contain quantifiers.
+   * in this, so run an occurs-check first.
    */
   def sTypeSubst ( from: Name , to: SType ) : SType = this match {
     case SVar   ( n     ) if n == from => to
@@ -358,14 +415,6 @@ sealed abstract class SType extends SyntaxElement {
     case SList  ( t     )              => SList ( t sTypeSubst ( from , to ) )
     case SFunc  ( a , r )              =>
       SFunc ( a sTypeSubst ( from , to ) , r sTypeSubst ( from , to ) )
-    case SQuant ( n , t )              =>
-      if ( to.free ( n ) ) {
-        val fresh: Name =
-          Name ( ( ( to.free ++ this.free + from ) map ( _.id ) ).max ).next
-        SQuant ( fresh , ( t sTypeSubst ( n , SVar ( fresh ) ) ) )
-          .sTypeSubst ( from , to )
-      }
-      else SQuant ( n , t sTypeSubst ( from , to ) )
     case _                            => this
   }
 
@@ -378,7 +427,6 @@ sealed abstract class SType extends SyntaxElement {
     case SList  ( t     ) => s"[${t pstr names}]"
     case SPair  ( l , r ) => s"{ ${l pstr names} , ${r pstr names} }"
     case SVar   ( n     ) => n pstr names
-    case SQuant ( n , t ) => s"${n pstr names} ~ ${t pstr names}"
     case SFunc  ( a , r ) => s"(${a pstr names} => ${r pstr names})"
   }
 
@@ -391,7 +439,6 @@ sealed abstract class SType extends SyntaxElement {
     case SList  ( t     ) => t.free
     case SPair  ( l , r ) => l.free union r.free
     case SVar   ( n     ) => Set(n)
-    case SQuant ( n , t ) => t.free - n
     case SFunc  ( a , r ) => a.free union r.free
   }
 
@@ -405,8 +452,6 @@ sealed abstract class SType extends SyntaxElement {
       case (SPair  ( l1 , r1 ), SPair  ( l2 , r2 )) =>
         alphaEquivCombine(l1 alphaEquiv l2, r1 alphaEquiv r2)
       case (SVar   ( n       ), SVar   ( m       )) => Some(Map(n -> m))
-      case (SQuant ( n , t   ), SQuant ( m , u   )) =>
-        alphaEquivEnsureBinding(t alphaEquiv u, n, m)
       case (SFunc  ( a1 , r1 ), SFunc  ( a2 , r2 )) =>
         alphaEquivCombine(a1 alphaEquiv a2, r1 alphaEquiv r2)
       case (_                 , _                 ) => None
@@ -420,7 +465,6 @@ case class  SChan  ( val t: SType        ) extends SType
 case class  SList  ( t: SType            ) extends SType
 case class  SPair  ( l: SType , r: SType ) extends SType
 case class  SVar   ( n: Name             ) extends SType
-case class  SQuant ( n: Name  , t: SType ) extends SType
 case class  SFunc  ( a: SType , r: SType ) extends SType
 
 /**
@@ -452,6 +496,19 @@ object alphaEquivCombine extends Function2[
   }
 }
 
+object alphaEquivCombineMany extends Function1[
+    List[Option[Map[Name, Name]]],
+    Option[Map[Name, Name]]
+  ] {
+
+  def apply(ms: List[Option[Map[Name, Name]]]): Option[Map[Name, Name]] =
+    ms match {
+      case Nil          => Some(Map.empty)
+      case m :: Nil     => m
+      case m :: n :: os => alphaEquivCombineMany(alphaEquivCombine(m, n) :: os)
+    }
+}
+
 /**
  * Ensure that two names n and m represent equivalent binders in a given alpha
  * equivalence mapping. They represent equivalent binders if
@@ -474,5 +531,21 @@ object alphaEquivEnsureBinding extends Function3[
     case Some(assocs)
       if  assocs.contains(n) &&  assocs(n) == m                    => a
     case _ => None
+  }
+}
+
+object alphaEquivEnsureManyBindings extends Function2[
+    Option[Map[Name, Name]],
+    List[(Name, Name)],
+    Option[Map[Name, Name]]
+  ] {
+
+  def apply(
+      a: Option[Map[Name, Name]],
+      nms: List[(Name, Name)])
+    : Option[Map[Name, Name]] = nms match {
+      case Nil          => a
+      case (n, m) :: os => alphaEquivEnsureManyBindings(
+        alphaEquivEnsureBinding(a, n, m), os)
   }
 }
