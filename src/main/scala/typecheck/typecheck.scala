@@ -69,9 +69,15 @@ case class Constraint
 object Typecheck {
 
   def checkProc ( p: Proc ): Option [ SType ] = {
-    val env: Map [ Name , SType ] = initialEnv ( p )
-    val ( tyP , constrP , nnP ): ( SType , ConstraintSet , Name ) =
-      constraintsProc ( p , env , Name ( 0 ) )
+
+    val nextName: Name = findNextName ( p.free )
+
+    val ( env: Map [ Name , SType ] , nextNameE: Name ) =
+      initialEnv ( p , nextName )
+
+    val ( tyP , constrP , nextNameP ): ( SType , ConstraintSet , Name ) =
+      constraintsProc ( p , env , nextNameE )
+
     unify ( constrP , ConstraintSet.empty ) match {
       case Right ( unifyFn ) => Some ( unifyFn ( tyP ) )
       case Left  ( _       ) => None
@@ -95,12 +101,12 @@ object Typecheck {
       case ( Some ( c ) , rest ) if c.trivial => unify ( rest , failed )
       case ( Some ( c ) , rest )              => c.asPair match {
 
-        case ( SVar ( n ) , ty         ) if ! ( ty hasOccurrenceOf n ) =>
+        case ( SVar ( n ) , ty         ) if ! ( ty free n ) =>
           val subFn: SType => SType = _ sTypeSubst ( n , ty )
           unify ( rest map subFn , failed map subFn )
             . right . map ( _ compose subFn )
 
-        case ( ty         , SVar ( n ) ) if ! ( ty hasOccurrenceOf n ) =>
+        case ( ty         , SVar ( n ) ) if ! ( ty free n ) =>
           val subFn: SType => SType = _ sTypeSubst ( n , ty )
           unify ( rest map subFn , failed map subFn )
             . right . map ( _ compose subFn )
@@ -127,9 +133,15 @@ object Typecheck {
     }
   }
 
-  def initialEnv ( p: Proc ): Map [ Name , SType ] = p.chanLiterals.map { c =>
-      ( c , SQuant ( Name ( 0 ) , SChan ( SVar ( Name ( 0 ) ) ) ) )
-  }.toMap
+  def initialEnv ( p: Proc , nn: Name ): ( Map [ Name , SType ] , Name ) = {
+    var map: Map [ Name , SType ] = Map.empty
+    var name: Name = nn
+    p.chanLiterals.foreach { c =>
+      map = map + ( c -> SChan ( SVar ( name ) ) )
+      name = name.next
+    }
+    ( map , name )
+  }
 
   def constraintsProc(
     p: Proc,
@@ -183,7 +195,8 @@ object Typecheck {
       ( SProc , constrP union constrQ , nnQ )
     }
     case New ( bind , ty , p ) => {
-      constraintsProc ( p , env + ( bind -> ty ) , nn )
+      val ( tyD , nnT ): ( SType, Name ) = dequantify ( ty , nn )
+      constraintsProc ( p , env + ( bind -> tyD ) , nnT )
     }
     case End => ( SProc , ConstraintSet.empty , nn )
   }
@@ -253,22 +266,20 @@ object Typecheck {
     case GreaterEq  => SFunc(SInt , SFunc(SInt , SBool))
     case And        => SFunc(SBool, SFunc(SBool, SBool))
     case Or         => SFunc(SBool, SFunc(SBool, SBool))
-    case Cons       => SQuant(new Name(0),
-      SFunc(SVar(new Name(0)),
-      SFunc(SList(SVar(new Name(0))),SList(SVar(new Name(0))))))
+    case Cons       => SQuant(Name(0),SFunc(SVar(Name(0)),
+      SFunc(SList(SVar(Name(0))),SList(SVar(Name(0))))))
   }
 
   def typeOfUnOp(op: UnOp): SType = op match {
     case Not    => SFunc(SBool, SBool)
-    case PLeft  => SQuant(new Name(0), SQuant(new Name(1),
-      SFunc(SPair(SVar(new Name(0)), SVar(new Name(1))), SVar(new Name(0)))))
-    case PRight => SQuant(new Name(0), SQuant(new Name(1),
-      SFunc(SPair(SVar(new Name(0)), SVar(new Name(1))), SVar(new Name(1)))))
-    case Empty  => SQuant(new Name(0), SFunc(SList(SVar(new Name(0))), SBool))
-    case Head   => SQuant(new Name(0),
-      SFunc(SList(SVar(new Name(0))), SVar(new Name(0))))
-    case Tail   => SQuant(new Name(0),
-      SFunc(SList(SVar(new Name(0))), SList(SVar(new Name(0)))))
+    case PLeft  => SQuant(Name(0), SQuant(Name(1),
+      SFunc(SPair(SVar(Name(0)), SVar(Name(1))), SVar(Name(0)))))
+    case PRight => SQuant(Name(0), SQuant(Name(1),
+      SFunc(SPair(SVar(Name(0)), SVar(Name(1))), SVar(Name(1)))))
+    case Empty  => SQuant(Name(0), SFunc(SList(SVar(Name(0))), SBool))
+    case Head   => SQuant(Name(0), SFunc(SList(SVar(Name(0))), SVar(Name(0))))
+    case Tail   => SQuant(Name(0), SFunc(SList(SVar(Name(0))),
+      SList(SVar(Name(0)))))
   }
 
   /**

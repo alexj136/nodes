@@ -10,10 +10,6 @@ import java.io.File
 import java.io.IOException
 import scala.io.Source
 
-// Input to new lexer from file thusly:
-//   newparser.Lexer.lex(new scala.util.parsing.input.PagedSeqReader(
-//     scala.collections.immutable.PagedSeq.fromLines(
-//       scala.io.Source.fromFile("filename"))))
 object Main extends App {
 
   if (args.length < 1) {
@@ -43,11 +39,12 @@ object Main extends App {
         val namesF: Map [ Name , String ] = names.map ( _.swap )
 
         // Get a typecheck environment
-        val env: Map [ Name , SType ] = Typecheck.initialEnv ( proc )
+        val (env: Map [ Name , SType ] , nextNameE: Name) =
+          Typecheck.initialEnv ( proc , nextName )
 
         // Generate typing constraints
         val ( _ , constr: ConstraintSet , _ ) =
-          Typecheck.constraintsProc ( proc , env , Name ( 0 ) )
+          Typecheck.constraintsProc ( proc , env , nextNameE )
 
         // Try to solve constraints
         Typecheck.unify ( constr , ConstraintSet.empty ) match {

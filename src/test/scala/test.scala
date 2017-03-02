@@ -436,6 +436,11 @@ object TypecheckProperties extends Properties("Typecheck") {
     "     end                    " +
     " ]                          " )
 
+  property("badProcsDontCheck") = noneCheck ( List (
+    " [ receive $a : y of @int  . send y : y . end | send $a : 12 . end ] " ,
+    " [ receive $a : y of @bool . send y : 3 . end | send $a : 12 . end ] " ,
+    " [ receive $a : y of @char . send y : y . end ] "                      ) )
+
   property("polymorphicProgChecks") = checks (
     " new id of d ~ @{ @d , d } .                                        " +
     "   [ server id : r_x of d ~ { @d , d } . send <- r_x : -> r_x . end " +
@@ -443,10 +448,13 @@ object TypecheckProperties extends Properties("Typecheck") {
     "   | send id : { $rb , true } . end                                 " +
     "   ]                                                                " )
 
-  property("badProcsDontCheck") = noneCheck ( List (
-    " [ receive $a : y of @int  . send y : y . end | send $a : 12 . end ] " ,
-    " [ receive $a : y of @bool . send y : 3 . end | send $a : 12 . end ] " ,
-    " [ receive $a : y of @char . send y : y . end ] "                      ) )
+  property("badPolyDoesntCheck") = ! checks (
+    " new id of d ~ @d .                                                 " +
+    "   [ server id : r_x of d ~ { @d , d } . send <- r_x : -> r_x . end " +
+    "   | send id : { $ri , 10   } . end                                 " +
+    "   | send id : { $rb , true } . end                                 " +
+    "   | send id : 10 . end                                             " +
+    "   ]                                                                " )
 
   property("simpleloopExampleTypechecks") =
     checks ( Source.fromFile("examples/simpleloop"        ).mkString )
@@ -462,6 +470,9 @@ object TypecheckProperties extends Properties("Typecheck") {
 
   property("strings_charsExampleTypechecks") =
     checks ( Source.fromFile("examples/strings_chars"     ).mkString )
+
+  property("polyExampleTypechecks") =
+    checks ( Source.fromFile("examples/poly"              ).mkString )
 
   property("unifyArbitraryProcNoCrash") = Prop.forAll { proc: Proc => {
     // Free variables are SInts in this typing environment

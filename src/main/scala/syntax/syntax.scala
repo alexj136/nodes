@@ -10,9 +10,15 @@ sealed trait SyntaxElement {
 
 case class Name(val id: Int) extends SyntaxElement {
   def next: Name = new Name(this.id + 1)
-  def pstr(names: Map[Name, String]): String = names(this)
+  def pstr(names: Map[Name, String]): String =
+    names getOrElse (this, s"<${this.id}>")
   def free: Set[Name] = Set(this)
   override def toString: String = s"Name(${this.id})" // for debugging
+}
+
+object findNextName extends Function1[Set[Name], Name] {
+  def apply(names: Set[Name]): Name = if (names.isEmpty) Name ( 0 ) else
+    Name ( ( names.map ( _.id ).max ) + 1 )
 }
 
 abstract class Info {
@@ -31,20 +37,20 @@ sealed abstract class Proc extends SyntaxElement {
     case Send       ( ch    , msg , p            ) =>
       s"send ${ch pstr names} : ${msg pstr names} . ${p pstr names}"
     case Receive    ( true  , ch  , bind , t , p ) =>
-      s"server ${ch pstr names} : ${names(bind)} of " +
+      s"server ${ch pstr names} : ${bind pstr names} of " +
       s"${t pstr names} . ${p pstr names}"
     case Receive    ( false , ch  , bind , t , p ) =>
-      s"receive ${ch pstr names} : ${names(bind)} of " +
+      s"receive ${ch pstr names} : ${bind pstr names} of " +
       s"${t pstr names} . ${p pstr names}"
     case LetIn      ( bind  , t , exp , p        ) =>
       s"let ${names(bind)} of ${t pstr names} = " +
-      s"${exp.pstr(names)} . ${p pstr names}"
+      s"${exp pstr names} . ${p pstr names}"
     case IfThenElse ( exp   , tP  , fP           ) =>
       s"if ${exp pstr names} then ${tP pstr names} else ${fP pstr names} endif"
     case Parallel   ( p     , q                  ) =>
       s"[ ${p pstr names} | ${q pstr names} ]"
     case New        ( name  , t , p              ) =>
-      s"new ${names(name)} of ${t pstr names} . ${p pstr names}"
+      s"new ${name pstr names} of ${t pstr names} . ${p pstr names}"
     case End                                       => "end"
   }
 
@@ -180,13 +186,13 @@ sealed abstract class Exp extends SyntaxElement {
 
   def pstr(names: Map[Name, String]): String = this match {
     case Variable    ( name          ) =>
-      names getOrElse (name, s"$$<new ${{name.id}}>")
+      name pstr names
     case IntLiteral  ( value         ) =>
       value.toString
     case BoolLiteral ( value         ) =>
       value.toString
     case ChanLiteral ( name          ) =>
-      names getOrElse (name, s"$$<new ${name.id}>")
+      name pstr names
     case KharLiteral ( value         ) =>
       s"'$value'"
     case Pair        ( l    , r      ) =>
@@ -363,37 +369,17 @@ sealed abstract class SType extends SyntaxElement {
     case _                            => this
   }
 
-  /**
-   * Occurs check - check a type variable name does not occur within this type,
-   * with which it must be unified. Such a situation would cause infinite
-   * recursion during unification.
-   */
-  def hasOccurrenceOf ( n: Name ) : Boolean = ( n , this ) match {
-    case ( x , SVar   ( y     ) ) => x == y
-    case ( x , SChan  ( t     ) ) => ( t hasOccurrenceOf x )
-    case ( x , SFunc  ( a , r ) ) =>
-      ( a hasOccurrenceOf x ) || ( r hasOccurrenceOf x )
-    case ( x , SPair  ( l , r ) ) =>
-      ( l hasOccurrenceOf x ) || ( r hasOccurrenceOf x )
-    case ( x , SList  ( t     ) ) => ( t hasOccurrenceOf x )
-    case ( x , SQuant ( n , t ) ) =>
-      if ( n == x ) false else t hasOccurrenceOf x
-    case _ => false
-  }
-
   override def pstr(names: Map[Name, String]): String = this match {
     case SProc            => "process"
-    case SInt             => "integer"
-    case SBool            => "boolean"
-    case SKhar            => "character"
-    case SChan  ( t     ) => s"channel ( $t )"
-    case SList  ( t     ) => s"list ( $t )"
-    case SPair  ( l , r ) => s"pair ( $l , $r )"
-    case SVar   ( n     ) =>
-      names getOrElse (n, s"$$<new ${{n.id}}>")
-    case SQuant ( n , t ) =>
-      s"forall ${names getOrElse (n, s"$$t${{n.id}}>")}: $t"
-    case SFunc  ( a , r ) => s"( $a => $r )"
+    case SInt             => "int"
+    case SBool            => "bool"
+    case SKhar            => "char"
+    case SChan  ( t     ) => s"@${t pstr names}"
+    case SList  ( t     ) => s"[${t pstr names}]"
+    case SPair  ( l , r ) => s"{ ${l pstr names} , ${r pstr names} }"
+    case SVar   ( n     ) => n pstr names
+    case SQuant ( n , t ) => s"${n pstr names} ~ ${t pstr names}"
+    case SFunc  ( a , r ) => s"(${a pstr names} => ${r pstr names})"
   }
 
   override def free: Set[Name] = this match {
