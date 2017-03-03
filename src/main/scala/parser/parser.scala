@@ -52,7 +52,7 @@ object Parser extends Parsers {
     }
 
 
-  /** Take a SyntaxElement and two PostTokens, assign the left source position 
+  /** Take a SyntaxElement and two PostTokens, assign the left source position
    *  of the SyntaxElement as the position of the first token, and the right
    *  source position of the SyntaxElement as the position of the second token.
    *  Return the SyntaxElement with reassigned positions.
@@ -94,33 +94,44 @@ object Parser extends Parsers {
 
   def seq: Parser [ Proc ] = end | snd | rcv | srv | res | let | ite | par
 
-  def par: Parser [ Proc ] = LSQUARE() ~ rep1sep ( seq , BAR() ) ~ RSQUARE() ^^ {
-    case l ~ p ~ r => putPos ( Proc fromList p , l , r )
-  }
+  def par: Parser [ Proc ] =
+    LSQUARE() ~ rep1sep ( seq , BAR() ) ~ RSQUARE() ^^ {
+      case l ~ p ~ r => putPos ( Proc fromList p , l , r )
+    }
 
-  def snd: Parser [ Proc ] = SEND() ~ exp ~ COLON() ~ exp ~ DOT() ~ seq ^^ {
-    case s ~ c ~ _ ~ m ~ d ~ p => putPos ( Send ( c , m , p ) , s , d )
-  }
+  def snd: Parser [ Proc ] = SEND() ~ exp ~ SEMI() ~ repsep ( ty , COMMA() ) ~
+    SEMI () ~ repsep ( exp , COMMA() ) ~ DOT() ~ seq ^^ {
+      case s ~ c ~ _ ~ ts ~ _ ~ ms ~ d ~ p =>
+        putPos ( Send ( c , ts , ms , p ) , s , d )
+    }
 
   def rcv: Parser [ Proc ] =
-    RECEIVE() ~ exp ~ COLON() ~ name ~ OF() ~ qty ~ DOT() ~ seq ^^ {
-      case r ~ c ~ _ ~ b ~ _ ~ t ~ d ~ p =>
-        putPos ( Receive ( false , c , b , t , p ) , r , d )
+    RECEIVE() ~ exp ~ SEMI() ~ repsep ( name , COMMA() ) ~
+    SEMI() ~ repsep ( nameTy , COMMA() ) ~ DOT() ~ seq ^^ {
+      case r ~ c ~ _ ~ qs ~ _ ~ as ~ d ~ p =>
+        putPos ( Receive ( false , c , qs , as , p ) , r , d )
     }
 
   def srv: Parser [ Proc ] =
-    SERVER() ~ exp ~ COLON() ~ name ~ OF() ~ qty ~ DOT() ~ seq ^^ {
-      case s ~ c ~ _ ~ b ~ _ ~ t ~ d ~ p =>
-        putPos ( Receive ( true , c , b , t , p ) , s , d )
+    SERVER() ~ exp ~ SEMI() ~ repsep ( name , COMMA() ) ~
+    SEMI() ~ repsep ( nameTy , COMMA() ) ~ DOT() ~ seq ^^ {
+      case s ~ c ~ _ ~ qs ~ _ ~ as ~ d ~ p =>
+        putPos ( Receive ( true , c , qs , as , p ) , s , d )
     }
 
+  // Helper parser for server and receive to easily parse lists of
+  // 'name: ty, ...' using repsep.
+  def nameTy: Parser [ ( Name , SType ) ] = name ~ COLON() ~ ty ^^ {
+    case n ~ _ ~ t => ( n , t )
+  }
+
   def res: Parser [ Proc ] =
-    NEW() ~ name ~ OF() ~ qty ~ DOT() ~ seq ^^ {
+    NEW() ~ name ~ COLON() ~ ty ~ DOT() ~ seq ^^ {
       case nu ~ n ~ _ ~ t ~ d ~ p => putPos ( New ( n , t , p ) , nu , d )
     }
 
   def let: Parser [ Proc ] =
-    LET() ~ name ~ OF() ~ qty ~ EQUAL() ~ exp ~ DOT() ~ seq ^^ {
+    LET() ~ name ~ COLON() ~ ty ~ EQUAL() ~ exp ~ DOT() ~ seq ^^ {
       case l ~ n ~ _ ~ t ~ _ ~ e ~ d ~ p =>
         putPos ( LetIn ( n , t , e , p ) , l , d )
     }
@@ -135,18 +146,9 @@ object Parser extends Parsers {
 
   /**
    * Combinator parsers for types. No left-recursion here so it's nice and
-   * straightforward. We only allow quantifiers at the top level and thus break
-   * the grammar down into qty and ty productions to acheive this.
+   * straightforward.
    */
 
-  def qty: Parser [ SType ] =
-    name ~ TILDE() ~ ty ^^ {
-      case n ~ _ ~ t => putPos ( SQuant ( n , t ) , n , t )
-    } |
-    name ~ COMMA() ~ qty ^^ {
-      case n ~ _ ~ t => putPos ( SQuant ( n , t ) , n , t )
-    } | ty
-    
   def ty: Parser [ SType ] =
     tyInt | tyBool | tyChar | tyStr | tyList | tyChan | tyPair | tyVar
 
@@ -463,7 +465,7 @@ case class PRESTR   ( text: String ) extends PreInfoToken ( text ) {
 }
 
 sealed trait PostToken extends Token
-sealed trait PostInfoToken extends PostToken 
+sealed trait PostInfoToken extends PostToken
 case class POSTIDENT ( name: Name ) extends PostInfoToken
 case class POSTCHAN  ( name: Name ) extends PostInfoToken
 case class POSTINT   ( num:  Int  ) extends PostInfoToken

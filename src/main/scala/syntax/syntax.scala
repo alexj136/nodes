@@ -81,16 +81,12 @@ sealed abstract class Proc extends SyntaxElement {
     case LetIn      ( n , t  , e  , p      ) =>
       e.free union (p.free - n) union t.free
     case Send       ( c , ts , ms , p      ) => c.free union p.free union
-      ( ( ms map ( ( e: Exp ) => e.free ) ) ++
-        ( ts map ( ( t: SType ) => t.free ) ) )
-          .fold ( Set.empty ) ( _ union _ )
+      ( ( ms map ( _.free ) ) ++ ( ts map ( _.free ) ) )
+        .fold ( Set.empty ) ( _ union _ )
     case Receive    ( _ , c  , qs , as , p ) => {
-      val freeInP: Set [ Name ] =
-        p.free -- ( as map ( ( nt: ( Name, SType ) ) => nt._1 ) )
-      val freeInAs: Set [ Name ] =
-        ( ( ( as map ( ( nt: ( Name, SType ) ) => nt._2 ) )
-          .map ( ( ( t: SType ) => t.free ) ) )
-          .fold ( Set.empty ) ( _ union _ ) ) -- qs
+      val freeInP: Set [ Name ] = p.free -- ( as map ( _._1 ) )
+      val freeInAs: Set [ Name ] = ( ( ( as map ( _._2 ) ).map ( _.free ) )
+        .fold ( Set.empty ) ( _ union _ ) ) -- qs
       c.free union freeInP union freeInAs
     }
   }
@@ -119,13 +115,12 @@ sealed abstract class Proc extends SyntaxElement {
       if (r != s) None else
         alphaEquivCombineMany(List(
           c alphaEquiv d,
-          alphaEquivCombineMany(
-            ((as map (_._2), bs map (_._2)).zipped map ( _ alphaEquiv _ ))
-              .map ( alphaEquivEnsureManyBindings ( _ , qs zip rs ) )
-          ),
           alphaEquivEnsureManyBindings(
-            p alphaEquiv q, (as map (_._1)) zip (bs map (_._1))
-          )
+            alphaEquivCombineMany(
+              (as map (_._2), bs map (_._2)).zipped map ( _ alphaEquiv _ )),
+            qs zip rs),
+          alphaEquivEnsureManyBindings(
+            p alphaEquiv q, (as map (_._1)) zip (bs map (_._1)))
         ))
     case ( LetIn     (n, t , x , p      ) , LetIn     (m, u , y , q    ) ) =>
       alphaEquivCombineMany(List(
