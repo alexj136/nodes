@@ -26,11 +26,11 @@ object substituteProc extends Function3[Proc, Name, EvalExp, Proc] {
     val subE : Function[Exp, Exp] = e => substituteExp(e, from, to)
     p match {
 
-      case Send(ch, msg, q) => Send(subE(ch), subE(msg), subP(q))
+      case Send(c, ts, ms, q) => Send(subE(c), ts, ms map subE, subP(q))
 
-      case Receive(repl, ch, bind, ty, q) => {
-        val newQ = if (bind == from) q else subP(q)
-        Receive(repl, subE(ch), bind, ty, newQ)
+      case Receive(r, c, qs, as, q) => {
+        val newQ = if ((as map (_._1)) contains from) q else subP(q)
+        Receive(r, subE(c), qs, as, newQ)
       }
 
       case LetIn(name, ty, exp, q) => {
