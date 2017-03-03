@@ -1,6 +1,7 @@
 # Nodes
 
 ## About
+
 Nodes is a concurrent programming language, based on the Pi-Calculus. It is
 implemented in scala, both sequentially and concurrently. The sequential
 implementation is based on the algorithm given in David N. Turner's PhD thesis,
@@ -8,16 +9,32 @@ while the concurrent implementation is a true-to-semantics implementation using
 Akka, scala's concurrency library. 
 
 ## Source language syntax
+
 #### Processes
-    P ::= send E : E . P                Output
-        | receive E : X . P             Input
-        | server E : X . P              Replicated input
-        | let X = E . P                 Local abstraction
+
+    P ::= send E ; TS ; ES . P          Output
+        | receive E ; XS ; AS . P       Input
+        | server E ; XS ; AS . P        Replicated input
+        | let X : T = E . P             Local abstraction
         | if E then P1 else P2 endif    Conditional
         | [ P1 | P2 | ... | PN ]        N-ary parallel composition
         | new X . P                     Channel creation
         | end                           Null process
+
+    XS ::= ε                            Name list
+        | X, XS
+
+    TS ::= ε                            Type list
+        | T, TS
+
+    ES ::= ε                            Expression list
+        | E, ES
+
+    AS ::= ε                            Typed argument list
+        | X: T, AS
+
 #### Expressions
+
     E, F ::= X                          Variables ([a-z_]+)
         | C                             Channel literals ($[a-z_]+)
         | I                             Integers (0|[1-9][0-9]*)
@@ -49,13 +66,21 @@ Akka, scala's concurrency library.
         | E :: F                        List constructor
         | (E)                           Parenthesised expression
 
+#### Types
+
+    T, U ::= int                        Integer
+        | bool                          Boolean
+        | char                          Char
+        | string                        String (equivalent to [ char ])
+        | [ T ]                         List
+        | { T , U }                     Pair
+        | @T                            Channel
+        | X                             Type Variable
+
+## Language semantics
+
+TODO
+
 ## Dependencies
 Just SBT and a JRE8. SBT will download the required scala compiler and
 libraries.
-
-## Todos
-The main priorities for this project are:
-- To implement a static type system
-- To implement more sophisticated data types, with ML style type inference
-- To provide a nicer command-line interface, allowing the user to specify
-  which implementation to use
