@@ -27,7 +27,7 @@ object runWithTurnerMachine extends Function3[
 }
 
 class TurnerMachineState(
-    run:   List[Proc], 
+    run:   List[Proc],
     wait:  Map[Name, List[Proc]],
     names: Map[Name, String],
     next:  Name) extends MachineState {
@@ -69,11 +69,11 @@ class TurnerMachineState(
   override def step: Option[MachineState] = this.run match {
     case Nil => None
 
-    case Send(chExp, msg, p) :: runTail =>
-      this.withRun(runTail).handleSend(Send(chExp, msg, p))
+    case Send(c, ts, ms, p) :: runTail =>
+      this.withRun(runTail).handleSend(Send(c, ts, ms, p))
 
-    case Receive(repl, chExp, bind, ty, p) :: runTail =>
-      this.withRun(runTail).handleReceive(Receive(repl, chExp, bind, ty, p))
+    case Receive(r, c, qs, as, p) :: runTail =>
+      this.withRun(runTail).handleReceive(Receive(r, c, qs, as, p))
 
     case LetIn(name, ty, exp, p) :: runTail =>
       this.withRun(runTail).handleLetIn(LetIn(name, ty, exp, p))
@@ -91,49 +91,58 @@ class TurnerMachineState(
   }
 
   def handleSend(send: Send): Option[MachineState] = send match {
-    case Send(ChanLiteral(ch), msg, p)
-      if this.names.get(ch) == Some("$print") => {
-        println((EvalExp from msg).unEvalExp pstr this.names)
+    case Send(ChanLiteral(c), ts, ms, p)
+      if this.names.get(c) == Some("$print") => {
+        println(ms map { m =>
+          ((EvalExp from m).unEvalExp pstr this.names) mkString ", " })
         this.runPrepend(p).someOf
       }
 
-    case Send(ChanLiteral(ch), msg, p) =>
+    case Send(ChanLiteral(c), ts, ms, p) =>
       val (nextWait, thisWithoutNextWait): (Option[Proc], TurnerMachineState) =
-        this.splitWait(ch)
+        this.splitWait(c)
       nextWait match {
 
-      case Some(Receive(repl, ChanLiteral(_), bind, ty, q)) => {
-        val qSub: Proc = substituteProc(q, bind, EvalExp from msg)
-        if (repl)
-          thisWithoutNextWait
-            .runPrepend(p)
-            .runAppend(qSub)
-            .waitAppend(ch, Receive(true, ChanLiteral(ch), bind, ty, q))
-            .someOf
-        else
-          thisWithoutNextWait
-            .runPrepend(p)
-            .runAppend(qSub)
-            .someOf
+        case Some(Receive(r, ChanLiteral(_), qs, as, q)) => {
+          val bindsEvalExps: List[(Name, EvalExp)] =
+            (as map (_._1)) zip (ms map (EvalExp from _))
+          val qSub: Proc = (bindsEvalExps foldLeft q) {
+            case (qCur, (bind, evalExp)) => substituteProc(qCur, bind, evalExp)
+          }
+          if (r)
+            thisWithoutNextWait
+              .runPrepend(p)
+              .runAppend(qSub)
+              .waitAppend(c, Receive(true, ChanLiteral(c), qs, as, q))
+              .someOf
+          else
+            thisWithoutNextWait
+              .runPrepend(p)
+              .runAppend(qSub)
+              .someOf
+        }
+        case _ => this.waitAppend(c, send).someOf
       }
-      case _ => this.waitAppend(ch, send).someOf
-    }
 
-    case Send(chExp, msg, p) => EvalExp from chExp match {
-      case EEChan(ch) => this.runPrepend(Send(ChanLiteral(ch), msg, p)).someOf
-      case _          => throw FreeVariableError(send)
+    case Send(cE, ts, ms, p) => EvalExp from cE match {
+      case EEChan(c) => this.runPrepend(Send(ChanLiteral(c), ts, ms, p)).someOf
+      case _         => throw FreeVariableError(send)
     }
   }
 
   def handleReceive(receive: Receive): Option[MachineState] = receive match {
-    case Receive(repl, ChanLiteral(ch), bind, ty, p) =>
+    case Receive(r, ChanLiteral(c), qs, as, p) =>
       val (nextWait, thisWithoutNextWait): (Option[Proc], TurnerMachineState) =
-        this.splitWait(ch)
+        this.splitWait(c)
       nextWait match {
 
-        case Some(Send(ChanLiteral(_), msg, q)) => {
-          val pSub: Proc = substituteProc(p, bind, EvalExp from msg)
-          if (repl)
+        case Some(Send(ChanLiteral(_), ts, ms, q)) => {
+          val bindsEvalExps: List[(Name, EvalExp)] =
+            (as map (_._1)) zip (ms map (EvalExp from _))
+          val pSub: Proc = (bindsEvalExps foldLeft p) {
+            case (pCur, (bind, evalExp)) => substituteProc(pCur, bind, evalExp)
+          }
+          if (r)
             thisWithoutNextWait
               .runPrepend(receive)
               .runAppend(pSub)
@@ -145,13 +154,13 @@ class TurnerMachineState(
               .runAppend(q)
               .someOf
         }
-        case _ => this.waitAppend(ch, receive).someOf
+        case _ => this.waitAppend(c, receive).someOf
       }
 
-    case Receive(repl, chExp, bind, ty, p) => EvalExp from chExp match {
-      case EEChan(ch) =>
-        this.runPrepend(Receive(repl, ChanLiteral(ch), bind, ty, p)).someOf
-      case _          => throw FreeVariableError(receive)
+    case Receive(r, cE, qs, as, p) => EvalExp from cE match {
+      case EEChan(c) =>
+        this.runPrepend(Receive(r, ChanLiteral(c), qs, as, p)).someOf
+      case _         => throw FreeVariableError(receive)
     }
   }
 
