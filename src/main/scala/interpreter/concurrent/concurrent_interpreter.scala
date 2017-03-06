@@ -82,7 +82,7 @@ class ProcManager(
     var nextName: Name,
     procRunnerClass: Class[_ <: ProcRunner])
   extends Actor {
-  
+
   var liveActors: Set[ActorRef] = Set.empty
   var result: List[Proc] = Nil
   var sendSinceTimerReset: Boolean = false
@@ -162,52 +162,48 @@ class ProcRunner(
 
   override def reportValue: Option[Proc] = Some(this.proc)
 
-  override def defaultBehaviours: Receive = super.defaultBehaviours orElse {
-    case metaInfo: MetaInfo => this.handleMetaMessageReceived(metaInfo)
-  }
-
-  def handleSend(chExp: Exp, msg: Exp, p: Proc): Unit = {
+  def handleSend(chExp: Exp, ms: List[Exp], p: Proc): Unit = {
     val evalChExp: EvalExp = EvalExp from chExp
-    val evalMsg: EvalExp = EvalExp from msg
-    this.chanMap(evalChExp.channelName) ! MsgSenderToChan(evalMsg,
-      this.computeMetaMessageToSend,
-      this.chanMap.filterKeys(evalMsg.channelNames.contains(_)))
-    context.become(({ case MsgConfirmToSender => {
+    val evalMs: List[EvalExp] = ms map (EvalExp from _)
+    val chansInMs: Map[Name, ActorRef] = this.chanMap.filterKeys(
+      (evalMs map (_.channelNames)).fold(Set.empty) {
+        (s1, s2) => s1 union s2
+      })
+    this.chanMap(evalChExp.channelName) ! MsgSenderToChan(evalMs, chansInMs)
+    context.become({ case MsgConfirmToSender => {
       this.proc = p
       context.unbecome()
       self ! ProcGo
-    }}: Receive) orElse defaultBehaviours)
+    }}: Receive)
   }
 
-  def handleReceive(chExp: Exp, bind: Name, p: Proc): Unit = {
+  def handleReceive(chExp: Exp, as: List[(Name, SType)], p: Proc): Unit = {
     val evalChExp: EvalExp = EvalExp from chExp
     this.chanMap(evalChExp.channelName) ! MsgRequestFromReceiver
-    context.become(({
-      case MsgChanToReceiver(evalMsg, metaInfo, newMappings) => {
-        val newProc: Proc = substituteProc(p, bind, evalMsg)
+    context.become({
+      case MsgChanToReceiver(evalMs, newMappings) => {
+        val newProc: Proc = substituteProcFold(p, (as map (_._1)) zip evalMs)
         val newChanMap: Map[Name, ActorRef] = this.chanMap ++ newMappings
         this.proc = newProc
         this.chanMap = newChanMap
-        this.handleMetaMessageReceived(metaInfo)
         context.unbecome()
         self ! ProcGo
       }
-    }: Receive) orElse defaultBehaviours)
+    }: Receive)
   }
 
-  def handleServer(chExp: Exp, bind: Name, p: Proc): Unit = {
+  def handleServer(chExp: Exp, as: List[(Name, SType)], p: Proc): Unit = {
     val evalChExp: EvalExp = EvalExp from chExp
     this.chanMap(evalChExp.channelName) ! MsgRequestFromReceiver
-    context.become(({
-      case MsgChanToReceiver(evalMsg, metaInfo, newMappings) => {
-        val newProc: Proc = substituteProc(p, bind, evalMsg)
+    context.become({
+      case MsgChanToReceiver(evalMs, newMappings) => {
+        val newProc: Proc = substituteProcFold(p, (as map (_._1)) zip evalMs)
         val newChanMap: Map[Name, ActorRef] = this.chanMap ++ newMappings
         this.procManager ! MakeRunner(Some(self), newChanMap, newProc)
-        this.handleMetaMessageReceived(metaInfo)
         context.unbecome()
         self ! ProcGo
       }
-    }: Receive) orElse defaultBehaviours)
+    }: Receive)
   }
 
   def handleLetIn(bind: Name, exp: Exp, p: Proc): Unit = {
@@ -232,41 +228,28 @@ class ProcRunner(
 
   def handleNew(name: Name, p: Proc): Unit = {
     this.procManager ! MakeChannel
-    context.become(({ case MakeChannelResponse(id, channel) => {
+    context.become({ case MakeChannelResponse(id, channel) => {
       this.chanMap = this.chanMap.updated(id, channel)
       this.proc = substituteProc(p, name, EEChan(id))
       context.unbecome()
       self ! ProcGo
-    }}: Receive) orElse defaultBehaviours)
+    }}: Receive)
   }
 
   def handleCurrentProcess: Unit = this.proc match {
-    case    Send       ( chExp , msg   , p            ) =>
-      handleSend       ( chExp , msg   , p            )
-    case    Receive    ( false , chExp , bind , _ , p ) =>
-      handleReceive    (         chExp , bind ,     p )
-    case    Receive    ( true  , chExp , bind , _ , p ) =>
-      handleServer     (         chExp , bind ,     p )
-    case    LetIn      ( bind  , _     , exp  , p     ) =>
-      handleLetIn      ( bind  ,         exp  , p     )
-    case    IfThenElse ( exp   , p     , q            ) =>
-      handleIfThenElse ( exp   , p     , q            )
-    case    Parallel   ( p     , q                    ) =>
-      handleParallel   ( p     , q                    )
-    case    New        ( name  , _     , p            ) =>
-      handleNew        ( name  ,         p            )
-    case End => this.procManager ! ReportStop(None)
+    case Send      (       c, _, ms, p) => handleSend      (c, ms, p)
+    case Receive   (false, c, _, as, p) => handleReceive   (c, as, p)
+    case Receive   (true , c, _, as, p) => handleServer    (c, as, p)
+    case LetIn     (       n, _, e , p) => handleLetIn     (n, e , p)
+    case IfThenElse(       e, p, q    ) => handleIfThenElse(e, p , q)
+    case Parallel  (       p, q       ) => handleParallel  (p, q    )
+    case New       (       n, _, p    ) => handleNew       (n, p    )
+    case End                            => this.procManager ! ReportStop(None)
   }
 
   def receive = ({
     case ProcGo => this.handleCurrentProcess
   }: Receive) orElse defaultBehaviours
-
-  def handleMetaMessageReceived(metaInfo: MetaInfo): Unit = metaInfo match {
-    case _ => Unit
-  }
-
-  def computeMetaMessageToSend: MetaInfo = NoInfo
 }
 
 // Implements the behaviour of channels in pi calculus
@@ -275,13 +258,12 @@ class Channel(procManager: ActorRef) extends AbstractImplActor(procManager) {
   def deliver(
       sndr: ActorRef,
       rcvr: ActorRef,
-      evalMsg: EvalExp,
-      metaInfo: MetaInfo,
+      evalMs: List[EvalExp],
       newMappings: Map[Name, ActorRef])
     : Unit = {
 
     procManager ! SendOccurred
-    rcvr ! MsgChanToReceiver(evalMsg, metaInfo, newMappings)
+    rcvr ! MsgChanToReceiver(evalMs, newMappings)
     sndr ! MsgConfirmToSender
   }
 
@@ -289,26 +271,26 @@ class Channel(procManager: ActorRef) extends AbstractImplActor(procManager) {
     // If the receiver request comes before the sender delivery
     case MsgRequestFromReceiver => {
       val msgReceiver: ActorRef = sender
-      context.become(({
-        case MsgSenderToChan(evalMsg, metaInfo, newMappings) => {
+      context.become({
+        case MsgSenderToChan(evalMs, newMappings) => {
           val msgSender: ActorRef = sender
-          this.deliver(msgSender, msgReceiver, evalMsg, metaInfo, newMappings)
+          this.deliver(msgSender, msgReceiver, evalMs, newMappings)
           context.unbecome()
         }
-      }: Receive) orElse defaultBehaviours)
+      }: Receive)
     }
     // If the sender delivery comes before the receiver request
-    case MsgSenderToChan(evalMsg, metaInfo, newMappings) => {
+    case MsgSenderToChan(evalMs, newMappings) => {
       val msgSender: ActorRef = sender
-      context.become(({
+      context.become({
         case MsgRequestFromReceiver => {
           val msgReceiver: ActorRef = sender
-          this.deliver(msgSender, msgReceiver, evalMsg, metaInfo, newMappings)
+          this.deliver(msgSender, msgReceiver, evalMs, newMappings)
           context.unbecome()
         }
-      }: Receive) orElse defaultBehaviours)
+      }: Receive)
     }
-  }: Receive) orElse defaultBehaviours
+  }: Receive)
 }
 
 class PrintingChannel(
@@ -317,9 +299,9 @@ class PrintingChannel(
   extends AbstractImplActor(procManager) {
 
   def receive: Receive = ({
-    case MsgSenderToChan(evalMsg, _, _) => {
+    case MsgSenderToChan(evalMs, _) => {
       procManager ! SendOccurred
-      println(evalMsg.unEvalExp pstr this.names)
+      println((evalMs map { m => m.unEvalExp pstr this.names }) mkString ", ")
       sender ! MsgConfirmToSender
     }
   }: Receive) orElse defaultBehaviours
@@ -331,17 +313,9 @@ sealed abstract class ImplMessage
 // Queries sent by ProcRunners to Channels
 sealed abstract class ChanQuery extends ImplMessage
 
-// Top-level class for meta information
-abstract class MetaInfo
-
-// This implementation does not use any meta information, so we define here only
-// a single concrete MetaInfo class called NoInfo
-case object NoInfo extends MetaInfo
-
 // Precursor to a MsgConfirmToSender ChanQueryResponse
 case class  MsgSenderToChan(
-    msg: EvalExp,
-    metaInfo: MetaInfo,
+    ms: List[EvalExp],
     chans: Map[Name, ActorRef])
   extends ChanQuery
 
@@ -356,8 +330,7 @@ case object MsgConfirmToSender                   extends ChanQueryResponse
 
 // Complements a MsgRequestFromReceiver ChanQuery
 case class  MsgChanToReceiver(
-    msg: EvalExp,
-    metaInfo: MetaInfo,
+    ms: List[EvalExp],
     chans: Map[Name, ActorRef])
   extends ChanQueryResponse
 

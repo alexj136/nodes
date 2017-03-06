@@ -106,9 +106,7 @@ class TurnerMachineState(
         case Some(Receive(r, ChanLiteral(_), qs, as, q)) => {
           val bindsEvalExps: List[(Name, EvalExp)] =
             (as map (_._1)) zip (ms map (EvalExp from _))
-          val qSub: Proc = (bindsEvalExps foldLeft q) {
-            case (qCur, (bind, evalExp)) => substituteProc(qCur, bind, evalExp)
-          }
+          val qSub: Proc = substituteProcFold(q, bindsEvalExps)
           if (r)
             thisWithoutNextWait
               .runPrepend(p)
@@ -139,9 +137,7 @@ class TurnerMachineState(
         case Some(Send(ChanLiteral(_), ts, ms, q)) => {
           val bindsEvalExps: List[(Name, EvalExp)] =
             (as map (_._1)) zip (ms map (EvalExp from _))
-          val pSub: Proc = (bindsEvalExps foldLeft p) {
-            case (pCur, (bind, evalExp)) => substituteProc(pCur, bind, evalExp)
-          }
+          val pSub: Proc = substituteProcFold(p, bindsEvalExps)
           if (r)
             thisWithoutNextWait
               .runPrepend(receive)

@@ -5,7 +5,6 @@ import parser._
 import typecheck._
 import interpreter._
 import interpreter.concurrent._
-import interpreter.concurrent.forwarder_optimising.spawn_time._
 import java.io.File
 import java.io.IOException
 import scala.io.Source
@@ -52,7 +51,7 @@ object Main extends App {
           // If constraints are solved, run the program
           case Right ( _  ) =>
             new Launcher(proc, names get "$print", nextName, names.map(_.swap),
-              { case _ => {} }, classOf[FwdOptProcRunner])
+              { case _ => {} }, classOf[ProcRunner])
 
           case Left  ( cs ) => {
             println ( s"${cs.size} type errors found:" )

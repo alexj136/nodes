@@ -51,6 +51,15 @@ object substituteProc extends Function3[Proc, Name, EvalExp, Proc] {
   }
 }
 
+object substituteProcFold extends Function2[Proc, List[(Name, EvalExp)], Proc] {
+
+  // Repeatedly apply substituteProc for a list of names and expressions
+  def apply(p: Proc, bindsEvalExps: List[(Name, EvalExp)]): Proc =
+    (bindsEvalExps foldLeft p) { case (pCur, (bind, evalExp)) =>
+      substituteProc(pCur, bind, evalExp)
+    }
+}
+
 object substituteExp extends Function3[Exp, Name, EvalExp, Exp] {
 
   def apply(exp: Exp, from: Name, to: EvalExp): Exp = {
