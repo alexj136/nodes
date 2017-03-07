@@ -402,39 +402,52 @@ sealed abstract class SType extends SyntaxElement {
    * in this, so run an occurs-check first.
    */
   def sTypeSubst ( from: Name , to: SType ) : SType = this match {
-    case SVar   ( n     ) if n == from => to
-    case SVar   ( n     ) if n != from => this
-    case SChan  ( t     )              => SChan ( t sTypeSubst ( from , to ) )
-    case SPair  ( l , r )              =>
+    case SVar   ( n       ) if n == from => to
+    case SVar   ( n       ) if n != from => this
+    case SChan  ( qs , ts )              => qs match {
+      case q :: rs if to.free contains q => {
+          val fresh: Name = findNextName (
+            ( ( ts map ( _.free ) ).fold ( Set.empty ) ( _ union _ ) ) ++ qs )
+          SChan ( rs , ts map ( _ sTypeSubst ( q , SVar ( fresh ) ) ) )
+            .sTypeSubst ( from , to ) match {
+              case SChan ( ss , us ) => SChan ( fresh :: ss , us )
+              case _ => throw new RuntimeException
+            }
+        }
+      case _ => SChan ( qs , ts map ( _ sTypeSubst ( from , to ) ) )
+    }
+    case SPair  ( l  , r  )              =>
       SPair ( l sTypeSubst ( from , to ) , r sTypeSubst ( from , to ) )
-    case SList  ( t     )              => SList ( t sTypeSubst ( from , to ) )
-    case SFunc  ( a , r )              =>
+    case SList  ( t       )              => SList ( t sTypeSubst ( from , to ) )
+    case SFunc  ( a  , r  )              =>
       SFunc ( a sTypeSubst ( from , to ) , r sTypeSubst ( from , to ) )
-    case _                            => this
+    case _                               => this
   }
 
   override def pstr(names: Map[Name, String]): String = this match {
-    case SProc            => "process"
-    case SInt             => "int"
-    case SBool            => "bool"
-    case SKhar            => "char"
-    case SChan  ( t     ) => s"@${t pstr names}"
-    case SList  ( t     ) => s"[${t pstr names}]"
-    case SPair  ( l , r ) => s"{ ${l pstr names} , ${r pstr names} }"
-    case SVar   ( n     ) => n pstr names
-    case SFunc  ( a , r ) => s"(${a pstr names} => ${r pstr names})"
+    case SProc              => "process"
+    case SInt               => "int"
+    case SBool              => "bool"
+    case SKhar              => "char"
+    case SChan  ( qs , ts ) => "@{" + ((qs map (_ pstr names)) mkString ", ") +
+      "; " + ((ts map (_ pstr names)) mkString ", ") + "}"
+    case SList  ( t       ) => s"[${t pstr names}]"
+    case SPair  ( l  , r  ) => s"( ${l pstr names} , ${r pstr names} )"
+    case SVar   ( n       ) => n pstr names
+    case SFunc  ( a  , r  ) => s"(${a pstr names} => ${r pstr names})"
   }
 
   override def free: Set[Name] = this match {
-    case SProc            => Set.empty
-    case SInt             => Set.empty
-    case SBool            => Set.empty
-    case SKhar            => Set.empty
-    case SChan  ( t     ) => Set.empty
-    case SList  ( t     ) => t.free
-    case SPair  ( l , r ) => l.free union r.free
-    case SVar   ( n     ) => Set(n)
-    case SFunc  ( a , r ) => a.free union r.free
+    case SProc              => Set.empty
+    case SInt               => Set.empty
+    case SBool              => Set.empty
+    case SKhar              => Set.empty
+    case SChan  ( qs , ts ) =>
+      ((ts map (_.free)).fold(Set.empty)(_ union _)) -- qs
+    case SList  ( t       ) => t.free
+    case SPair  ( l  , r  ) => l.free union r.free
+    case SVar   ( n       ) => Set(n)
+    case SFunc  ( a  , r  ) => a.free union r.free
   }
 
   def alphaEquiv(that: SType): Option[Map[Name, Name]] = (this, that) match {
@@ -442,7 +455,9 @@ sealed abstract class SType extends SyntaxElement {
       case (SInt              , SInt              ) => Some(Map.empty)
       case (SBool             , SBool             ) => Some(Map.empty)
       case (SKhar             , SKhar             ) => Some(Map.empty)
-      case (SChan  ( t       ), SChan  ( u       )) => t alphaEquiv u
+      case (SChan  ( qs , ts ), SChan  ( rs , us )) =>
+        alphaEquivEnsureManyBindings(alphaEquivCombineMany(
+          (ts, us).zipped map (_ alphaEquiv _)), qs zip rs)
       case (SList  ( t       ), SList  ( u       )) => t alphaEquiv u
       case (SPair  ( l1 , r1 ), SPair  ( l2 , r2 )) =>
         alphaEquivCombine(l1 alphaEquiv l2, r1 alphaEquiv r2)
@@ -452,15 +467,15 @@ sealed abstract class SType extends SyntaxElement {
       case (_                 , _                 ) => None
   }
 }
-case object SProc                          extends SType
-case object SInt                           extends SType
-case object SBool                          extends SType
-case object SKhar                          extends SType
-case class  SChan  ( val t: SType        ) extends SType
-case class  SList  ( t: SType            ) extends SType
-case class  SPair  ( l: SType , r: SType ) extends SType
-case class  SVar   ( n: Name             ) extends SType
-case class  SFunc  ( a: SType , r: SType ) extends SType
+case object SProc                                      extends SType
+case object SInt                                       extends SType
+case object SBool                                      extends SType
+case object SKhar                                      extends SType
+case class  SChan  ( qs: List[Name], ts: List[SType] ) extends SType
+case class  SList  ( t:  SType                       ) extends SType
+case class  SPair  ( l:  SType     , r:  SType       ) extends SType
+case class  SVar   ( n:  Name                        ) extends SType
+case class  SFunc  ( a:  SType     , r:  SType       ) extends SType
 
 /**
  * Combine two alpha-equivalence maps, if compatible. For example, if we want to

@@ -37,13 +37,9 @@ object Main extends App {
         // print terms.
         val namesF: Map [ Name , String ] = names.map ( _.swap )
 
-        // Get a typecheck environment
-        val (env: Map [ Name , SType ] , nextNameE: Name) =
-          Typecheck.initialEnv ( proc , nextName )
-
         // Generate typing constraints
-        val ( _ , constr: ConstraintSet , _ ) =
-          Typecheck.constraintsProc ( proc , env , nextNameE )
+        val ( _ , constr: ConstraintSet , _ ) = Typecheck.constraintsProc (
+          proc , Map.empty , findNextName ( proc.free ) )
 
         // Try to solve constraints
         Typecheck.unify ( constr , ConstraintSet.empty ) match {

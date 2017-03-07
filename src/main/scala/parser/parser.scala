@@ -172,11 +172,13 @@ object Parser extends Parsers {
     case l ~ t ~ r => putPos ( SList ( t ) , l , r )
   }
 
-  def tyChan: Parser [ SType ] = AT() ~ ty ^^ {
-    case a ~ t => putPos ( SChan ( t ) , a , t )
-  }
+  def tyChan: Parser [ SType ] =
+    AT() ~ LCURLY() ~ repsep ( name , COMMA() ) ~ SEMI() ~
+    repsep ( ty , COMMA() ) ~ RCURLY() ^^ {
+      case a ~ _ ~ qs ~ _ ~ ts ~ r => putPos ( SChan ( qs , ts ) , a , r )
+    }
 
-  def tyPair: Parser [ SType ] = LCURLY() ~ ty ~ COMMA() ~ ty ~ RCURLY() ^^ {
+  def tyPair: Parser [ SType ] = LPAREN() ~ ty ~ COMMA() ~ ty ~ RPAREN() ^^ {
     case l ~ t1 ~ _ ~ t2 ~ r => putPos ( SPair ( t1 , t2 ) , l , r )
   }
 
@@ -194,8 +196,8 @@ object Parser extends Parsers {
   def exp: Parser [ Exp ] = binExp | expNoBinExp
 
   def expNoBinExp: Parser [ Exp ] = variable | intLiteral | trueLiteral |
-    falseLiteral | chanLiteral | kharLiteral | strLiteral | pair | unExp |
-    parens | emptyList | list
+    falseLiteral | kharLiteral | strLiteral | pair | unExp | parens |
+    emptyList | list
 
   def binExp: Parser [ Exp ] = expNoBinExp ~ binOpTy ~ exp ^^ {
     case l ~ op ~ r => putPos ( BinExp ( op , l , r ) , l , r )
@@ -229,11 +231,7 @@ object Parser extends Parsers {
     case f => putPos ( BoolLiteral ( false ) , f , f )
   }
 
-  def chanLiteral: Parser [ Exp ] = accept ( "POSTCHAN" , {
-    case p @ POSTCHAN ( c ) => putPos ( ChanLiteral ( c ) , p , p )
-  } )
-
-  def pair: Parser [ Exp ] = LCURLY() ~ exp ~ COMMA() ~ exp ~ RCURLY() ^^ {
+  def pair: Parser [ Exp ] = LPAREN() ~ exp ~ COMMA() ~ exp ~ RPAREN() ^^ {
     case lp ~ l ~ _ ~ r ~ rp => putPos ( Pair ( l , r ) , lp , rp )
   }
 
@@ -307,7 +305,6 @@ object Lexer extends RegexParsers {
 
   def lex : Parser [ List [ PreToken ] ] = phrase ( rep1 (
     positioned { """[a-z_]+""".r         ^^ { PREIDENT ( _ )   } } |||
-    positioned { """\$[a-z_]+""".r       ^^ { PRECHAN  ( _ )   } } |||
     positioned { """(0|[1-9]\d*)""".r    ^^ { PREINT   ( _ )   } } |||
     positioned { """\'(.|\n)\'""".r      ^^ { PREKHAR  ( _ )   } } |||
     positioned { """\"([^\"]|\n)*\"""".r ^^ { PRESTR   ( _ )   } } |||
@@ -415,20 +412,6 @@ case class PREIDENT ( text: String ) extends PreInfoToken ( text ) {
         nextName.next , POSTIDENT ( nextName ).setPos ( this.pos ) )
     }
 }
-case class PRECHAN  ( text: String ) extends PreInfoToken ( text ) {
-  /** Processing a CHAN is the same as with IDENTs.
-   */
-  override def postLex (
-    nameMap: Map [ String , Name ] ,
-    nextName: Name
-  ): ( Map [ String , Name ] , Name , PostToken ) =
-    nameMap get this.text match {
-      case Some ( name ) => ( nameMap ,
-        nextName      , POSTCHAN ( name     ).setPos ( this.pos ) )
-      case None          => ( nameMap + ( ( this.text , nextName ) ) ,
-        nextName.next , POSTCHAN ( nextName ).setPos ( this.pos ) )
-    }
-}
 case class PREINT   ( text: String ) extends PreInfoToken ( text ) {
   /** To postlex an INT, we simply have to .toInt the string.
    */
@@ -467,7 +450,6 @@ case class PRESTR   ( text: String ) extends PreInfoToken ( text ) {
 sealed trait PostToken extends Token
 sealed trait PostInfoToken extends PostToken
 case class POSTIDENT ( name: Name ) extends PostInfoToken
-case class POSTCHAN  ( name: Name ) extends PostInfoToken
 case class POSTINT   ( num:  Int  ) extends PostInfoToken
 case class POSTKHAR  ( khar: Char ) extends PostInfoToken
 case class POSTSTR   ( str:  Exp  ) extends PostInfoToken

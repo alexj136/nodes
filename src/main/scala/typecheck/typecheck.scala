@@ -72,11 +72,8 @@ object Typecheck {
 
     val nextName: Name = findNextName ( p.free )
 
-    val ( env: Map [ Name , SType ] , nextNameE: Name ) =
-      initialEnv ( p , nextName )
-
     val ( tyP , constrP , nextNameP ): ( SType , ConstraintSet , Name ) =
-      constraintsProc ( p , env , nextNameE )
+      constraintsProc ( p , Map.empty , nextName )
 
     unify ( constrP , ConstraintSet.empty ) match {
       case Right ( unifyFn ) => Some ( unifyFn ( tyP ) )
@@ -111,8 +108,7 @@ object Typecheck {
           unify ( rest map subFn , failed map subFn )
             . right . map ( _ compose subFn )
 
-        case ( SChan  ( t1m       ) , SChan  ( t2m       ) ) =>
-          unify ( rest + Constraint ( t1m , t2m , c.origins ) , failed )
+        case ( SChan  ( qs1 , ts1 ) , SChan  ( qs2 , ts2 ) ) => ???
 
         case ( SList  ( t1o       ) , SList  ( t2o       ) ) =>
           unify ( rest + Constraint ( t1o , t2o , c.origins ) , failed )
@@ -125,22 +121,9 @@ object Typecheck {
           unify ( rest + Constraint ( t1a , t2a , c.origins ) +
             Constraint ( t1r , t2r , c.origins ) , failed )
 
-        case ( SQuant ( _   , _   ) , _                    ) => throw exception
-        case ( _                    , SQuant ( _   , _   ) ) => throw exception
-        case _                                               =>
-          unify ( rest , failed + c )
+        case _ => unify ( rest , failed + c )
       }
     }
-  }
-
-  def initialEnv ( p: Proc , nn: Name ): ( Map [ Name , SType ] , Name ) = {
-    var map: Map [ Name , SType ] = Map.empty
-    var name: Name = nn
-    p.chanLiterals.foreach { c =>
-      map = map + ( c -> SChan ( SVar ( name ) ) )
-      name = name.next
-    }
-    ( map , name )
   }
 
   def constraintsProc(
@@ -148,26 +131,21 @@ object Typecheck {
     env: Map[Name, SType],
     nn: Name
   ): (SType, ConstraintSet, Name) = p match {
-    case Send ( ch , msg , q ) => {
-      val newVar: SType = SVar ( nn )
-      val ( tyCh , constrCh , nnCh ): ( SType , ConstraintSet , Name ) =
-        constraintsExp ( ch , env , nn.next )
-      val ( tyMsg , constrMsg , nnMsg ): ( SType , ConstraintSet , Name ) =
-        constraintsExp ( msg , env , nnCh )
+    case Send ( c , ts, ms , q ) => {
+      val ( tyC , constrC , nnC ): ( SType , ConstraintSet , Name ) =
+        constraintsExp ( c , env , nn )
       val ( tyQ , constrQ , nnQ ): ( SType , ConstraintSet , Name ) =
-        constraintsProc ( q , env , nnMsg )
-      ( SProc , constrCh union constrMsg union constrQ
-        + Constraint ( tyCh  , SChan ( newVar ) , List ( ch  ) )
-        + Constraint ( tyMsg , newVar           , List ( msg ) ) , nnQ.next )
+        constraintsProc ( q , env , nnC )
+      ( SProc , constrC union constrQ + ??? , nnQ )
     }
-    case Receive ( _ , ch , bind , ty , q ) => {
-      val ( tyD , nnT ): ( SType, Name ) = dequantify ( ty , nn )
-      val ( tyCh , constrCh , nnCh ): ( SType , ConstraintSet , Name ) =
-        constraintsExp ( ch , env , nnT )
+    case Receive ( _ , c , qs , as , q ) => {
+      val ( tyC , constrC , nnC ): ( SType , ConstraintSet , Name ) =
+        constraintsExp ( c , env , nn )
       val ( tyQ , constrQ , nnQ ): ( SType , ConstraintSet , Name ) =
-        constraintsProc ( q , env + ( bind -> ty ) , nnCh )
-      ( SProc , constrCh union constrQ
-        + Constraint ( tyCh , SChan ( tyD ) , List ( p ) ) , nnQ )
+        constraintsProc ( q , env ++ as , nnC )
+      ( SProc , constrC union constrQ
+        + Constraint ( tyC , SChan ( qs , as map ( _._2 ) ) , List ( c ) )
+        , nnQ )
     }
     case LetIn ( bind , ty , exp , p ) => {
       val ( tyE , constrE , nnE ): ( SType , ConstraintSet , Name ) =
@@ -194,10 +172,8 @@ object Typecheck {
         constraintsProc ( q , env , nnP )
       ( SProc , constrP union constrQ , nnQ )
     }
-    case New ( bind , ty , p ) => {
-      val ( tyD , nnT ): ( SType, Name ) = dequantify ( ty , nn )
-      constraintsProc ( p , env + ( bind -> tyD ) , nnT )
-    }
+    case New ( bind , ty , p ) =>
+      constraintsProc ( p , env + ( bind -> ty ) , nn )
     case End => ( SProc , ConstraintSet.empty , nn )
   }
 
@@ -206,16 +182,10 @@ object Typecheck {
     env: Map[Name, SType],
     nn: Name
   ): (SType, ConstraintSet, Name) = e match {
-    case Variable    ( name          ) => {
-      val (deqTyName, nnName): (SType, Name) = dequantify(env(name), nn)
-      (deqTyName, ConstraintSet.empty, nnName)
-    }
+    case Variable    ( name          ) => (env(name), ConstraintSet.empty, nn)
     case IntLiteral  ( value         ) => (SInt     , ConstraintSet.empty, nn)
     case BoolLiteral ( value         ) => (SBool    , ConstraintSet.empty, nn)
-    case ChanLiteral ( name          ) => {
-      val (deqTyName, nnName): (SType, Name) = dequantify(env(name), nn)
-      (deqTyName, ConstraintSet.empty, nnName)
-    }
+    case ChanLiteral ( name          ) => (env(name), ConstraintSet.empty, nn)
     case KharLiteral ( value         ) => (SKhar    , ConstraintSet.empty, nn)
     case ListExp     ( Nil           ) =>
       (SList(SVar(nn)), ConstraintSet.empty, nn.next)
@@ -252,114 +222,45 @@ object Typecheck {
     }
   }
 
-  def typeOfBinOp(op: BinOp): SType = op match {
-    case Add        => SFunc(SInt , SFunc(SInt , SInt ))
-    case Sub        => SFunc(SInt , SFunc(SInt , SInt ))
-    case Mul        => SFunc(SInt , SFunc(SInt , SInt ))
-    case Div        => SFunc(SInt , SFunc(SInt , SInt ))
-    case Mod        => SFunc(SInt , SFunc(SInt , SInt ))
-    case Equal      => SFunc(SInt , SFunc(SInt , SBool))
-    case NotEqual   => SFunc(SInt , SFunc(SInt , SBool))
-    case Less       => SFunc(SInt , SFunc(SInt , SBool))
-    case LessEq     => SFunc(SInt , SFunc(SInt , SBool))
-    case Greater    => SFunc(SInt , SFunc(SInt , SBool))
-    case GreaterEq  => SFunc(SInt , SFunc(SInt , SBool))
-    case And        => SFunc(SBool, SFunc(SBool, SBool))
-    case Or         => SFunc(SBool, SFunc(SBool, SBool))
-    case Cons       => SQuant(Name(0),SFunc(SVar(Name(0)),
+  def typeOfBinOp(op: BinOp): (Set[Name], SType) = op match {
+    case Add        => (Set.empty   , SFunc(SInt , SFunc(SInt , SInt )))
+    case Sub        => (Set.empty   , SFunc(SInt , SFunc(SInt , SInt )))
+    case Mul        => (Set.empty   , SFunc(SInt , SFunc(SInt , SInt )))
+    case Div        => (Set.empty   , SFunc(SInt , SFunc(SInt , SInt )))
+    case Mod        => (Set.empty   , SFunc(SInt , SFunc(SInt , SInt )))
+    case Equal      => (Set.empty   , SFunc(SInt , SFunc(SInt , SBool)))
+    case NotEqual   => (Set.empty   , SFunc(SInt , SFunc(SInt , SBool)))
+    case Less       => (Set.empty   , SFunc(SInt , SFunc(SInt , SBool)))
+    case LessEq     => (Set.empty   , SFunc(SInt , SFunc(SInt , SBool)))
+    case Greater    => (Set.empty   , SFunc(SInt , SFunc(SInt , SBool)))
+    case GreaterEq  => (Set.empty   , SFunc(SInt , SFunc(SInt , SBool)))
+    case And        => (Set.empty   , SFunc(SBool, SFunc(SBool, SBool)))
+    case Or         => (Set.empty   , SFunc(SBool, SFunc(SBool, SBool)))
+    case Cons       => (Set(Name(0)), SFunc(SVar(Name(0)),
       SFunc(SList(SVar(Name(0))),SList(SVar(Name(0))))))
   }
 
-  def typeOfUnOp(op: UnOp): SType = op match {
-    case Not    => SFunc(SBool, SBool)
-    case PLeft  => SQuant(Name(0), SQuant(Name(1),
-      SFunc(SPair(SVar(Name(0)), SVar(Name(1))), SVar(Name(0)))))
-    case PRight => SQuant(Name(0), SQuant(Name(1),
-      SFunc(SPair(SVar(Name(0)), SVar(Name(1))), SVar(Name(1)))))
-    case Empty  => SQuant(Name(0), SFunc(SList(SVar(Name(0))), SBool))
-    case Head   => SQuant(Name(0), SFunc(SList(SVar(Name(0))), SVar(Name(0))))
-    case Tail   => SQuant(Name(0), SFunc(SList(SVar(Name(0))),
-      SList(SVar(Name(0)))))
+  def typeOfUnOp(op: UnOp): (Set[Name], SType) = op match {
+    case Not    => (Set.empty,
+      SFunc(SBool, SBool))
+    case PLeft  => (Set(Name(0), Name(1)),
+      SFunc(SPair(SVar(Name(0)), SVar(Name(1))), SVar(Name(0))))
+    case PRight => (Set(Name(0), Name(1)),
+      SFunc(SPair(SVar(Name(0)), SVar(Name(1))), SVar(Name(1))))
+    case Empty  => (Set(Name(0)),
+      SFunc(SList(SVar(Name(0))), SBool))
+    case Head   => (Set(Name(0)),
+      SFunc(SList(SVar(Name(0))), SVar(Name(0))))
+    case Tail   => (Set(Name(0)),
+      SFunc(SList(SVar(Name(0))), SList(SVar(Name(0)))))
   }
 
   /**
    * Remove quantifiers from an SType. The Name parameter & Name return value is
    * the next globally available Name, before and after the dequantification.
    */
-  def dequantify(ty: SType, nn: Name): (SType, Name) = ty match {
-    case SProc           => (SProc  , nn)
-    case SInt            => (SInt   , nn)
-    case SBool           => (SBool  , nn)
-    case SKhar           => (SKhar  , nn)
-    case SChan ( t     ) => {
-      val (deT, nnT): (SType, Name) = dequantify(t, nn)
-      (SChan(deT), nnT)
-    }
-    case SVar  ( n     ) => (SVar(n), nn)
-    case SList ( t     ) => {
-      val (deT, nnT): (SType, Name) = dequantify(t, nn)
-      (SList(deT), nnT)
-    }
-    case SPair ( l , r ) => {
-      val (deL, nnL): (SType, Name) = dequantify(l, nn)
-      val (deR, nnR): (SType, Name) = dequantify(r, nnL)
-      (SPair(deL, deR), nnR)
-    }
-    case SFunc ( a , r ) => {
-      val (deA, nnA): (SType, Name) = dequantify(a, nn)
-      val (deR, nnR): (SType, Name) = dequantify(r, nnA)
-      (SFunc(deA, deR), nnR)
-    }
-    case SQuant( n , t ) => {
-      val (newT, nnT): (SType, Name) = sTVarSubst(t, n, nn, nn.next)
-      dequantify(newT, nnT)
-    }
-  }
-
-  /**
-   * Substitute type variables in a type expression, of a given name, to another
-   * given name. Alpha conversion of quantified expressions is sometimes
-   * necessary to prevent erroneous capture, so a next-name parameter is
-   * required and returned.
-   */
-  def sTVarSubst(ty: SType, from: Name, to: Name, nn: Name): (SType, Name) =
-    ty match {
-      case SProc           => (SProc                          , nn)
-      case SInt            => (SInt                           , nn)
-      case SBool           => (SBool                          , nn)
-      case SKhar           => (SKhar                          , nn)
-      case SChan ( t     ) => {
-        val (subT, nnT): (SType, Name) = sTVarSubst(t, from, to, nn)
-        (SChan(subT), nnT)
-      }
-      case SVar  ( n     ) => (SVar(if (n == from) to else n) , nn)
-      case SList ( t     ) => {
-        val (subT, nnT): (SType, Name) = sTVarSubst(t, from, to, nn)
-        (SList(subT), nnT)
-      }
-      case SPair ( l , r ) => {
-        val (subL, nnL): (SType, Name) = sTVarSubst(l, from, to, nn)
-        val (subR, nnR): (SType, Name) = sTVarSubst(r, from, to, nnL)
-        (SPair(subL, subR), nnR)
-      }
-      case SFunc ( a , r ) => {
-        val (subA, nnA): (SType, Name) = sTVarSubst(a, from, to, nn)
-        val (subR, nnR): (SType, Name) = sTVarSubst(r, from, to, nnA)
-        (SFunc(subA, subR), nnR)
-      }
-      case SQuant( n , t ) =>
-        if (n == from) (SQuant(n, t), nn)
-        // If substituting within the quantifier would cause this quantifier to
-        // erroneously capture the substituted name, first rename the quantifier
-        // and its bound variables to a new name.
-        else if (n == to) {
-          val (subT, nnT): (SType, Name) = sTVarSubst(t, n, nn, nn.next)
-          val (subSubT, nnST): (SType, Name) = sTVarSubst(subT, from, to, nnT)
-          (SQuant(nn, subSubT), nnST)
-        }
-        else {
-          val (subT, nnT): (SType, Name) = sTVarSubst(t, from, to, nn)
-          (SQuant(n, subT), nnT)
-        }
+  def dequantify(qs_ty: (Set[Name], SType), nn: Name): (SType, Name) =
+    (qs_ty._1 foldLeft (qs_ty._2, nn)) { case ((t, n), q) =>
+      (t.sTypeSubst(q, SVar(n)), n.next)
     }
 }
