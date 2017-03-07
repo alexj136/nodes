@@ -21,6 +21,11 @@ case class ConstraintSet( val set: Set [ Constraint ] ) {
     else
       ConstraintSet ( set + constr )
 
+  def ++ ( constrs: List [ Constraint ] ) : ConstraintSet = constrs match {
+    case Nil     => this
+    case c :: cs => (this + c) ++ cs
+  }
+
   def map ( f: SType => SType ) : ConstraintSet =
     ConstraintSet( set map ( _ map f ) )
 
@@ -131,9 +136,17 @@ object Typecheck {
     env: Map[Name, SType],
     nn: Name
   ): (SType, ConstraintSet, Name) = p match {
-    case Send ( c , ts, ms , q ) => {
+    case Send ( c , ts , ms , q ) => {
       val ( tyC , constrC , nnC ): ( SType , ConstraintSet , Name ) =
         constraintsExp ( c , env , nn )
+      tyC match {
+        case SChan ( qs , us ) => {
+          val usReplaced: List [ SType ] =
+            us map ( _ sTypeSubstFold ( qs zip ts ) )
+          ???
+        }
+        case _ => ???
+      }
       val ( tyQ , constrQ , nnQ ): ( SType , ConstraintSet , Name ) =
         constraintsProc ( q , env , nnC )
       ( SProc , constrC union constrQ + ??? , nnQ )
@@ -256,8 +269,9 @@ object Typecheck {
   }
 
   /**
-   * Remove quantifiers from an SType. The Name parameter & Name return value is
-   * the next globally available Name, before and after the dequantification.
+   * Replace quantified type variables with fresh type variables in an SType.
+   * The Name parameter & Name return value is the next globally available Name,
+   * before and after the dequantification.
    */
   def dequantify(qs_ty: (Set[Name], SType), nn: Name): (SType, Name) =
     (qs_ty._1 foldLeft (qs_ty._2, nn)) { case ((t, n), q) =>

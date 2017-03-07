@@ -424,6 +424,13 @@ sealed abstract class SType extends SyntaxElement {
     case _                               => this
   }
 
+  def sTypeSubstFold ( fromTos: List [ ( Name , SType ) ] ) : SType =
+    fromTos match {
+      case Nil               => this
+      case ( n , t ) :: rest =>
+        ( this sTypeSubst ( n , t ) ) sTypeSubstFold rest
+    }
+
   override def pstr(names: Map[Name, String]): String = this match {
     case SProc              => "process"
     case SInt               => "int"
