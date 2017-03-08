@@ -106,13 +106,15 @@ sealed abstract class Proc extends SyntaxElement {
    */
   def alphaEquiv(that: Proc): Option[Map[Name, Name]] = (this, that) match {
     case ( Send      (c, ts, ms, p      ) , Send      (d, us, ns, q    ) ) =>
-      alphaEquivCombineMany(List(
-        c alphaEquiv d,
-        p alphaEquiv q,
-        alphaEquivCombineMany((ts, us).zipped map ( _ alphaEquiv _ ))
-      ))
+      if (ts.size != us.size || ms.size != ns.size) None else
+        alphaEquivCombineMany(List(
+          c alphaEquiv d,
+          p alphaEquiv q,
+          alphaEquivCombineMany((ts, us).zipped map ( _ alphaEquiv _ )),
+          alphaEquivCombineMany((ms, ns).zipped map ( _ alphaEquiv _ ))
+        ))
     case ( Receive   (r, c , qs, as, p  ) , Receive   (s, d , rs, bs, q) ) =>
-      if (r != s) None else
+      if (r != s || qs.size != rs.size || as.size != bs.size) None else
         alphaEquivCombineMany(List(
           c alphaEquiv d,
           alphaEquivEnsureManyBindings(
@@ -462,9 +464,11 @@ sealed abstract class SType extends SyntaxElement {
       case (SInt              , SInt              ) => Some(Map.empty)
       case (SBool             , SBool             ) => Some(Map.empty)
       case (SKhar             , SKhar             ) => Some(Map.empty)
-      case (SChan  ( qs , ts ), SChan  ( rs , us )) =>
-        alphaEquivEnsureManyBindings(alphaEquivCombineMany(
-          (ts, us).zipped map (_ alphaEquiv _)), qs zip rs)
+      case (SChan  ( qs , ts ), SChan  ( rs , us )) => {
+        if (qs.size != rs.size || ts.size != us.size) None else
+          alphaEquivEnsureManyBindings(alphaEquivCombineMany(
+            (ts, us).zipped map (_ alphaEquiv _)), qs zip rs)
+      }
       case (SList  ( t       ), SList  ( u       )) => t alphaEquiv u
       case (SPair  ( l1 , r1 ), SPair  ( l2 , r2 )) =>
         alphaEquivCombine(l1 alphaEquiv l2, r1 alphaEquiv r2)

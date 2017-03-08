@@ -37,12 +37,14 @@ object Main extends App {
         // print terms.
         val namesF: Map [ Name , String ] = names.map ( _.swap )
 
+        val checker: Typecheck = new Typecheck ( findNextName ( proc.free ) )
+
         // Generate typing constraints
-        val ( _ , constr: ConstraintSet , _ ) = Typecheck.constraintsProc (
-          proc , Map.empty , findNextName ( proc.free ) )
+        val ( _ , constr: ConstraintSet ) =
+          checker.constraintsProc ( proc , Map.empty )
 
         // Try to solve constraints
-        Typecheck.unify ( constr , ConstraintSet.empty ) match {
+        checker.unify ( constr , ConstraintSet.empty ) match {
 
           // If constraints are solved, run the program
           case Right ( _  ) =>
@@ -51,14 +53,23 @@ object Main extends App {
 
           case Left  ( cs ) => {
             println ( s"${cs.size} type errors found:" )
-            cs.foreach ( { c =>
-              println (
-                s"\n  Cannot unify ${c.t1 pstr namesF} " +
-                s"with ${c.t2 pstr namesF}." )
-              c.origins.foreach ( { o =>
-                println ( s"    At ${o.info}:" )
-                println ( s"    ${o pstr namesF}" )
-              } )
+            cs.foreach ( {
+              case TypeConstraint ( t1 , t2 , orig ) => {
+                println (
+                  s"\n  Cannot unify ${t1 pstr namesF} " +
+                  s"with ${t2 pstr namesF}." )
+                orig.foreach ( { o =>
+                  println ( s"    At ${o.info}:" )
+                  println ( s"    ${o pstr namesF}" )
+                } )
+              }
+              case ArityConstraint ( a1 , a2 , orig ) => {
+                println ( s"\n  Arity mismatch $a1 != $a2." )
+                orig.foreach ( { o =>
+                  println ( s"    At ${o.info}:" )
+                  println ( s"    ${o pstr namesF}" )
+                } )
+              }
             } )
           }
 

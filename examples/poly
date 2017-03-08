@@ -1,26 +1,24 @@
-new length of k ~ @{ [k], @int } .
+new length: @{k; [k], @{;int}}.
 [
-    server length : m_r of k ~ { [k], @int } .
-    if ? ( <- m_r ) then
-        send -> m_r : 0 .
+    server length; k; m: [k], r: @{;int}.
+    if ? m then
+        send r; ; 0.
         end
     else
-        new r of @int .
-        send length : { -** ( <- m_r ) , r } .
-        receive r : lengthminusone of int .
-        send -> m_r : lengthminusone + 1 .
+        new rnew: @{;int}.
+        send length; k; -** m, rnew.
+        receive rnew; ; lengthminusone: int.
+        send r; ; lengthminusone + 1.
         end
     endif
 |
-    new r of @int .
-    send length : { "hello" , r } .
-    receive r : lengthofhello of int .
-    send $print : { "hello has length" , lengthofhello } .
+    new r: @{;int}.
+    send length; char; "hello", r.
+    receive r; ; lengthofhello: int.
     end
 |
-    new r of @int .
-    send length : { [1, 8] , r } .
-    receive r : lengthoflist of int .
-    send $print : { "list has length" , -** lengthoflist } .
+    new r: @{;int}.
+    send length; int; [1, 8], r.
+    receive r; ; lengthoflist: int.
     end
 ]
