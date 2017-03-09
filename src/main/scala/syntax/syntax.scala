@@ -404,26 +404,25 @@ sealed abstract class SType extends SyntaxElement {
    * in this, so run an occurs-check first.
    */
   def sTypeSubst ( from: Name , to: SType ) : SType = this match {
-    case SVar   ( n       ) if n == from => to
-    case SVar   ( n       ) if n != from => this
-    case SChan  ( qs , ts )              => qs match {
-      case q :: rs if to.free contains q => {
-          val fresh: Name = findNextName (
-            ( ( ts map ( _.free ) ).fold ( Set.empty ) ( _ union _ ) ) ++ qs )
-          SChan ( rs , ts map ( _ sTypeSubst ( q , SVar ( fresh ) ) ) )
-            .sTypeSubst ( from , to ) match {
-              case SChan ( ss , us ) => SChan ( fresh :: ss , us )
-              case _ => throw new RuntimeException
-            }
-        }
-      case _ => SChan ( qs , ts map ( _ sTypeSubst ( from , to ) ) )
-    }
-    case SPair  ( l  , r  )              =>
+    case SVar   ( n       ) => if ( n == from ) to else this
+    case SList  ( t       ) => SList ( t sTypeSubst ( from , to ) )
+    case SPair  ( l  , r  ) =>
       SPair ( l sTypeSubst ( from , to ) , r sTypeSubst ( from , to ) )
-    case SList  ( t       )              => SList ( t sTypeSubst ( from , to ) )
-    case SFunc  ( a  , r  )              =>
+    case SFunc  ( a  , r  ) =>
       SFunc ( a sTypeSubst ( from , to ) , r sTypeSubst ( from , to ) )
-    case _                               => this
+    case SChan  ( qs , ts ) =>
+      if ( ( qs filter ( to.free ( _ ) ) ).size > 0 )
+        SChan ( qs , ts map ( _ sTypeSubst ( from , to ) ) )
+      else {
+        val fresh: Name = findNextName ( ( ( ts map ( _.free ) )
+          .fold ( Set.empty ) ( _ union _ ) ) union to.free ++ qs + from )
+        val allFresh: List[ Name ] = List.empty ++
+          ( ( fresh.id until ( fresh.id + qs.size ) ) map ( Name ( _ ) ) )
+        SChan ( allFresh ,
+          ts.map ( _ sTypeSubstFold ( qs zip ( allFresh map ( SVar ( _ ) ) ) ) )
+            .map ( _ sTypeSubst ( from , to ) ) )
+      }
+    case _                                      => this
   }
 
   def sTypeSubstFold ( fromTos: List [ ( Name , SType ) ] ) : SType =

@@ -1,0 +1,16 @@
+new echo: @{k; k, @{;k}}.
+[
+    server echo; k; m: k, r: @{;k}.
+    send r; ; m.
+    end
+|
+    new r: @{;int}.
+    send echo; int; 10, r.
+    receive r; ; x: int.
+    end
+|
+    new r: @{;char}.
+    send echo; char; 'a', r.
+    receive r; ; c: char.
+    end
+]

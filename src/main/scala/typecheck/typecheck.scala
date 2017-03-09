@@ -103,11 +103,7 @@ class Typecheck ( nextName: Name ) {
 
   private var nn: Name = nextName
 
-  def fresh: Name = {
-    val freshN: Name = nn
-    nn = nn.next
-    freshN
-  }
+  def fresh: Name = { val freshN: Name = nn ; nn = nn.next ; freshN }
 
   def checkProc(p: Proc): Option[SType] = {
     val (tyP: SType, constrP: ConstraintSet) = constraintsProc(p, Map.empty)
@@ -129,50 +125,44 @@ class Typecheck ( nextName: Name ) {
     val exception = new RuntimeException (
       "SQuant not removed from type before unification" )
     constrs.split match {
-      case ( None , _ ) =>
-        if ( failed.isEmpty ) Right ( identity ) else Left ( failed )
-      case ( Some ( c ) , rest ) if c.trivial => unify ( rest , failed )
-      case ( Some ( c ) , rest ) if c.isInstanceOf [ ArityConstraint ] =>
-        unify ( rest , failed + c )
-      case ( Some ( c ) , rest ) if c.isInstanceOf [ TypeConstraint ] =>
-        c.asInstanceOf [ TypeConstraint ].asPair match {
+      case (None, _) => if (failed.isEmpty) Right(identity) else Left(failed)
+      case (Some(c), rest) if c.trivial => unify(rest, failed)
+      case (Some(c), rest) if c.isInstanceOf[ArityConstraint] =>
+        unify (rest, failed + c)
+      case (Some(c), rest) if c.isInstanceOf[TypeConstraint] =>
+        c.asInstanceOf[TypeConstraint].asPair match {
 
-          case ( SVar ( n ) , ty         ) if ! ( ty free n ) =>
-            val subFn: SType => SType = _ sTypeSubst ( n , ty )
-            unify ( rest map subFn , failed map subFn )
-              . right . map ( _ compose subFn )
+          case (SVar(n), ty     ) if !(ty free n) =>
+            val subFn: SType => SType = _ sTypeSubst(n, ty)
+            unify (rest map subFn, failed map subFn)
+              .right.map(_ compose subFn)
 
-          case ( ty         , SVar ( n ) ) if ! ( ty free n ) =>
-            val subFn: SType => SType = _ sTypeSubst ( n , ty )
-            unify ( rest map subFn , failed map subFn )
-              . right . map ( _ compose subFn )
+          case (ty     , SVar(n)) if !(ty free n) =>
+            val subFn: SType => SType = _ sTypeSubst(n, ty)
+            unify (rest map subFn, failed map subFn)
+              .right.map(_ compose subFn)
 
-          case ( SList  ( t1o       ) , SList  ( t2o       ) ) =>
-            unify ( rest + TypeConstraint ( t1o , t2o , c.origins ) , failed )
+          case (SList(t1o), SList(t2o)) =>
+            unify(rest + TypeConstraint(t1o, t2o, c.origins), failed)
 
-          case ( SPair  ( t1l , t1r ) , SPair  ( t2l , t2r ) ) =>
-            unify ( rest + TypeConstraint ( t1l , t2l , c.origins ) +
-              TypeConstraint ( t1r , t2r , c.origins ) , failed )
+          case (SPair(t1l, t1r), SPair(t2l, t2r)) =>
+            unify(rest + TypeConstraint(t1l, t2l, c.origins) +
+              TypeConstraint(t1r, t2r, c.origins), failed)
 
-          case ( SFunc  ( t1a , t1r ) , SFunc  ( t2a , t2r ) ) =>
-            unify ( rest + TypeConstraint ( t1a , t2a , c.origins ) +
-              TypeConstraint ( t1r , t2r , c.origins ) , failed )
+          case (SFunc(t1a, t1r), SFunc(t2a, t2r)) =>
+            unify(rest + TypeConstraint(t1a, t2a, c.origins) +
+              TypeConstraint(t1r, t2r, c.origins), failed)
 
-          case ( SChan  ( qs1 , ts1 ) , SChan  ( qs2 , ts2 ) ) => {
-            if ( ts1.size != ts2.size ) unify ( rest , failed + c ) else {
-              val ts1d: List [ SType ] =
-                ts1 map ( dequantify ( Set.empty ++ qs1 , _ ) )
-              val ts2d: List [ SType ] =
-                ts2 map ( dequantify ( Set.empty ++ qs2 , _ ) )
-              val constrs: List [ Constraint ] = ( ts1d , ts2d ).zipped map {
-                TypeConstraint ( _ , _ , c.origins )
-              }
-              unify ( rest ++ constrs , failed )
+          case (SChan(qs1, ts1), SChan(qs2, ts2)) =>
+            if (ts1.size != ts2.size) unify(rest, failed + c) else {
+              val ts1d: List[SType] = ts1 map (dequantify(Set.empty ++ qs1, _))
+              val ts2d: List[SType] = ts2 map (dequantify(Set.empty ++ qs2, _))
+              val constrs: List[Constraint] = (ts1d, ts2d).zipped
+                .map(TypeConstraint(_, _, c.origins))
+              unify(rest ++ constrs, failed)
             }
-          }
 
-          case _ =>
-            unify ( rest , failed + c )
+          case _ => unify(rest, failed + c)
         }
     }
   }

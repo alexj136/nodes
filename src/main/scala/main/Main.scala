@@ -37,7 +37,7 @@ object Main extends App {
         // print terms.
         val namesF: Map [ Name , String ] = names.map ( _.swap )
 
-        val checker: Typecheck = new Typecheck ( findNextName ( proc.free ) )
+        val checker: Typecheck = new Typecheck ( nextName )
 
         // Generate typing constraints
         val ( _ , constr: ConstraintSet ) =
