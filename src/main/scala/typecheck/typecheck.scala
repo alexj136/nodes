@@ -246,13 +246,13 @@ class Typecheck ( nextName: Name ) {
       }
       case UnExp(op, of) => {
         val (tyOf: SType, constrOf: ConstraintSet) = constraintsExp(of, env)
-        val tyOp: SType = dequantify(typeOfUnOp(op))
+        val tyOp: SType = dequantify(Typecheck.typeOfUnOp(op))
         (tyOp.retTy, constrOf + TypeConstraint(tyOp.argTy, tyOf, List(e)))
       }
       case BinExp      ( op   , l  , r ) => {
         val (tyL: SType, constrL: ConstraintSet) = constraintsExp(l, env)
         val (tyR: SType, constrR: ConstraintSet) = constraintsExp(r, env)
-        val tyOp: SType = dequantify(typeOfBinOp(op))
+        val tyOp: SType = dequantify(Typecheck.typeOfBinOp(op))
         (tyOp.retTy.retTy, constrL union constrR
           + TypeConstraint(tyOp.argTy      , tyL, List(e))
           + TypeConstraint(tyOp.retTy.argTy, tyR, List(e)))
@@ -260,6 +260,17 @@ class Typecheck ( nextName: Name ) {
       case ChanLiteral ( _             ) =>
         throw new RuntimeException("ChanLiteral present in type-check")
     }
+
+  /**
+   * Replace quantified type variables with fresh type variables in an SType.
+   */
+  def dequantify( qs: Set [ Name ] , ty: SType ): SType =
+    ( qs foldLeft ty ) { ( t , q ) => t sTypeSubst ( q , SVar ( fresh ) ) }
+  def dequantify( qs_ty: ( Set [ Name ] , SType ) ): SType =
+    dequantify ( qs_ty._1 , qs_ty._2 )
+}
+
+object Typecheck {
 
   def typeOfBinOp(op: BinOp): (Set[Name], SType) = op match {
     case Add        => (Set.empty   , SFunc(SInt , SFunc(SInt , SInt )))
@@ -293,12 +304,4 @@ class Typecheck ( nextName: Name ) {
     case Tail   => (Set(Name(0)),
       SFunc(SList(SVar(Name(0))), SList(SVar(Name(0)))))
   }
-
-  /**
-   * Replace quantified type variables with fresh type variables in an SType.
-   */
-  def dequantify( qs: Set [ Name ] , ty: SType ): SType =
-    ( qs foldLeft ty ) { ( t , q ) => t sTypeSubst ( q , SVar ( fresh ) ) }
-  def dequantify( qs_ty: ( Set [ Name ] , SType ) ): SType =
-    dequantify ( qs_ty._1 , qs_ty._2 )
 }

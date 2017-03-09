@@ -8,19 +8,25 @@ import org.scalacheck.Prop.BooleanOperators
 
 object ArbitraryTypes {
 
+  def smallListOf[A](gen: Gen[A]): Gen[List[A]] = for {
+    g <- listOfN(Math.round(scala.util.Random.nextGaussian * 5).toInt.abs, gen)
+  } yield g
+
   val genSend: Gen[Proc] = for {
     ch   <- genExp
-    msg  <- genExp
+    ts   <- smallListOf(genSType)
+    ms   <- smallListOf(genExp)
     next <- genProc
-  } yield Send(ch, msg, next)
+  } yield Send(ch, ts, ms, next)
 
   val genReceive: Gen[Proc] = for {
     srv  <- arbitrary[Boolean]
     ch   <- genExp
-    bind <- genName
-    ty   <- genSType
+    qs   <- smallListOf(genName)
+    bs   <- smallListOf(genName)
+    ts   <- listOfN(bs.size, genSType)
     next <- genProc
-  } yield Receive(srv, ch, bind, ty, next)
+  } yield Receive(srv, ch, qs, bs zip ts, next)
 
   val genNew: Gen[Proc] = for {
     bind <- genName
@@ -111,9 +117,7 @@ object ArbitraryTypes {
   } yield BinExp(op, l, r)
 
   val genListExp: Gen[Exp] = for {
-    es <- listOfN(
-      Math.round(scala.util.Random.nextGaussian * 5).toInt.abs,
-      genExp)
+    es <- smallListOf(genExp)
   } yield ListExp(es)
 
   def genExp: Gen[Exp] = lzy(frequency(
@@ -133,8 +137,9 @@ object ArbitraryTypes {
   val genSKhar: Gen[SType] = const(SKhar)
 
   val genSChan: Gen[SType] = for {
-    t <- genSType
-  } yield SChan(t)
+    qs <- smallListOf(genName)
+    ts <- smallListOf(genSType)
+  } yield SChan(qs, ts)
 
   val genSList: Gen[SType] = for {
     t <- genSType
@@ -148,11 +153,6 @@ object ArbitraryTypes {
   val genSVar: Gen[SType] = for {
     x <- genName
   } yield SVar(x)
-
-  val genSQuant: Gen[SType] = for {
-    x <- genName
-    t <- genSType
-  } yield SQuant(x, t)
 
   val genSFunc: Gen[SType] = for {
     a <- genSType
@@ -168,7 +168,6 @@ object ArbitraryTypes {
     (  6 , genSList       ) ,
     (  3 , genSPair       ) ,
     ( 10 , genSVar        ) ,
-    (  6 , genSQuant      ) ,
     (  3 , genSFunc       ) )
   )
 
@@ -176,9 +175,10 @@ object ArbitraryTypes {
     id <- lzy(arbitrary[Int])
   } yield Name(id)
 
-  implicit val arbitraryProc: Arbitrary[Proc] = Arbitrary(genProc)
-  implicit val arbitraryExp : Arbitrary[Exp ] = Arbitrary(genExp )
-  implicit val arbitraryName: Arbitrary[Name] = Arbitrary(genName)
+  implicit val arbitraryProc : Arbitrary[Proc ] = Arbitrary(genProc )
+  implicit val arbitraryExp  : Arbitrary[Exp  ] = Arbitrary(genExp  )
+  implicit val arbitrarySType: Arbitrary[SType] = Arbitrary(genSType)
+  implicit val arbitraryName : Arbitrary[Name ] = Arbitrary(genName )
 }
 
 object ProcProperties extends Properties("Proc") {
@@ -190,8 +190,8 @@ object ProcProperties extends Properties("Proc") {
 
   property("alphaEquivSimple") = Prop.forAll {
     ( n0: Name, n1: Name, n2: Name ) => { (n0 != n1 && n0 != n2) ==>
-      (Send(ChanLiteral(n0), Variable(n1), End).alphaEquiv(
-        Send(ChanLiteral(n1), Variable(n2), End))).nonEmpty
+      (Send(ChanLiteral(n0), List(), List(Variable(n1)), End).alphaEquiv(
+        Send(ChanLiteral(n1), List(), List(Variable(n2)), End))).nonEmpty
     }
   }
 }
@@ -232,8 +232,6 @@ object ParserProperties extends Properties("Parser") {
   property("twoIdents") =
     lexesAs ( "a b" , List ( PREIDENT ( "a" ) , PREIDENT ( "b" ) ) )
 
-  property("justChan") = lexesAs ( "$send" , List ( PRECHAN ( "$send" ) ) )
-
   property("justInt") = lexesAs ( "25" , List ( PREINT ( "25" ) ) )
 
   /* Parser tests */
@@ -254,12 +252,15 @@ object ParserProperties extends Properties("Parser") {
     parsesAs ( Parser.proc , "end" , End ) &&
     parsesAs ( Parser.proc , "[ end | end | end ]" ,
       Parallel ( End , Parallel ( End , End ) ) ) &&
-    parsesAs ( Parser.proc , "send 1 : 2 . end" ,
-      Send ( IntLiteral ( 1 ) , IntLiteral ( 2 ) , End ) ) &&
-    parsesAs ( Parser.proc , " [ send 1 : 2 . end | receive 1 : a of t . end ] " ,
-      Parallel ( Send ( IntLiteral ( 1 ) , IntLiteral ( 2 ) , End ) ,
-        Receive ( false , IntLiteral ( 1 ) ,
-          Name ( 0 ) , SVar ( Name ( 1 ) ) , End ) ) )
+    parsesAs ( Parser.proc , "send 1 ; ; 2 . end" ,
+      Send ( IntLiteral ( 1 ) , List ( ) ,
+        List ( IntLiteral ( 2 ) ) , End ) ) &&
+    parsesAs ( Parser.proc ,
+      " [ send 1 ; ; 2 . end | receive 1 ; ; a : int . end ] " ,
+      Parallel ( Send ( IntLiteral ( 1 ) , List ( ) ,
+        List ( IntLiteral ( 2 ) ) , End ) ,
+        Receive ( false , IntLiteral ( 1 ) , List ( ) ,
+          List ( ( Name ( 0 ) , SInt ) ) , End ) ) )
   }
 
   property("Exps") = {
@@ -292,14 +293,13 @@ object TurnerMachineProperties extends Properties("TurnerMachineState") {
   val next: Name = Name(52)
 
   property("simpleProcess") = {
-    val procStr: String = " [ receive $a : y of int . send $b : y . end | " +
-      "send $a : 10 . end ] "
+    val procStr: String =
+      "new c: a. [ receive c;; y: int. send y;;. end | send c;; 10. end ]"
     lexAndParse ( Parser.proc , Source fromString procStr ) match {
       case Right ( ( nmap , nn , proc ) ) => {
         runWithTurnerMachine ( proc , nmap.map ( _.swap ) , nn )._1.listify
           .filter( _ != End )
-          .==( List ( Send ( ChanLiteral ( nmap ( "$b" ) ) ,
-            IntLiteral ( 10 ) , End ) ) )
+          .==( List ( Send ( IntLiteral ( 10 ) , List ( ) , List ( ) , End ) ) )
       }
       case Left ( _ ) => false
     }
@@ -308,14 +308,16 @@ object TurnerMachineProperties extends Properties("TurnerMachineState") {
   property("addThreeNumbers") = {
 
     /* proc =
-     *  [
-     *    send a : x . end |
-     *    send a : y . end |
-     *    send a : z . end |
-     *    receive a : b of int . receive a : c of int . receive a : d of int . [
-     *      send a : b + c + d . end |
-     *      receive a : e of int . send a : e . end
-     *    ]
+     *  [ send a ; ; x . end
+     *  | send a ; ; y . end
+     *  | send a ; ; z . end
+     *  |
+     *    receive a ; ; b : int .
+     *    receive a ; ; c : int .
+     *    receive a ; ; d : int .
+     *    send e : b + c + d . end
+     *  |
+     *    receive e ; ; f : int . send a : f . end
      *  ]
      *
      * should evaluate to =
@@ -324,20 +326,21 @@ object TurnerMachineProperties extends Properties("TurnerMachineState") {
      */
     val proc: Function3[Int, Int, Int, Proc] = ( x: Int, y: Int, z: Int ) =>
       Proc.fromList(List(
-        Send(ChanLiteral(Name(0)), IntLiteral(x), End),
-        Send(ChanLiteral(Name(0)), IntLiteral(y), End),
-        Send(ChanLiteral(Name(0)), IntLiteral(z), End),
-        Receive(false, ChanLiteral(Name(0)), Name(1), SInt,
-          Receive(false, ChanLiteral(Name(0)), Name(2), SInt,
-          Receive(false, ChanLiteral(Name(0)), Name(3), SInt,
-          Send(ChanLiteral(Name(4)), BinExp(Add, BinExp(Add, Variable(Name(1)),
-            Variable(Name(2))), Variable(Name(3))), End)))),
-        Receive(false, ChanLiteral(Name(4)), Name(5), SInt,
-          Send(ChanLiteral(Name(0)), Variable(Name(5)), End))))
+        Send(ChanLiteral(Name(0)), List(), List(IntLiteral(x)), End),
+        Send(ChanLiteral(Name(0)), List(), List(IntLiteral(y)), End),
+        Send(ChanLiteral(Name(0)), List(), List(IntLiteral(z)), End),
+        Receive(false, ChanLiteral(Name(0)), List(), List((Name(1), SInt)),
+          Receive(false, ChanLiteral(Name(0)), List(), List((Name(2), SInt)),
+          Receive(false, ChanLiteral(Name(0)), List(), List((Name(3), SInt)),
+          Send(ChanLiteral(Name(4)), List(), List(BinExp(Add, BinExp(Add,
+            Variable(Name(1)), Variable(Name(2))), Variable(Name(3)))), End)))),
+        Receive(false, ChanLiteral(Name(4)), List(), List((Name(5), SInt)),
+          Send(ChanLiteral(Name(0)), List(), List(Variable(Name(5))), End))))
     Prop.forAll { ( x: Int, y: Int, z: Int ) => {
       val procPost: Proc = runWithTurnerMachine(proc(x, y, z), names, next)._1
       Proc.fromList(procPost.listify.filter( _ != End )).alphaEquiv(
-        Proc.fromList(Send(ChanLiteral(Name(0)), IntLiteral(x + y + z), End)
+        Proc.fromList(Send(ChanLiteral(Name(0)), List(),
+          List(IntLiteral(x + y + z)), End)
           .listify.filter( _ != End ))).nonEmpty
     }}
   }
@@ -351,37 +354,46 @@ object TypecheckProperties extends Properties("Typecheck") {
   import scala.io.Source
 
   property("dequantifyPLeft") = Prop.forAll { ( n: Int ) => { ( n > 1 ) ==> {
-    dequantify(typeOfUnOp(PLeft), new Name(n)) ==
-      (SFunc(SPair(SVar(new Name(n)), SVar(new Name(n + 1))), SVar(new Name(n)))
-      , new Name(n + 2))
+    new Typecheck(Name(n)).dequantify(typeOfUnOp(PLeft)) ==
+      SFunc(SPair(SVar(new Name(n)), SVar(new Name(n + 1))), SVar(new Name(n)))
   }}}
 
   property("dequantifyPRight") = Prop.forAll { ( n: Int ) => { ( n > 1 ) ==> {
-    dequantify(typeOfUnOp(PRight), new Name(n)) ==
-      (SFunc(SPair(SVar(new Name(n)), SVar(new Name(n + 1)))
-      , SVar(new Name(n + 1))), new Name(n + 2))
+    new Typecheck(Name(n)).dequantify(typeOfUnOp(PRight)) ==
+      SFunc(SPair(SVar(new Name(n)), SVar(new Name(n + 1))),
+        SVar(new Name(n + 1)))
   }}}
 
   property("unifyBadlyTypedExpFails") = {
     val exp: Exp = UnExp(PLeft, IntLiteral(1))
-    val (_, constraints: ConstraintSet, _) =
-      constraintsExp(exp, Map.empty, new Name(0))
-    unify(constraints, ConstraintSet.empty).isLeft
+    val checker: Typecheck = new Typecheck(Name(0))
+    val (_, constraints: ConstraintSet) = checker.constraintsExp(exp, Map.empty)
+    checker.unify(constraints, ConstraintSet.empty).isLeft
   }
 
   property("unifyArbitraryExpNoCrash") = Prop.forAll { exp: Exp => {
     // Free variables are SInts in this typing environment
-    val (_, constraints: ConstraintSet, _) = constraintsExp(exp,
-      ((exp.free union exp.chanLiterals) map ( n => ( n , SInt ) ) ).toMap,
-      new Name(0))
-    unify ( constraints , ConstraintSet.empty )
+    val checker: Typecheck = new Typecheck(findNextName(exp.free))
+    val (_, constraints: ConstraintSet) = checker.constraintsExp(exp,
+      ((exp.free union exp.chanLiterals) map (n => (n, SInt))).toMap)
+    checker.unify (constraints, ConstraintSet.empty)
+    true
+  }}
+
+  property("unifyArbitraryProcNoCrash") = Prop.forAll { proc: Proc => {
+    // Free variables are SInts in this typing environment
+    val checker: Typecheck = new Typecheck(findNextName(proc.free))
+    val (_, constraints: ConstraintSet) = checker.constraintsProc(proc,
+      ((proc.free union proc.chanLiterals) map (n => (n, SInt))).toMap)
+    checker.unify(constraints, ConstraintSet.empty)
     true
   }}
 
   def checks(procStr: String): Boolean =
     lexAndParse ( Parser.proc , Source fromString procStr ) match {
-      case Right ( ( nmap , nn , proc ) ) => checkProc ( proc ).isDefined
       case Left  ( _                    ) => false
+      case Right ( ( nmap , nn , proc ) ) =>
+        new Typecheck ( nn ).checkProc ( proc ).isDefined
     }
   def allCheck(procStrs: List[String]): Boolean =
     procStrs.map ( checks ).foldLeft ( true ) ( _ && _ )
@@ -473,13 +485,4 @@ object TypecheckProperties extends Properties("Typecheck") {
 
   property("polyExampleTypechecks") =
     checks ( Source.fromFile("examples/poly"              ).mkString )
-
-  property("unifyArbitraryProcNoCrash") = Prop.forAll { proc: Proc => {
-    // Free variables are SInts in this typing environment
-    val (_, constraints: ConstraintSet, _) = constraintsProc(proc,
-      ((proc.free union proc.chanLiterals) map ( n => ( n , SInt ) ) ).toMap,
-      new Name(0))
-    unify ( constraints , ConstraintSet.empty )
-    true
-  }}
 }
