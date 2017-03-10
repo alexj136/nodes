@@ -124,7 +124,7 @@ class TurnerMachineState(
 
     case Send(cE, ts, ms, p) => EvalExp from cE match {
       case EEChan(c) => this.runPrepend(Send(ChanLiteral(c), ts, ms, p)).someOf
-      case _         => throw FreeVariableError(send)
+      case _         => throw TypeError("send on non-channel expression")
     }
   }
 
@@ -156,7 +156,7 @@ class TurnerMachineState(
     case Receive(r, cE, qs, as, p) => EvalExp from cE match {
       case EEChan(c) =>
         this.runPrepend(Receive(r, ChanLiteral(c), qs, as, p)).someOf
-      case _         => throw FreeVariableError(receive)
+      case _         => throw TypeError("receive on non-channel expression")
     }
   }
 

@@ -11,7 +11,9 @@ abstract class MachineState {
 }
 
 sealed abstract class EvaluationException extends Exception
-case class TypeError(message: String) extends EvaluationException
+case class TypeError(message: String) extends EvaluationException {
+  override def toString: String = s"TypeError: $message"
+}
 case class FreeVariableError(in: SyntaxElement) extends EvaluationException
 case class ListBoundError(message: String, in: SyntaxElement)
   extends EvaluationException

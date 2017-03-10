@@ -124,7 +124,7 @@ object ArbitraryTypes {
     ( 10 , genVariable    ) ,
     ( 10 , genIntLiteral  ) ,
     ( 10 , genBoolLiteral ) ,
-    ( 10 , genChanLiteral ) ,
+//  ( 10 , genChanLiteral ) , not allowed in source - only for interpreters
     (  3 , genPair        ) ,
     (  6 , genUnExp       ) ,
     (  3 , genBinExp      ) ,
@@ -294,14 +294,15 @@ object TurnerMachineProperties extends Properties("TurnerMachineState") {
 
   property("simpleProcess") = {
     val procStr: String =
-      "new c: a. [ receive c;; y: int. send y;;. end | send c;; 10. end ]"
+      "new c: a. [ receive c;; y: int. send c;;y . end | send c;; 10. end ]"
     lexAndParse ( Parser.proc , Source fromString procStr ) match {
-      case Right ( ( nmap , nn , proc ) ) => {
-        runWithTurnerMachine ( proc , nmap.map ( _.swap ) , nn )._1.listify
-          .filter( _ != End )
-          .==( List ( Send ( IntLiteral ( 10 ) , List ( ) , List ( ) , End ) ) )
+      case Right((nmap, nn, proc)) => {
+        runWithTurnerMachine(proc, nmap map (_.swap), nn)._1.listify
+          .filter(_ != End)
+          .head.alphaEquiv(Send(ChanLiteral(Name(0)), List(),
+            List(IntLiteral(10)), End)).nonEmpty
       }
-      case Left ( _ ) => false
+      case Left(_) => false
     }
   }
 
@@ -406,83 +407,80 @@ object TypecheckProperties extends Properties("Typecheck") {
     " [ end | end | end ] " ) )
 
   property("reallySimpleProcsTypeCheck") = allCheck ( List (
-    " receive $a : y of int . end "         ,
-    " send $a : 12 . end "                  ,
-    " new a of @bool. end "                 ,
-    " let x of int = -> { 10 , 11 } . end " ,
-    " server $a : y of int . end "          ) )
+    " new a: @{; int}. receive a;; y: int. end " ,
+    " new a: @{; int}. send a;; 12. end        " ,
+    " new a: @{; bool}. end                    " ,
+    " let x: int = -> (10, 11). end            " ,
+    " new a: @{; int}. server a;; y: int. end  " ) )
 
   property("letProcChecks") = checks (
-    " [                                " +
-    " let abc of d ~ { @@d , { @d , d } } = { $a , { $b , $c } } . " +
-    " let a of d ~ @@d = <- abc                                  . " +
-    " let b of d ~ @d  = <- -> abc                               . " +
-    " let c of d ~ d   = -> -> abc                               . " +
-    " send a : b                                                 . " +
-    " send b : c                                                 . " +
-    " end                                                          " +
-    " |                                                            " +
-    " receive $a : bb of d ~ @d                                  . " +
-    " receive bb : cc of d ~ d                                   . " +
-    " end                                                          " +
-    " ]                                                            " )
+    " [ let a: int         = 10     . " +
+    "   let b: bool        = true   . " +
+    "   let c: char        = 'x'    . " +
+    "   let d: string      = \"xy\" . " +
+    "   new e: @{; int}             . " +
+    "   let f: @{; int}    = e      . " +
+    "   let g: (int, char) = (a, c) . " +
+    "   end                           " +
+    " ]                               " )
 
   property("simpleListsCheck") = allCheck ( List (
-  " if ? [] then end else end endif "         ,
-  " send $a : *-- [ 1 , 2 , 3 , 4 ] . end "   ,
-  " send $a : 0 :: [ 1 , 2 , 3 , 4 ] . end "  ,
-  " send $a : -** [ 1 , 2 , 3 , 4 ] . end "   ,
-  " send $a : -** [ 'a' , 'b' , 'c' ] . end " ,
-  " send $a : [ 1 , 2 , 3 , 4 ] . end "       ) )
+    " if ? [] then end else end endif                               " ,
+    " new a: @{k;  k }. send a; int ; *--  [ 1 , 2 , 3 , 4   ]. end " ,
+    " new a: @{k; [k]}. send a; int ; 0 :: [ 1 , 2 , 3 , 4   ]. end " ,
+    " new a: @{k; [k]}. send a; int ; -**  [ 1 , 2 , 3 , 4   ]. end " ,
+    " new a: @{k; [k]}. send a; char; -**  [ 'a' , 'b' , 'c' ]. end " ,
+    " new a: @{k; [k]}. send a; int ;      [ 1 , 2 , 3 , 4   ]. end " ) )
 
   property("badListsDontCheck") = noneCheck ( List (
-  " send $a : true :: [ 1 , 2 , 3 , 4 ] . end " ,
-  " send $a : [ 1 , 2 , 3 , 4 , $q ] . end "    ,
-  " if [] then end else end endif "             ) )
+    " new a: @{; [int]}. send a;; true :: [ 1 , 2 , 3 , 4 ] . end " ,
+    " new a: @{; [int]}. send a;; [ 1 , 2 , 3 , 4 , '5' ] . end "   ,
+    " if [] then end else end endif "             ) )
 
   property("simpleProcTypeChecks") = checks (
-    " [ receive $a : y of @int . " +
-    "     send y : 12          . " +
+    " new a: @{; @{; int}}     . " +
+    " new x: @{;     int }     . " +
+    " [ receive a;; y: @{;int} . " +
+    "     send y;; 12          . " +
     "     end                    " +
-    " | send $a : $x           . " +
+    " | send a;; x             . " +
     "     end                    " +
     " ]                          " )
 
   property("badProcsDontCheck") = noneCheck ( List (
-    " [ receive $a : y of @int  . send y : y . end | send $a : 12 . end ] " ,
-    " [ receive $a : y of @bool . send y : 3 . end | send $a : 12 . end ] " ,
-    " [ receive $a : y of @char . send y : y . end ] "                      ) )
-
-  property("polymorphicProgChecks") = checks (
-    " new id of d ~ @{ @d , d } .                                        " +
-    "   [ server id : r_x of d ~ { @d , d } . send <- r_x : -> r_x . end " +
-    "   | send id : { $ri , 10   } . end                                 " +
-    "   | send id : { $rb , true } . end                                 " +
-    "   ]                                                                " )
+    " new a: @{;@{;int}}. new y: @{;int}.                           " +
+    "   receive a;; y: @{;int } . send y;; y. end | send a: 12. end " ,
+    " new a: @{;@{;int}}. new y: @{;int}.                           " +
+    "   receive a;; y: @{;bool} . send y;; 3. end | send a: 12. end " ,
+    " new a: @{;@{;int}}. new y: @{;int}.                           " +
+    "   receive a;; y: @{;char} . send y;; y. end                   " ) )
 
   property("badPolyDoesntCheck") = ! checks (
-    " new id of d ~ @d .                                                 " +
-    "   [ server id : r_x of d ~ { @d , d } . send <- r_x : -> r_x . end " +
-    "   | send id : { $ri , 10   } . end                                 " +
-    "   | send id : { $rb , true } . end                                 " +
-    "   | send id : 10 . end                                             " +
-    "   ]                                                                " )
+    " new echo: @{d; d, @{;d}}.                            " +
+    "   [ server echo; d; x:d, r: @{;d}. send r;; x. end   " +
+    "   | new r: @{;int }. send echo; bool; (10  , r). end " +
+    "   | new r: @{;bool}. send echo; int ; (true, r). end " +
+    "   | new r: @{;char}. send echo; char; 'a'      . end " +
+    "   ]                                                  " )
 
   property("simpleloopExampleTypechecks") =
-    checks ( Source.fromFile("examples/simpleloop"        ).mkString )
+    checks ( Source.fromFile("examples/simpleloop"         ).mkString )
 
   property("looping_functionsExampleTypechecks") =
-    checks ( Source.fromFile("examples/looping_functions" ).mkString )
+    checks ( Source.fromFile("examples/looping_functions"  ).mkString )
 
   property("functionsExampleTypechecks") =
-    checks ( Source.fromFile("examples/functions"         ).mkString )
+    checks ( Source.fromFile("examples/functions"          ).mkString )
 
   property("listsExampleTypechecks") =
-    checks ( Source.fromFile("examples/lists"             ).mkString )
+    checks ( Source.fromFile("examples/lists"              ).mkString )
 
   property("strings_charsExampleTypechecks") =
-    checks ( Source.fromFile("examples/strings_chars"     ).mkString )
+    checks ( Source.fromFile("examples/strings_chars"      ).mkString )
 
-  property("polyExampleTypechecks") =
-    checks ( Source.fromFile("examples/poly"              ).mkString )
+  property("polymorphic_lengthExampleTypechecks") =
+    checks ( Source.fromFile("examples/polymorphic_length" ).mkString )
+
+  property("polymorphic_echoExampleTypechecks") =
+    checks ( Source.fromFile("examples/polymorphic_echo"   ).mkString )
 }

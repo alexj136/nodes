@@ -1,8 +1,10 @@
+new f: @{;int}.
+new print: @{k; k}.
 [
-    server $f : a of int .
+    server f;; a: int.
     if a > 0 then
-        send $print : a - 1 .
-        send $f : a - 1 .
+        send print; int; a - 1.
+        send f;; a - 1.
         end
     else
         end
@@ -10,6 +12,6 @@
 
 |
 
-    send $f : 10 .
+    send f;; 10.
     end
 ]

@@ -1,37 +1,35 @@
+new subten: @{; int, @{;int}}.
+new double_subten: @{; int, @{;int}}.
+new addone_double_subten: @{; int, @{;int}}.
+new print: @{k; k}.
 [
-    server $subten : n_rch of { int , @int } .
-    let n   of  int = <- n_rch .
-    let rch of @int = -> n_rch .
-    send rch : n - 10 .
+    server subten;; n: int, rch: @{;int}.
+    send rch;; n - 10.
     end
 
 |
 
-    server $double_subten : n_rch of { int , @int } .
-    let n   of  int = <- n_rch .
-    let rch of @int = -> n_rch .
-    new rch_d of @int .
-    send $subten : { n * 2 , rch_d } .
-    receive rch_d : res of int .
-    send rch : res .
+    server double_subten;; n: int, rch: @{;int}.
+    new rch_d: @{;int}.
+    send subten;; n * 2, rch_d.
+    receive rch_d;; res: int.
+    send rch;; res.
     end
 
 |
 
-    server $addone_double_subten : n_rch of { int , @int } .
-    let n   of  int = <- n_rch .
-    let rch of @int = -> n_rch .
-    new rch_d of @int .
-    send $double_subten : { n + 1 , rch_d } .
-    receive rch_d : res of int .
-    send rch : res .
+    server addone_double_subten;; n: int, rch: @{;int}.
+    new rch_d: @{;int}.
+    send double_subten;; n + 1, rch_d.
+    receive rch_d;; res: int.
+    send rch;; res.
     end
 
 |
 
-    new rch of @int .
-    send $addone_double_subten : { 10 , rch } .
-    receive rch : n of int .
-    send $print : n .
+    new rch: @{;int}.
+    send addone_double_subten;; 10, rch.
+    receive rch;; n: int.
+    send print; int; n.
     end
 ]

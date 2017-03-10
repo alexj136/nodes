@@ -1,26 +1,25 @@
+new a: @{; string}.
+new wrongcat: @{; string, string, @{; string}}.
+new print: @{a; a}.
 [
-    send $a : [ 'a' , 'b' , 'c' ] .
-    send $a : "def" .
+    send a;; [ 'a' , 'b' , 'c' ] .
+    send a;; "def" .
     end
 |
-    receive $a : first  of string .
-    receive $a : second of string .
-    new rch_wrongcat of @string .
-    send $wrongcat : { { first , second } , rch_wrongcat } .
-    receive rch_wrongcat : all of string .
-    send $print : all .
+    receive a;; first : string .
+    receive a;; second: string .
+    new rw: @{;string} .
+    send wrongcat;; first, second, rw.
+    receive rw;; all: string .
+    send print; string; all .
     end
 |
-    server $wrongcat : first_second__rch of { { string , string } , @string } .
-    let rch          of @string             = -> first_second__rch .
-    let first_second of { string , string } = <- first_second__rch .
-    let second       of string              = -> first_second .
-    let first        of string              = <- first_second .
+    server wrongcat;; first: string, second: string, rch: @{;string}.
     if ? first then
-        send rch : second .
+        send rch;; second.
         end
     else
-        send $wrongcat : { { -** first , ( *-- first ) :: second } , rch } .
+        send wrongcat;; -** first, (*-- first) :: second, rch.
         end
     endif
 ]
