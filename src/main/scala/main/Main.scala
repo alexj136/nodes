@@ -4,6 +4,7 @@ import syntax._
 import parser._
 import typecheck._
 import interpreter._
+import interpreter.turner.runWithTurnerMachine
 import interpreter.concurrent._
 import java.io.File
 import java.io.IOException
@@ -48,8 +49,11 @@ object Main extends App {
 
           // If constraints are solved, run the program
           case Right ( _  ) =>
-            new Launcher(proc, names get "$print", nextName, names.map(_.swap),
-              { case _ => {} }, classOf[ProcRunner])
+            val (procAfter: Proc, namesFAfter: Map[Name, String], _) =
+              runWithTurnerMachine(proc, namesF, nextName)
+            println ( procAfter.noServers pstr namesFAfter )
+            /*new Launcher(proc, names get "$print", nextName, namesF,
+              { case _ => {} }, classOf[ProcRunner])*/
 
           case Left  ( cs ) => {
             println ( s"${cs.size} type errors found:" )

@@ -314,22 +314,22 @@ sealed abstract class ImplMessage
 sealed abstract class ChanQuery extends ImplMessage
 
 // Precursor to a MsgConfirmToSender ChanQueryResponse
-case class  MsgSenderToChan(
+case class MsgSenderToChan(
     ms: List[EvalExp],
     chans: Map[Name, ActorRef])
   extends ChanQuery
 
 // Precursor to a MsgChanToReceiver ChanQueryResponse
-case object MsgRequestFromReceiver             extends ChanQuery
+case object MsgRequestFromReceiver extends ChanQuery
 
 // Responses sent by Channels to ProcRunners
 sealed abstract class ChanQueryResponse extends ImplMessage
 
 // Complements a MsgSenderToChan ChanQuery
-case object MsgConfirmToSender                   extends ChanQueryResponse
+case object MsgConfirmToSender extends ChanQueryResponse
 
 // Complements a MsgRequestFromReceiver ChanQuery
-case class  MsgChanToReceiver(
+case class MsgChanToReceiver(
     ms: List[EvalExp],
     chans: Map[Name, ActorRef])
   extends ChanQueryResponse
@@ -341,7 +341,7 @@ sealed abstract class CreationRequest extends ImplMessage
 case object MakeChannel extends CreationRequest
 
 // Requests a new process
-case class  MakeRunner(
+case class MakeRunner(
     parent: Option[ActorRef],
     chanMap: Map[Name, ActorRef],
     p: Proc)

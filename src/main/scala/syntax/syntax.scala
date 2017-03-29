@@ -99,6 +99,13 @@ sealed abstract class Proc extends SyntaxElement {
     case _                  => List(this)
   }
 
+  /** Remove top-level servers from a process (for convenient result printing)
+   */
+  def noServers: Proc = Proc fromList (this.listify filter {
+    case Receive(true, _, _, _, _) => false
+    case _                         => true
+  })
+
   /** Alpha-equivalence for processes. If the processes are alpha-equivalent, a
    *  Some of a map containing the 'name equlivalences' between this and that
    *  are returned in an Option. If they are not alpha equivalent, None is
