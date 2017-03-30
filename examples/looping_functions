@@ -30,14 +30,14 @@ new print: @{k; k}.
 
     server loop;; x: int.
     if x < 1000000000 then
-        send print; int; x.
+        send stdout;; "looping...\n".
         new rch: @{;int}.
         send addone_double_subten;; x, rch.
         receive rch;; n: int.
         send loop;; n.
         end
     else
-        send print; int; x.
+        send stdout;; "done.\n".
         end
     endif
 

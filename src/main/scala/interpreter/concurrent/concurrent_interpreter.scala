@@ -79,7 +79,7 @@ class Launcher(
 // Can be queried for deadlock detection.
 class ProcManager(
     launcher: Launcher,
-    var nextName: Name,
+    var nextName: NumName,
     procRunnerClass: Class[_ <: ProcRunner])
   extends Actor {
 
@@ -89,7 +89,7 @@ class ProcManager(
 
   def receive: Receive = setLiveActors
 
-  def makeChannel: (Name, ActorRef) = {
+  def makeChannel: (NumName, ActorRef) = {
     this.nextName = this.nextName.next
     val newChannel: ActorRef = context.actorOf(Props(classOf[Channel],
       self), s"NEW${this.nextName.id}")

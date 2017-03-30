@@ -99,11 +99,11 @@ case class ArityConstraint
   def combineIfCompatible ( other: Constraint ): Constraint = this
 }
 
-class Typecheck ( nextName: Name ) {
+class Typecheck ( nextName: NumName ) {
 
-  private var nn: Name = nextName
+  private var nn: NumName = nextName
 
-  def fresh: Name = { val freshN: Name = nn ; nn = nn.next ; freshN }
+  def fresh: NumName = { val freshN: NumName = nn ; nn = nn.next ; freshN }
 
   def checkProc(p: Proc): Option[SType] = {
     val (tyP: SType, constrP: ConstraintSet) = constraintsProc(p, Map.empty)
@@ -257,6 +257,12 @@ class Typecheck ( nextName: Name ) {
           + TypeConstraint(tyOp.argTy      , tyL, List(e))
           + TypeConstraint(tyOp.retTy.argTy, tyR, List(e)))
       }
+      case ChanLiteral ( StdOutName    ) =>
+        (Typecheck.typeOfIOChan, ConstraintSet.empty)
+      case ChanLiteral ( StdInName     ) =>
+        (Typecheck.typeOfIOChan, ConstraintSet.empty)
+      case ChanLiteral ( StdErrName    ) =>
+        (Typecheck.typeOfIOChan, ConstraintSet.empty)
       case ChanLiteral ( _             ) =>
         throw new RuntimeException("ChanLiteral present in type-check")
     }
@@ -272,6 +278,8 @@ class Typecheck ( nextName: Name ) {
 
 object Typecheck {
 
+  def typeOfIOChan: SType = SChan(List(), List(SList(SKhar)))
+
   def typeOfBinOp(op: BinOp): (Set[Name], SType) = op match {
     case Add        => (Set.empty   , SFunc(SInt , SFunc(SInt , SInt )))
     case Sub        => (Set.empty   , SFunc(SInt , SFunc(SInt , SInt )))
@@ -286,22 +294,22 @@ object Typecheck {
     case GreaterEq  => (Set.empty   , SFunc(SInt , SFunc(SInt , SBool)))
     case And        => (Set.empty   , SFunc(SBool, SFunc(SBool, SBool)))
     case Or         => (Set.empty   , SFunc(SBool, SFunc(SBool, SBool)))
-    case Cons       => (Set(Name(0)), SFunc(SVar(Name(0)),
-      SFunc(SList(SVar(Name(0))),SList(SVar(Name(0))))))
+    case Cons       => (Set(NumName(0)), SFunc(SVar(NumName(0)),
+      SFunc(SList(SVar(NumName(0))),SList(SVar(NumName(0))))))
   }
 
   def typeOfUnOp(op: UnOp): (Set[Name], SType) = op match {
     case Not    => (Set.empty,
       SFunc(SBool, SBool))
-    case PLeft  => (Set(Name(0), Name(1)),
-      SFunc(SPair(SVar(Name(0)), SVar(Name(1))), SVar(Name(0))))
-    case PRight => (Set(Name(0), Name(1)),
-      SFunc(SPair(SVar(Name(0)), SVar(Name(1))), SVar(Name(1))))
-    case Empty  => (Set(Name(0)),
-      SFunc(SList(SVar(Name(0))), SBool))
-    case Head   => (Set(Name(0)),
-      SFunc(SList(SVar(Name(0))), SVar(Name(0))))
-    case Tail   => (Set(Name(0)),
-      SFunc(SList(SVar(Name(0))), SList(SVar(Name(0)))))
+    case PLeft  => (Set(NumName(0), NumName(1)),
+      SFunc(SPair(SVar(NumName(0)), SVar(NumName(1))), SVar(NumName(0))))
+    case PRight => (Set(NumName(0), NumName(1)),
+      SFunc(SPair(SVar(NumName(0)), SVar(NumName(1))), SVar(NumName(1))))
+    case Empty  => (Set(NumName(0)),
+      SFunc(SList(SVar(NumName(0))), SBool))
+    case Head   => (Set(NumName(0)),
+      SFunc(SList(SVar(NumName(0))), SVar(NumName(0))))
+    case Tail   => (Set(NumName(0)),
+      SFunc(SList(SVar(NumName(0))), SList(SVar(NumName(0)))))
   }
 }

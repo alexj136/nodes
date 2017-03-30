@@ -32,7 +32,7 @@ object lexAndParse {
   def apply [ T ] (
     production: Parser.Parser [ T ] ,
     input: Source
-  ): Either [ LexerParserError , ( Map [ String , Name ] , Name , T ) ] =
+  ): Either [ LexerParserError , ( Map [ String , Name ] , NumName , T ) ] =
     for {
       lexed  <- Lexer  ( input                       ).right
       parsed <- Parser ( production , lexed._3       ).right
@@ -197,7 +197,7 @@ object Parser extends Parsers {
 
   def expNoBinExp: Parser [ Exp ] = variable | intLiteral | trueLiteral |
     falseLiteral | kharLiteral | strLiteral | pair | unExp | parens |
-    emptyList | list
+    emptyList | list | stdOut | stdIn | stdErr
 
   def binExp: Parser [ Exp ] = expNoBinExp ~ binOpTy ~ exp ^^ {
     case l ~ op ~ r => putPos ( BinExp ( op , l , r ) , l , r )
@@ -252,6 +252,18 @@ object Parser extends Parsers {
       case l ~ es ~ r => putPos ( ListExp ( es ) , l , r )
     }
 
+  def stdOut: Parser [ Exp ] = STDOUT() ^^ {
+    case s => putPos ( ChanLiteral ( StdOutName ) , s , s )
+  }
+
+  def stdIn:  Parser [ Exp ] = STDIN() ^^ {
+    case s => putPos ( ChanLiteral ( StdInName  ) , s , s )
+  }
+
+  def stdErr: Parser [ Exp ] = STDERR() ^^ {
+    case s => putPos ( ChanLiteral ( StdErrName ) , s , s )
+  }
+
   def binOpTy: Parser [ BinOp ] =
     PLUS   ( ) ^^ { case t  => putPos ( Add       , t , t ) } |
     DASH   ( ) ^^ { case t  => putPos ( Sub       , t , t ) } |
@@ -293,7 +305,7 @@ object Lexer extends RegexParsers {
 
   def apply ( input: Source ): Either
     [ LexerError
-    , ( Map [ String , Name ] , Name , List [ PostToken ] )
+    , ( Map [ String , Name ] , NumName , List [ PostToken ] )
     ] = lex ( new PagedSeqReader ( PagedSeq.fromSource ( input ) ) ) match {
       case Success   ( tks , rest ) => Right ( PreToken.postLexAll ( tks ) )
       case NoSuccess ( msg , rest ) =>
@@ -358,7 +370,10 @@ object Lexer extends RegexParsers {
     positioned { "int"                   ^^ { _ => TYINT   ( ) } } |||
     positioned { "bool"                  ^^ { _ => TYBOOL  ( ) } } |||
     positioned { "char"                  ^^ { _ => TYCHAR  ( ) } } |||
-    positioned { "string"                ^^ { _ => TYSTR   ( ) } } ) )
+    positioned { "string"                ^^ { _ => TYSTR   ( ) } } |||
+    positioned { "stdout"                ^^ { _ => STDOUT  ( ) } } |||
+    positioned { "stdin"                 ^^ { _ => STDIN   ( ) } } |||
+    positioned { "stderr"                ^^ { _ => STDERR  ( ) } } ) )
 }
 
 /** Below we have the token classes. We have PreTokens and PostTokens to
@@ -372,15 +387,15 @@ sealed trait Token extends Positional
 sealed abstract class PreToken extends Token {
   def postLex (
     nameMap: Map [ String , Name ] ,
-    nextName: Name
-  ): ( Map [ String , Name ] , Name , PostToken )
+    nextName: NumName
+  ): ( Map [ String , Name ] , NumName , PostToken )
 }
 object PreToken {
   def postLexAll (
     tokens: List [ PreToken ]
-  ): ( Map [ String , Name ] , Name , List [ PostToken ] ) = {
+  ): ( Map [ String , Name ] , NumName , List [ PostToken ] ) = {
     var nameMap  : Map [ String , Name ] = Map.empty
-    var nextName : Name                  = Name ( 0 )
+    var nextName : NumName               = NumName ( 0 )
     var done     : List [ PostToken ]    = List ( )
     var todo     : List [ PreToken  ]    = tokens
     while ( ! todo.isEmpty ) {
@@ -403,8 +418,8 @@ case class PREIDENT ( text: String ) extends PreInfoToken ( text ) {
    */
   override def postLex (
     nameMap: Map [ String , Name ] ,
-    nextName: Name
-  ): ( Map [ String , Name ] , Name , PostToken ) =
+    nextName: NumName
+  ): ( Map [ String , Name ] , NumName , PostToken ) =
     nameMap get this.text match {
       case Some ( name ) => ( nameMap ,
         nextName      , POSTIDENT ( name     ).setPos ( this.pos ) )
@@ -417,8 +432,8 @@ case class PREINT   ( text: String ) extends PreInfoToken ( text ) {
    */
   override def postLex (
     nameMap: Map [ String , Name ] ,
-    nextName: Name
-  ): ( Map [ String , Name ] , Name , PostToken ) =
+    nextName: NumName
+  ): ( Map [ String , Name ] , NumName , PostToken ) =
     ( nameMap , nextName , POSTINT ( this.text.toInt ).setPos ( this.pos ) )
 }
 
@@ -427,8 +442,8 @@ case class PREKHAR  ( text: String ) extends PreInfoToken ( text ) {
    */
   override def postLex (
     nameMap: Map [ String , Name ] ,
-    nextName: Name
-  ): ( Map [ String , Name ] , Name , PostToken ) =
+    nextName: NumName
+  ): ( Map [ String , Name ] , NumName , PostToken ) =
     ( nameMap , nextName , POSTKHAR ( this.text.charAt ( 1 ) ).setPos ( this.pos ) )
 }
 
@@ -437,8 +452,8 @@ case class PRESTR   ( text: String ) extends PreInfoToken ( text ) {
    */
   override def postLex (
     nameMap: Map [ String , Name ] ,
-    nextName: Name
-  ): ( Map [ String , Name ] , Name , PostToken ) =
+    nextName: NumName
+  ): ( Map [ String , Name ] , NumName , PostToken ) =
     ( nameMap , nextName ,
       POSTSTR  ( stringToCharList ( this.text.init.tail ) )
       .setPos ( this.pos ) )
@@ -458,8 +473,8 @@ sealed abstract class KeyWdToken extends PreToken with PostToken {
   val text: String
   override def postLex (
     nameMap: Map [ String , Name ] ,
-    nextName: Name
-  ): ( Map [ String , Name ] , Name , PostToken ) =
+    nextName: NumName
+  ): ( Map [ String , Name ] , NumName , PostToken ) =
     ( nameMap , nextName , this )
 }
 
@@ -514,3 +529,6 @@ case class TYINT   ( ) extends KeyWdToken { val text: String = "int"     }
 case class TYBOOL  ( ) extends KeyWdToken { val text: String = "bool"    }
 case class TYCHAR  ( ) extends KeyWdToken { val text: String = "char"    }
 case class TYSTR   ( ) extends KeyWdToken { val text: String = "string"  }
+case class STDOUT  ( ) extends KeyWdToken { val text: String = "stdout"  }
+case class STDIN   ( ) extends KeyWdToken { val text: String = "stdin"   }
+case class STDERR  ( ) extends KeyWdToken { val text: String = "stderr"  }

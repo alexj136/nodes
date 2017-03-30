@@ -7,7 +7,7 @@ abstract class MachineState {
   def step: Option[MachineState]
   def someOf: Option[MachineState] = Some(this)
   def getNames: Map[Name, String]
-  def getNext: Name
+  def getNext: NumName
 }
 
 sealed abstract class EvaluationException extends Exception

@@ -6,15 +6,15 @@ import interpreter._
 object runWithTurnerMachine extends Function3[
     Proc,
     Map[Name, String],
-    Name,
-    (Proc, Map[Name, String], Name)
+    NumName,
+    (Proc, Map[Name, String], NumName)
   ] {
 
   def apply(
       proc: Proc,
       names: Map[Name, String],
-      next: Name)
-  : (Proc, Map[Name, String], Name) = {
+      next: NumName)
+  : (Proc, Map[Name, String], NumName) = {
     var state: MachineState = new TurnerMachineState(proc.listify,
       names map {case (id, str) => (id, Nil)}, names, next)
     var stepState: Option[MachineState] = state.step
@@ -30,13 +30,13 @@ class TurnerMachineState(
     run:   List[Proc],
     wait:  Map[Name, List[Proc]],
     names: Map[Name, String],
-    next:  Name) extends MachineState {
+    next:  NumName) extends MachineState {
 
   override def toProc: Proc = (this.run :: this.wait.toList.map(_._2)).flatten
     .fold(End){ (p, q) => Parallel(p, q) }
 
   def getNames: Map[Name, String] = names
-  def getNext: Name = next
+  def getNext: NumName = next
 
   def withRun(newRun: List[Proc]): TurnerMachineState =
     new TurnerMachineState(newRun, this.wait, this.names, this.next)
@@ -60,10 +60,10 @@ class TurnerMachineState(
   def waitAppend(ch: Name, proc: Proc): TurnerMachineState =
     this.withWait(ch, this.wait(ch) :+ proc)
 
-  def withNext(newNext: Name): TurnerMachineState =
+  def withNext(newNext: NumName): TurnerMachineState =
     new TurnerMachineState(this.run, this.wait, this.names, newNext)
 
-  def makeName: (Name, TurnerMachineState) =
+  def makeName: (NumName, TurnerMachineState) =
     (this.next.next, this.withNext(this.next.next))
 
   override def step: Option[MachineState] = this.run match {
@@ -91,12 +91,11 @@ class TurnerMachineState(
   }
 
   def handleSend(send: Send): Option[MachineState] = send match {
-    case Send(ChanLiteral(c), ts, ms, p)
-      if this.names.get(c) == Some("$print") => {
-        println(ms map { m =>
-          ((EvalExp from m).unEvalExp pstr this.names) mkString ", " })
-        this.runPrepend(p).someOf
-      }
+    case Send(ChanLiteral(StdOutName), ts, ms, p) => {
+      println(ms map { m =>
+        ((EvalExp from m).unEvalExp pstr this.names) mkString ", " })
+      this.runPrepend(p).someOf
+    }
 
     case Send(ChanLiteral(c), ts, ms, p) =>
       val (nextWait, thisWithoutNextWait): (Option[Proc], TurnerMachineState) =
@@ -178,7 +177,7 @@ class TurnerMachineState(
 
   def handleNew(nu: New): Option[MachineState] = nu match {
     case New(name, _, p) => {
-      val (nuV, thisWithNewName): (Name, TurnerMachineState) = this.makeName
+      val (nuV, thisWithNewName): (NumName, TurnerMachineState) = this.makeName
       thisWithNewName
         .withWait(nuV, Nil)
         .runPrepend(substituteProc(p, name, EEChan(nuV)))

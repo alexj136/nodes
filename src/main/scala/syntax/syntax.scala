@@ -8,17 +8,37 @@ sealed trait SyntaxElement {
   def free: Set[Name]
 }
 
-case class Name(val id: Int) extends SyntaxElement {
-  def next: Name = new Name(this.id + 1)
+abstract class Name extends SyntaxElement
+
+case class NumName(val id: Int) extends Name {
+  def next: NumName = new NumName(this.id + 1)
   def pstr(names: Map[Name, String]): String =
-    names getOrElse (this, s"<${this.id}>")
+    names getOrElse (this, this.toString)
   def free: Set[Name] = Set(this)
-  override def toString: String = s"Name(${this.id})" // for debugging
+  override def toString: String = s"<${this.id}>" // for debugging
 }
 
-object findNextName extends Function1[Set[Name], Name] {
-  def apply(names: Set[Name]): Name = if (names.isEmpty) Name ( 0 ) else
-    Name ( ( names.map ( _.id ).max ) + 1 )
+abstract class PreDefName extends Name {
+  def pstr(names: Map[Name, String]): String = this.toString
+  def free: Set[Name] = Set(this)
+}
+
+case object StdOutName extends PreDefName {
+  override def toString: String = "stdout" 
+}
+
+case object StdInName  extends PreDefName {
+  override def toString: String = "stdin"
+}
+
+case object StdErrName extends PreDefName {
+  override def toString: String = "stderr"
+}
+
+object findNextName extends Function1[Set[Name], NumName] {
+  def apply(names: Set[Name]): NumName =
+      if ((names filter (_.isInstanceOf[NumName])).isEmpty) NumName ( 0 ) else
+    NumName ( ( names.map ( _.asInstanceOf[NumName].id ).max ) + 1 )
 }
 
 abstract class Info {
@@ -421,10 +441,10 @@ sealed abstract class SType extends SyntaxElement {
       if ( ( qs filter ( to.free ( _ ) ) ).size > 0 )
         SChan ( qs , ts map ( _ sTypeSubst ( from , to ) ) )
       else {
-        val fresh: Name = findNextName ( ( ( ts map ( _.free ) )
+        val fresh: NumName = findNextName ( ( ( ts map ( _.free ) )
           .fold ( Set.empty ) ( _ union _ ) ) union to.free ++ qs + from )
-        val allFresh: List[ Name ] = List.empty ++
-          ( ( fresh.id until ( fresh.id + qs.size ) ) map ( Name ( _ ) ) )
+        val allFresh: List[ NumName ] = List.empty ++
+          ( ( fresh.id until ( fresh.id + qs.size ) ) map ( NumName ( _ ) ) )
         SChan ( allFresh ,
           ts.map ( _ sTypeSubstFold ( qs zip ( allFresh map ( SVar ( _ ) ) ) ) )
             .map ( _ sTypeSubst ( from , to ) ) )
