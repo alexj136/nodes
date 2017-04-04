@@ -169,15 +169,8 @@ object EvalExp {
       case(Mod, _, _) => throw TypeError("%")
 
       // A -> A -> Bool
-      case(Equal, EEInt(l), EEInt(r)) => EEBool(l == r)
-      case(Equal, EEBool(l), EEBool(r)) => EEBool(l == r)
-      case(Equal, EEChan(l), EEChan(r)) => EEBool(l == r)
-      case(Equal, _, _) => throw TypeError("==")
-
-      case(NotEqual, EEInt(l), EEInt(r)) => EEBool(l != r)
-      case(NotEqual, EEBool(l), EEBool(r)) => EEBool(l != r)
-      case(NotEqual, EEChan(l), EEChan(r)) => EEBool(l != r)
-      case(NotEqual, _, _) => throw TypeError("!=")
+      case(Equal   , l, r) => EEBool(l == r)
+      case(NotEqual, l, r) => EEBool(l != r)
 
       // Int -> Int -> Bool
       case(Less, EEInt(l), EEInt(r)) => EEBool(l < r)

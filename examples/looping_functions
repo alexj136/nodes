@@ -2,7 +2,6 @@ new loop: @{;int}.
 new subten: @{; int, @{;int}}.
 new double_subten: @{; int, @{;int}}.
 new addone_double_subten: @{; int, @{;int}}.
-new print: @{k; k}.
 [
     server subten;; n: int, rch: @{;int}.
     send rch;; n - 10.

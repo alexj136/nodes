@@ -455,11 +455,25 @@ case class PRESTR   ( text: String ) extends PreInfoToken ( text ) {
     nextName: NumName
   ): ( Map [ String , Name ] , NumName , PostToken ) =
     ( nameMap , nextName ,
-      POSTSTR  ( stringToCharList ( this.text.init.tail ) )
+      POSTSTR  ( stringToEscapedCharList ( this.text.init.tail ) )
       .setPos ( this.pos ) )
 
-  def stringToCharList ( str: String ): Exp =
-    ListExp ( str.toList.map ( KharLiteral ( _ ) ) )
+  def stringToEscapedCharList ( str: String ): Exp =
+    ListExp ( escape ( str ).toList.map ( KharLiteral ( _ ) ) )
+
+  /** Hacky way to deal with escape characters in strings. Scan through the
+   *  string (implicitly converted to Seq[Char] and back) and look for the
+   *  escape sequences. This implementation will not scale to deal with \" or \'
+   *  and therefore something more sophisticated will eventually be required in
+   *  the lex method to handle these.
+   */
+  def escape ( s: Seq[Char] ): Seq[Char] = s match {
+    case '\\' +: 'n'  +: t => '\n' +: escape ( t )
+    case '\\' +: 't'  +: t => '\t' +: escape ( t )
+    case '\\' +: '\\' +: t => '\\' +: escape ( t )
+    case          c   +: t =>   c  +: escape ( t )
+    case Nil               => Nil
+  }
 }
 
 sealed trait PostToken extends Token

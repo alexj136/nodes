@@ -1,0 +1,16 @@
+send stdout;; "What's your name?\n".
+receive stdin;; name: string.
+if ((*-- name) == 'q') || ((*-- name) == 'Q') then
+    send stdout;; "That's an unusual name.\n".
+    end
+else
+    if name == "Voldemort" then
+        send stderr;; "WARNING! LORD VOLDEMORT IS HERE!\n".
+        end
+    else
+        send stdout;; "Hello ".
+        send stdout;; name.
+        send stdout;; "!\n".
+        end
+    endif
+endif

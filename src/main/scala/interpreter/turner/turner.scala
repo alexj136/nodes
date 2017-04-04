@@ -91,9 +91,13 @@ class TurnerMachineState(
   }
 
   def handleSend(send: Send): Option[MachineState] = send match {
-    case Send(ChanLiteral(StdOutName), ts, ms, p) => {
-      println(ms map { m =>
-        ((EvalExp from m).unEvalExp pstr this.names) mkString ", " })
+    case Send(ChanLiteral(StdOutName), ts, m :: Nil, p) => {
+      System.out.print((EvalExp from m).unEvalExp pstr this.names)
+      this.runPrepend(p).someOf
+    }
+
+    case Send(ChanLiteral(StdErrName), ts, m :: Nil, p) => {
+      System.err.print((EvalExp from m).unEvalExp pstr this.names)
       this.runPrepend(p).someOf
     }
 
@@ -128,6 +132,22 @@ class TurnerMachineState(
   }
 
   def handleReceive(receive: Receive): Option[MachineState] = receive match {
+    case Receive(r, ChanLiteral(StdInName), List(),
+        List((n, SList(SKhar))), p) => {
+      val str: String = readLine()
+      val strAsExp: EvalExp = EEList(str.toList.map(EEKhar(_)))
+      val pSub: Proc = substituteProc(p, n, strAsExp)
+      if (r)
+        this
+          .runPrepend(receive)
+          .runAppend(pSub)
+          .someOf
+      else
+        this
+          .runPrepend(pSub)
+          .someOf
+    }
+
     case Receive(r, ChanLiteral(c), qs, as, p) =>
       val (nextWait, thisWithoutNextWait): (Option[Proc], TurnerMachineState) =
         this.splitWait(c)

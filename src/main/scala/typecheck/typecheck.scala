@@ -286,16 +286,18 @@ object Typecheck {
     case Mul        => (Set.empty   , SFunc(SInt , SFunc(SInt , SInt )))
     case Div        => (Set.empty   , SFunc(SInt , SFunc(SInt , SInt )))
     case Mod        => (Set.empty   , SFunc(SInt , SFunc(SInt , SInt )))
-    case Equal      => (Set.empty   , SFunc(SInt , SFunc(SInt , SBool)))
-    case NotEqual   => (Set.empty   , SFunc(SInt , SFunc(SInt , SBool)))
     case Less       => (Set.empty   , SFunc(SInt , SFunc(SInt , SBool)))
     case LessEq     => (Set.empty   , SFunc(SInt , SFunc(SInt , SBool)))
     case Greater    => (Set.empty   , SFunc(SInt , SFunc(SInt , SBool)))
     case GreaterEq  => (Set.empty   , SFunc(SInt , SFunc(SInt , SBool)))
     case And        => (Set.empty   , SFunc(SBool, SFunc(SBool, SBool)))
     case Or         => (Set.empty   , SFunc(SBool, SFunc(SBool, SBool)))
+    case Equal      => (Set(NumName(0)),
+      SFunc(SVar(NumName(0)), SFunc(SVar(NumName(0)), SBool)))
+    case NotEqual   => (Set(NumName(0)),
+      SFunc(SVar(NumName(0)), SFunc(SVar(NumName(0)), SBool)))
     case Cons       => (Set(NumName(0)), SFunc(SVar(NumName(0)),
-      SFunc(SList(SVar(NumName(0))),SList(SVar(NumName(0))))))
+      SFunc(SList(SVar(NumName(0))), SList(SVar(NumName(0))))))
   }
 
   def typeOfUnOp(op: UnOp): (Set[Name], SType) = op match {
