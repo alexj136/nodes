@@ -49,11 +49,7 @@ object Main extends App {
 
           // If constraints are solved, run the program
           case Right ( _  ) =>
-            val (procAfter: Proc, namesFAfter: Map[Name, String], _) =
-              runWithTurnerMachine(proc, namesF, nextName)
-            println ( procAfter.noServers pstr namesFAfter )
-            /*new Launcher(proc, names get "$print", nextName, namesF,
-              { case _ => {} }, classOf[ProcRunner])*/
+            runWithTurnerMachine(proc, namesF, nextName)
 
           case Left  ( cs ) => {
             println ( s"${cs.size} type errors found:" )
