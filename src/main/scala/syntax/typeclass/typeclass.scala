@@ -12,7 +12,8 @@ case class TypeClassDecl
   ) extends TypeClassElement {
 
   override def pstr(names: Map[Name, String]) = ???
-  override def free: Set[Name] = ???
+  override def free: Set[Name] =
+    (body.free union (ty.free - bind)) - tcName
 }
 
 case class TypeClassInst
@@ -23,7 +24,8 @@ case class TypeClassInst
   ) extends TypeClassElement {
 
   override def pstr(names: Map[Name, String]) = ???
-  override def free: Set[Name] = ???
+  override def free: Set[Name] =
+    body.free union witness.free union instTy.free + tcName
 }
 
 case class TypeClassProc ( p: Proc ) extends TypeClassElement {
