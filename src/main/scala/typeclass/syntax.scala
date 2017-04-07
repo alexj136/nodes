@@ -1,4 +1,4 @@
-package syntax.typeclass_syntax
+package typeclass.syntax
 
 import syntax._
 
@@ -12,7 +12,7 @@ case class TypeClassDecl
   ) extends TypeClassElement {
 
   override def pstr(names: Map[Name, String]) =
-    s"class ${tcName pstr names} ${bind pstr names} = ${ty pstr names} in " +
+    s"class ${tcName pstr names}; ${bind pstr names}: ${ty pstr names}." +
     s"${body pstr names}"
 
   override def free: Set[Name] =
@@ -27,7 +27,7 @@ case class TypeClassInst
   ) extends TypeClassElement {
 
   override def pstr(names: Map[Name, String]) =
-    s"instance ${tcName pstr names} ${instTy pstr names} where\n" +
+    s"instance ${tcName pstr names}; ${instTy pstr names} where\n" +
     s"    ${witness pstr names}\n" +
     s"in\n" +
     s"    ${body pstr names}"
