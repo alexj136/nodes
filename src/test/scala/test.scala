@@ -173,7 +173,7 @@ object ArbitraryTypes {
 
   def genName: Gen[Name] = for {
     id <- lzy(arbitrary[Int])
-  } yield Name(id)
+  } yield NumName(id)
 
   implicit val arbitraryProc : Arbitrary[Proc ] = Arbitrary(genProc )
   implicit val arbitraryExp  : Arbitrary[Exp  ] = Arbitrary(genExp  )
@@ -260,17 +260,18 @@ object ParserProperties extends Properties("Parser") {
       Parallel ( Send ( IntLiteral ( 1 ) , List ( ) ,
         List ( IntLiteral ( 2 ) ) , End ) ,
         Receive ( false , IntLiteral ( 1 ) , List ( ) ,
-          List ( ( Name ( 0 ) , SInt ) ) , End ) ) )
+          List ( ( NumName ( 0 ) , SInt ) ) , End ) ) )
   }
 
   property("Exps") = {
-    parsesAs ( Parser.exp , "a" , Variable ( Name ( 0 ) ) ) &&
+    parsesAs ( Parser.exp , "a" , Variable ( NumName ( 0 ) ) ) &&
     parsesAs ( Parser.exp , "a + b" ,
-      BinExp ( Add , Variable ( Name ( 0 ) ) , Variable ( Name ( 1 ) ) ) ) &&
+      BinExp ( Add , Variable ( NumName ( 0 ) ) ,
+        Variable ( NumName ( 1 ) ) ) ) &&
     parsesAs ( Parser.exp , "a + b + c" ,
-      BinExp ( Add , Variable ( Name ( 0 ) ) ,
-        BinExp ( Add , Variable ( Name ( 1 ) ) ,
-          Variable ( Name ( 2 ) ) ) ) ) &&
+      BinExp ( Add , Variable ( NumName ( 0 ) ) ,
+        BinExp ( Add , Variable ( NumName ( 1 ) ) ,
+          Variable ( NumName ( 2 ) ) ) ) ) &&
     ( lexAndParse ( Parser.exp , Source fromString "a + b + c" ) ==
       lexAndParse ( Parser.exp , Source fromString "a + ( b + c )" ) ) &&
     parsesAs ( Parser.exp , "[]" , ListExp ( List.empty ) ) &&
@@ -287,10 +288,10 @@ object TurnerMachineProperties extends Properties("TurnerMachineState") {
   import interpreter.turner.runWithTurnerMachine
   import scala.io.Source
 
-  val names: Map[Name, String] = (((0 to 51) map (n => Name(n)))
+  val names: Map[Name, String] = (((0 to 51) map (n => NumName(n)))
     .zip(((('a' to 'z') ++ ('A' to 'Z')) map (s => s.toString)))).toMap
 
-  val next: Name = Name(52)
+  val next: NumName = NumName(52)
 
   property("simpleProcess") = {
     val procStr: String =
@@ -299,7 +300,7 @@ object TurnerMachineProperties extends Properties("TurnerMachineState") {
       case Right((nmap, nn, proc)) => {
         runWithTurnerMachine(proc, nmap map (_.swap), nn)._1.listify
           .filter(_ != End)
-          .head.alphaEquiv(Send(ChanLiteral(Name(0)), List(),
+          .head.alphaEquiv(Send(ChanLiteral(NumName(0)), List(),
             List(IntLiteral(10)), End)).nonEmpty
       }
       case Left(_) => false
@@ -327,20 +328,25 @@ object TurnerMachineProperties extends Properties("TurnerMachineState") {
      */
     val proc: Function3[Int, Int, Int, Proc] = ( x: Int, y: Int, z: Int ) =>
       Proc.fromList(List(
-        Send(ChanLiteral(Name(0)), List(), List(IntLiteral(x)), End),
-        Send(ChanLiteral(Name(0)), List(), List(IntLiteral(y)), End),
-        Send(ChanLiteral(Name(0)), List(), List(IntLiteral(z)), End),
-        Receive(false, ChanLiteral(Name(0)), List(), List((Name(1), SInt)),
-          Receive(false, ChanLiteral(Name(0)), List(), List((Name(2), SInt)),
-          Receive(false, ChanLiteral(Name(0)), List(), List((Name(3), SInt)),
-          Send(ChanLiteral(Name(4)), List(), List(BinExp(Add, BinExp(Add,
-            Variable(Name(1)), Variable(Name(2))), Variable(Name(3)))), End)))),
-        Receive(false, ChanLiteral(Name(4)), List(), List((Name(5), SInt)),
-          Send(ChanLiteral(Name(0)), List(), List(Variable(Name(5))), End))))
+        Send(ChanLiteral(NumName(0)), List(), List(IntLiteral(x)), End),
+        Send(ChanLiteral(NumName(0)), List(), List(IntLiteral(y)), End),
+        Send(ChanLiteral(NumName(0)), List(), List(IntLiteral(z)), End),
+        Receive(false, ChanLiteral(NumName(0)),
+          List(), List((NumName(1), SInt)),
+          Receive(false, ChanLiteral(NumName(0)),
+            List(), List((NumName(2), SInt)),
+          Receive(false, ChanLiteral(NumName(0)),
+            List(), List((NumName(3), SInt)),
+          Send(ChanLiteral(NumName(4)), List(), List(BinExp(Add, BinExp(Add,
+            Variable(NumName(1)), Variable(NumName(2))), Variable(NumName(3)))),
+              End)))),
+        Receive(false, ChanLiteral(NumName(4)), List(), List((NumName(5), SInt)),
+          Send(ChanLiteral(NumName(0)), List(), List(Variable(NumName(5))),
+            End))))
     Prop.forAll { ( x: Int, y: Int, z: Int ) => {
       val procPost: Proc = runWithTurnerMachine(proc(x, y, z), names, next)._1
       Proc.fromList(procPost.listify.filter( _ != End )).alphaEquiv(
-        Proc.fromList(Send(ChanLiteral(Name(0)), List(),
+        Proc.fromList(Send(ChanLiteral(NumName(0)), List(),
           List(IntLiteral(x + y + z)), End)
           .listify.filter( _ != End ))).nonEmpty
     }}
@@ -355,19 +361,19 @@ object TypecheckProperties extends Properties("Typecheck") {
   import scala.io.Source
 
   property("dequantifyPLeft") = Prop.forAll { ( n: Int ) => { ( n > 1 ) ==> {
-    new Typecheck(Name(n)).dequantify(typeOfUnOp(PLeft)) ==
-      SFunc(SPair(SVar(new Name(n)), SVar(new Name(n + 1))), SVar(new Name(n)))
+    new Typecheck(NumName(n)).dequantify(typeOfUnOp(PLeft)) ==
+      SFunc(SPair(SVar(NumName(n)), SVar(NumName(n + 1))), SVar(NumName(n)))
   }}}
 
   property("dequantifyPRight") = Prop.forAll { ( n: Int ) => { ( n > 1 ) ==> {
-    new Typecheck(Name(n)).dequantify(typeOfUnOp(PRight)) ==
-      SFunc(SPair(SVar(new Name(n)), SVar(new Name(n + 1))),
-        SVar(new Name(n + 1)))
+    new Typecheck(NumName(n)).dequantify(typeOfUnOp(PRight)) ==
+      SFunc(SPair(SVar(NumName(n)), SVar(NumName(n + 1))),
+        SVar(NumName(n + 1)))
   }}}
 
   property("unifyBadlyTypedExpFails") = {
     val exp: Exp = UnExp(PLeft, IntLiteral(1))
-    val checker: Typecheck = new Typecheck(Name(0))
+    val checker: Typecheck = new Typecheck(NumName(0))
     val (_, constraints: ConstraintSet) = checker.constraintsExp(exp, Map.empty)
     checker.unify(constraints, ConstraintSet.empty).isLeft
   }
