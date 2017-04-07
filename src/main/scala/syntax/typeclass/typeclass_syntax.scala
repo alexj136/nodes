@@ -1,4 +1,4 @@
-package syntax.typeclass
+package syntax.typeclass_syntax
 
 import syntax._
 
