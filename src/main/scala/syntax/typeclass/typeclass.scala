@@ -11,7 +11,10 @@ case class TypeClassDecl
   , val body   : TypeClassElement
   ) extends TypeClassElement {
 
-  override def pstr(names: Map[Name, String]) = ???
+  override def pstr(names: Map[Name, String]) =
+    s"class ${tcName pstr names} ${bind pstr names} = ${ty pstr names} in " +
+    s"${body pstr names}"
+
   override def free: Set[Name] =
     (body.free union (ty.free - bind)) - tcName
 }
@@ -23,7 +26,12 @@ case class TypeClassInst
   , val body    : TypeClassElement
   ) extends TypeClassElement {
 
-  override def pstr(names: Map[Name, String]) = ???
+  override def pstr(names: Map[Name, String]) =
+    s"instance ${tcName pstr names} ${instTy pstr names} where\n" +
+    s"    ${witness pstr names}\n" +
+    s"in\n" +
+    s"    ${body pstr names}"
+
   override def free: Set[Name] =
     body.free union witness.free union instTy.free + tcName
 }
