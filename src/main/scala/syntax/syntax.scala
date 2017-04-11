@@ -364,9 +364,9 @@ sealed abstract class SType extends SyntaxElement {
           .fold ( Set.empty ) ( _ union _ ) ) union to.free ++ qsNames + from )
         val allFresh: List[ NumName ] = List.empty ++
           ( ( fresh.id until ( fresh.id + qs.size ) ) map ( NumName ( _ ) ) )
-        SChan ( allFresh ,
-          ts.map ( _ sTypeSubstFold ( qs zip ( allFresh map ( SVar ( _ ) ) ) ) )
-            .map ( _ sTypeSubst ( from , to ) ) )
+        SChan ( allFresh zip ( qs map ( _._2 ) ) ,
+          ts.map ( _ sTypeSubstFold ( ( qs map ( _._1 ) ) zip ( allFresh map (
+            SVar ( _ ) ) ) ) ).map ( _ sTypeSubst ( from , to ) ) )
       }
     case _                                      => this
   }
