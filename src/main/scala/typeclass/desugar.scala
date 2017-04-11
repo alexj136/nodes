@@ -1,7 +1,6 @@
 package typeclass.desugar
 
 import syntax._
-import typecheck._
 import typeclass.syntax._
 
 sealed abstract class DesugarError
@@ -39,7 +38,7 @@ class Desugar ( nextName: NumName ) {
 
   def desugarProc(
     info: Map[Name, ClassInfo],
-    env:  Map [Name, SType],
+    env:  Map[Name, SType],
     p:    Proc
   ): Proc = {
     def desugarE(e: Exp ): Exp  = desugarExp (info, env, e)

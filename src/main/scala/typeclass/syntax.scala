@@ -6,8 +6,8 @@ sealed abstract class TypeClassElement extends SyntaxElement
 
 case class TypeClassDecl
   ( val tcName : Name
-  , val bind   : Name
-  , val ty     : SChan
+  , val bind   : Name // binds a type variable in this.ty
+  , val ty     : SType
   , val body   : TypeClassElement
   ) extends TypeClassElement {
 
