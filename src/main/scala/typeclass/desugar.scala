@@ -8,7 +8,7 @@ case class FreeClassNameError ( n: Name ) extends DesugarError
 
 case class ClassInfo
   ( val classBind : Name
-  , val classTy   : SChan
+  , val classTy   : SType
   , val instances : Map[SType, Receive]
   ) {
   def withInstance(ty: SType, witness: Receive): ClassInfo =

@@ -20,7 +20,14 @@ object withDefaultPrelude extends Function1
 
     ( names
     , n(2)
-    , New(n(0), SChan(List(n(1)), List(SList(SVar(n(1))))), ???)
+    , New
+      ( n(0)
+      , SChan
+        ( List((n(1), List.empty))
+        , List(SList(SVar(n(1), List.empty)))
+        )
+      , ???
+      )
     )
   }
 }

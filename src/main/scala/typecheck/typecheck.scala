@@ -132,12 +132,12 @@ class Typecheck ( nextName: NumName ) {
       case (Some(c), rest) if c.isInstanceOf[TypeConstraint] =>
         c.asInstanceOf[TypeConstraint].asPair match {
 
-          case (SVar(n), ty     ) if !(ty free n) =>
+          case (SVar(n, _), ty     ) if !(ty free n) =>
             val subFn: SType => SType = _ sTypeSubst(n, ty)
             unify (rest map subFn, failed map subFn)
               .right.map(_ compose subFn)
 
-          case (ty     , SVar(n)) if !(ty free n) =>
+          case (ty     , SVar(n, _)) if !(ty free n) =>
             val subFn: SType => SType = _ sTypeSubst(n, ty)
             unify (rest map subFn, failed map subFn)
               .right.map(_ compose subFn)
@@ -155,8 +155,10 @@ class Typecheck ( nextName: NumName ) {
 
           case (SChan(qs1, ts1), SChan(qs2, ts2)) =>
             if (ts1.size != ts2.size) unify(rest, failed + c) else {
-              val ts1d: List[SType] = ts1 map (dequantify(Set.empty ++ qs1, _))
-              val ts2d: List[SType] = ts2 map (dequantify(Set.empty ++ qs2, _))
+              val ts1d: List[SType] =
+                ts1 map (dequantify(Set.empty ++ (qs1 map (_._1)), _))
+              val ts2d: List[SType] =
+                ts2 map (dequantify(Set.empty ++ (qs2 map (_._1)), _))
               val constrs: List[Constraint] = (ts1d, ts2d).zipped
                 .map(TypeConstraint(_, _, c.origins))
               unify(rest ++ constrs, failed)
@@ -182,10 +184,11 @@ class Typecheck ( nextName: NumName ) {
       val constrs: List [ Constraint ] = tyC match {
         case SChan ( qs , us ) =>
           if ( ms.size == us.size && ts.size == qs.size )
-            ( tyMs , us map ( _ sTypeSubstFold ( qs zip ts ) ) , ms ).zipped
-              .map { ( t1 , t2 , e ) =>
-                TypeConstraint ( t1 , t2 , List ( e ) )
-              }
+            ( tyMs , us map ( _ sTypeSubstFold (
+              ( qs map ( _._1 ) ) zip ts ) ) , ms ).zipped
+                .map { ( t1 , t2 , e ) =>
+                  TypeConstraint ( t1 , t2 , List ( e ) )
+                }
           else List (
             ArityConstraint ( ms.size , us.size , List ( p ) ) ,
             ArityConstraint ( ts.size , qs.size , List ( p ) ) )
@@ -195,16 +198,15 @@ class Typecheck ( nextName: NumName ) {
       ( SProc , constrC union constrQ union constrMs ++ constrs )
     }
     case Receive ( _ , c , qs , as , q ) => {
-      val ( tyC: SType , constrC: ConstraintSet ) = constraintsExp ( c , env )
-      val ( tyQ: SType , constrQ: ConstraintSet ) =
-        constraintsProc ( q , env ++ as )
-      val constr: Constraint =
-        TypeConstraint ( tyC , SChan ( qs , as map ( _._2 ) ) , List ( c ) )
+      val (tyC: SType, constrC: ConstraintSet) = constraintsExp (c, env      )
+      val (tyQ: SType, constrQ: ConstraintSet) = constraintsProc(q, env ++ as)
+      val constr: Constraint = TypeConstraint ( tyC ,
+        SChan ( qs map ( ( _ , List.empty ) ) , as map ( _._2 ) ) , List ( c ) )
       ( SProc , constrC union constrQ + constr )
     }
     case LetIn ( bind , ty , exp , p ) => {
-      val ( tyE: SType , constrE: ConstraintSet ) = constraintsExp ( exp , env )
-      val ( tyP: SType , constrP: ConstraintSet ) =
+      val (tyE: SType, constrE: ConstraintSet) = constraintsExp ( exp , env )
+      val (tyP: SType, constrP: ConstraintSet) =
         constraintsProc ( p , env + ( bind -> tyE ) )
       ( SProc , constrE union constrP )
     }
@@ -231,7 +233,8 @@ class Typecheck ( nextName: NumName ) {
       case IntLiteral (value      ) => (SInt              , ConstraintSet.empty)
       case BoolLiteral(value      ) => (SBool             , ConstraintSet.empty)
       case KharLiteral(value      ) => (SKhar             , ConstraintSet.empty)
-      case ListExp    (Nil        ) => (SList(SVar(fresh)), ConstraintSet.empty)
+      case ListExp    (Nil        ) =>
+        (SList(SVar(fresh, List.empty)), ConstraintSet.empty)
       case ListExp    (exp :: exps) => {
         val (tyE:  SType, constrE:  ConstraintSet) = constraintsExp(exp, env)
         val (tyES: SType, constrES: ConstraintSet) =
@@ -270,10 +273,10 @@ class Typecheck ( nextName: NumName ) {
   /**
    * Replace quantified type variables with fresh type variables in an SType.
    */
-  def dequantify( qs: Set [ Name ] , ty: SType ): SType =
-    ( qs foldLeft ty ) { ( t , q ) => t sTypeSubst ( q , SVar ( fresh ) ) }
-  def dequantify( qs_ty: ( Set [ Name ] , SType ) ): SType =
-    dequantify ( qs_ty._1 , qs_ty._2 )
+  def dequantify(qs: Set[Name], ty: SType): SType =
+    (qs foldLeft ty) { (t, q) => t sTypeSubst (q, SVar(fresh, List.empty)) }
+  def dequantify(qs_ty: (Set[Name], SType)): SType =
+    dequantify(qs_ty._1, qs_ty._2)
 }
 
 object Typecheck {
@@ -292,26 +295,27 @@ object Typecheck {
     case GreaterEq  => (Set.empty   , SFunc(SInt , SFunc(SInt , SBool)))
     case And        => (Set.empty   , SFunc(SBool, SFunc(SBool, SBool)))
     case Or         => (Set.empty   , SFunc(SBool, SFunc(SBool, SBool)))
-    case Equal      => (Set(NumName(0)),
-      SFunc(SVar(NumName(0)), SFunc(SVar(NumName(0)), SBool)))
-    case NotEqual   => (Set(NumName(0)),
-      SFunc(SVar(NumName(0)), SFunc(SVar(NumName(0)), SBool)))
-    case Cons       => (Set(NumName(0)), SFunc(SVar(NumName(0)),
-      SFunc(SList(SVar(NumName(0))), SList(SVar(NumName(0))))))
+    case Equal      => (Set(NumName(0)), SFunc(SVar(NumName(0), List.empty),
+      SFunc(SVar(NumName(0), List.empty), SBool)))
+    case NotEqual   => (Set(NumName(0)), SFunc(SVar(NumName(0), List.empty),
+      SFunc(SVar(NumName(0), List.empty), SBool)))
+    case Cons       => (Set(NumName(0)), SFunc(SVar(NumName(0), List.empty),
+      SFunc(SList(SVar(NumName(0), List.empty)), SList(SVar(NumName(0),
+        List.empty)))))
   }
 
   def typeOfUnOp(op: UnOp): (Set[Name], SType) = op match {
     case Not    => (Set.empty,
       SFunc(SBool, SBool))
-    case PLeft  => (Set(NumName(0), NumName(1)),
-      SFunc(SPair(SVar(NumName(0)), SVar(NumName(1))), SVar(NumName(0))))
-    case PRight => (Set(NumName(0), NumName(1)),
-      SFunc(SPair(SVar(NumName(0)), SVar(NumName(1))), SVar(NumName(1))))
-    case Empty  => (Set(NumName(0)),
-      SFunc(SList(SVar(NumName(0))), SBool))
-    case Head   => (Set(NumName(0)),
-      SFunc(SList(SVar(NumName(0))), SVar(NumName(0))))
-    case Tail   => (Set(NumName(0)),
-      SFunc(SList(SVar(NumName(0))), SList(SVar(NumName(0)))))
+    case PLeft  => (Set(NumName(0), NumName(1)), SFunc(SPair(SVar(NumName(0),
+      List.empty), SVar(NumName(1), List.empty)), SVar(NumName(0), List.empty)))
+    case PRight => (Set(NumName(0), NumName(1)), SFunc(SPair(SVar(NumName(0),
+      List.empty), SVar(NumName(1), List.empty)), SVar(NumName(1), List.empty)))
+    case Empty  => (Set(NumName(0)), SFunc(SList(SVar(NumName(0), List.empty)),
+      SBool))
+    case Head   => (Set(NumName(0)), SFunc(SList(SVar(NumName(0), List.empty)),
+      SVar(NumName(0), List.empty)))
+    case Tail   => (Set(NumName(0)), SFunc(SList(SVar(NumName(0), List.empty)),
+      SList(SVar(NumName(0), List.empty))))
   }
 }

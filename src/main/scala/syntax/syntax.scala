@@ -347,7 +347,7 @@ sealed abstract class SType extends SyntaxElement {
    * in this, so run an occurs-check first. Does not care about type classes.
    */
   def sTypeSubst ( from: Name , to: SType ) : SType = this match {
-    case SVar   ( n       ) => if ( n == from ) to else this
+    case SVar   ( n  , _  ) => if ( n == from ) to else this
     case SList  ( t       ) => SList ( t sTypeSubst ( from , to ) )
     case SPair  ( l  , r  ) =>
       SPair ( l sTypeSubst ( from , to ) , r sTypeSubst ( from , to ) )
@@ -366,7 +366,7 @@ sealed abstract class SType extends SyntaxElement {
           ( ( fresh.id until ( fresh.id + qs.size ) ) map ( NumName ( _ ) ) )
         SChan ( allFresh zip ( qs map ( _._2 ) ) ,
           ts.map ( _ sTypeSubstFold ( ( qs map ( _._1 ) ) zip ( allFresh map (
-            SVar ( _ ) ) ) ) ).map ( _ sTypeSubst ( from , to ) ) )
+            SVar ( _ , List.empty ) ) ) ) ).map ( _ sTypeSubst ( from , to ) ) )
       }
     case _                                      => this
   }
@@ -379,19 +379,21 @@ sealed abstract class SType extends SyntaxElement {
     }
 
   override def pstr(names: Map[Name, String]): String = this match {
-    case SProc              => "process"
-    case SInt               => "int"
-    case SBool              => "bool"
-    case SKhar              => "char"
-    case SChan  ( qs , ts ) => "@{" +
+    case SProc               => "process"
+    case SInt                => "int"
+    case SBool               => "bool"
+    case SKhar               => "char"
+    case SChan  ( qs , ts  ) => "@{" +
       ((qs map { case (n, cs) =>
         s"${n pstr names} <" + ((cs map (_ pstr names)) mkString ", ") + ">"
       }) mkString ", ") +
       "; " + ((ts map (_ pstr names)) mkString ", ") + "}"
-    case SList  ( t       ) => s"[${t pstr names}]"
-    case SPair  ( l  , r  ) => s"( ${l pstr names} , ${r pstr names} )"
-    case SVar   ( n       ) => n pstr names
-    case SFunc  ( a  , r  ) => s"(${a pstr names} => ${r pstr names})"
+    case SList  ( t        ) => s"[${t pstr names}]"
+    case SPair  ( l  , r   ) => s"( ${l pstr names} , ${r pstr names} )"
+    case SVar   ( n  , Nil ) => n pstr names
+    case SVar   ( n  , cs  ) => s"${n pstr names} <" +
+      ((cs map (_ pstr names)) mkString ", ") + ">"
+    case SFunc  ( a  , r   ) => s"(${a pstr names} => ${r pstr names})"
   }
 
   override def free: Set[Name] = this match {
@@ -403,7 +405,7 @@ sealed abstract class SType extends SyntaxElement {
       ((ts map (_.free)).fold(Set.empty)(_ union _)) -- (qs map (_._1))
     case SList  ( t       ) => t.free
     case SPair  ( l  , r  ) => l.free union r.free
-    case SVar   ( n       ) => Set(n)
+    case SVar   ( n  , _  ) => Set(n)
     case SFunc  ( a  , r  ) => a.free union r.free
   }
 }
@@ -413,8 +415,11 @@ case object SBool                           extends SType
 case object SKhar                           extends SType
 case class  SList ( t:  SType             ) extends SType
 case class  SPair ( l:  SType , r:  SType ) extends SType
-case class  SVar  ( n:  Name              ) extends SType
 case class  SFunc ( a:  SType , r:  SType ) extends SType
+case class  SVar
+  ( n:  Name
+  , cs: List [ Name ]
+  ) extends SType
 case class  SChan
   ( qs: List [ ( Name , List [ Name ] ) ]
   , ts: List [ SType ]

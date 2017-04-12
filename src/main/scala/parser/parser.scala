@@ -175,7 +175,8 @@ object Parser extends Parsers {
   def tyChan: Parser [ SType ] =
     AT() ~ LCURLY() ~ repsep ( name , COMMA() ) ~ SEMI() ~
     repsep ( ty , COMMA() ) ~ RCURLY() ^^ {
-      case a ~ _ ~ qs ~ _ ~ ts ~ r => putPos ( SChan ( qs , ts ) , a , r )
+      case a ~ _ ~ qs ~ _ ~ ts ~ r =>
+        putPos ( SChan ( qs map ( ( _ , List.empty ) ) , ts ) , a , r )
     }
 
   def tyPair: Parser [ SType ] = LPAREN() ~ ty ~ COMMA() ~ ty ~ RPAREN() ^^ {
@@ -183,7 +184,7 @@ object Parser extends Parsers {
   }
 
   def tyVar: Parser [ SType ] = name ^^ {
-    case n => putPos ( SVar ( n ) , n , n )
+    case n => putPos ( SVar ( n , List.empty ) , n , n )
   }
 
   /**
