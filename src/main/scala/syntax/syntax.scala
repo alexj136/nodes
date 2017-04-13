@@ -250,8 +250,6 @@ sealed abstract class BinOp extends SyntaxElement {
 
   def pstr(names: Map[Name, String]): String = this.toString
   def free: Set[Name] = Set.empty
-  def alphaEquiv(that: BinOp): Option[Map[Name, Name]] =
-    if (this == that) Some(Map.empty) else None
 
   override def toString: String = this match {
     case Add        => "+"
@@ -289,8 +287,6 @@ sealed abstract class UnOp extends SyntaxElement {
 
   def pstr(names: Map[Name, String]): String = this.toString
   def free: Set[Name] = Set.empty
-  def alphaEquiv(that: UnOp): Option[Map[Name, Name]] =
-    if (this == that) Some(Map.empty) else None
 
   override def toString: String = this match {
     case Not    => "!"

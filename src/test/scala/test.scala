@@ -181,21 +181,6 @@ object ArbitraryTypes {
   implicit val arbitraryName : Arbitrary[Name ] = Arbitrary(genName )
 }
 
-object ProcProperties extends Properties("Proc") {
-  import ArbitraryTypes._
-
-  property("alphaEquivIsReflexive") = Prop.forAll { ( p: Proc ) => {
-    (p alphaEquiv p).nonEmpty
-  }}
-
-  property("alphaEquivSimple") = Prop.forAll {
-    ( n0: Name, n1: Name, n2: Name ) => { (n0 != n1 && n0 != n2) ==>
-      (Send(ChanLiteral(n0), List(), List(Variable(n1)), End).alphaEquiv(
-        Send(ChanLiteral(n1), List(), List(Variable(n2)), End))).nonEmpty
-    }
-  }
-}
-
 object ParserProperties extends Properties("Parser") {
   import parser._
   import scala.io.Source
