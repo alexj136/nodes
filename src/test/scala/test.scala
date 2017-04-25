@@ -137,9 +137,10 @@ object ArbitraryTypes {
   val genSKhar: Gen[SType] = const(SKhar)
 
   val genSChan: Gen[SType] = for {
-    qs <- smallListOf(genName)
+    qs <- smallListOf(smallListOf(genName))
+    cs <- smallListOf(genName)
     ts <- smallListOf(genSType)
-  } yield SChan(qs, ts)
+  } yield SChan(cs zip qs, ts)
 
   val genSList: Gen[SType] = for {
     t <- genSType
@@ -151,8 +152,9 @@ object ArbitraryTypes {
   } yield SPair(l, r)
 
   val genSVar: Gen[SType] = for {
-    x <- genName
-  } yield SVar(x)
+    x  <- genName
+    cs <- smallListOf(genName)
+  } yield SVar(x, cs)
 
   val genSFunc: Gen[SType] = for {
     a <- genSType
@@ -278,20 +280,6 @@ object TurnerMachineProperties extends Properties("TurnerMachineState") {
 
   val next: NumName = NumName(52)
 
-  property("simpleProcess") = {
-    val procStr: String =
-      "new c: a. [ receive c;; y: int. send c;;y . end | send c;; 10. end ]"
-    lexAndParse ( Parser.proc , Source fromString procStr ) match {
-      case Right((nmap, nn, proc)) => {
-        runWithTurnerMachine(proc, nmap map (_.swap), nn)._1.listify
-          .filter(_ != End)
-          .head.alphaEquiv(Send(ChanLiteral(NumName(0)), List(),
-            List(IntLiteral(10)), End)).nonEmpty
-      }
-      case Left(_) => false
-    }
-  }
-
   property("addThreeNumbers") = {
 
     /* proc =
@@ -330,10 +318,10 @@ object TurnerMachineProperties extends Properties("TurnerMachineState") {
             End))))
     Prop.forAll { ( x: Int, y: Int, z: Int ) => {
       val procPost: Proc = runWithTurnerMachine(proc(x, y, z), names, next)._1
-      Proc.fromList(procPost.listify.filter( _ != End )).alphaEquiv(
+      Proc.fromList(procPost.listify.filter( _ != End )).equals(
         Proc.fromList(Send(ChanLiteral(NumName(0)), List(),
           List(IntLiteral(x + y + z)), End)
-          .listify.filter( _ != End ))).nonEmpty
+          .listify.filter( _ != End )))
     }}
   }
 }
@@ -347,13 +335,14 @@ object TypecheckProperties extends Properties("Typecheck") {
 
   property("dequantifyPLeft") = Prop.forAll { ( n: Int ) => { ( n > 1 ) ==> {
     new Typecheck(NumName(n)).dequantify(typeOfUnOp(PLeft)) ==
-      SFunc(SPair(SVar(NumName(n)), SVar(NumName(n + 1))), SVar(NumName(n)))
+      SFunc(SPair(SVar(NumName(n), List()), SVar(NumName(n + 1), List())),
+        SVar(NumName(n), List()))
   }}}
 
   property("dequantifyPRight") = Prop.forAll { ( n: Int ) => { ( n > 1 ) ==> {
     new Typecheck(NumName(n)).dequantify(typeOfUnOp(PRight)) ==
-      SFunc(SPair(SVar(NumName(n)), SVar(NumName(n + 1))),
-        SVar(NumName(n + 1)))
+      SFunc(SPair(SVar(NumName(n), List()), SVar(NumName(n + 1), List())),
+        SVar(NumName(n + 1), List()))
   }}}
 
   property("unifyBadlyTypedExpFails") = {
