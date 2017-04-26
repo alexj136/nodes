@@ -277,6 +277,21 @@ class Typecheck ( nextName: NumName ) {
     (qs foldLeft ty) { (t, q) => t sTypeSubst (q, SVar(fresh, List.empty)) }
   def dequantify(qs_ty: (Set[Name], SType)): SType =
     dequantify(qs_ty._1, qs_ty._2)
+
+  /**
+   * Propagate type class information down a type as described in the paper
+   * 'Implementing Type Classes - Peterson & Jones', 1993.
+   */
+  def propagateClasses(classes: List[Name], ty: SType): SType = ty match {
+    case SVar (x, cs) => SVar(x, (classes.toSet union cs.toSet).toList)
+    case SList(a    ) => SList(propagateClasses(classes, a))
+    case SPair(l, r ) => SPair(propagateClasses(classes, l),
+                               propagateClasses(classes, r))
+    case SFunc(a, r ) => SFunc(propagateClasses(classes, a),
+                               propagateClasses(classes, r))
+    case SChan(n, cs) => ???
+    case _            => ty
+  }
 }
 
 object Typecheck {
