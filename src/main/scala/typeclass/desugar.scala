@@ -15,6 +15,23 @@ case class ClassInfo
     ClassInfo(classBind, classTy, instances + (ty -> witness))
 }
 
+object contextualProc extends Function1
+  [ TypeClassElement
+  , Option[(Proc, Map[Name, ClassInfo])]
+  ] {
+  def apply(e: TypeClassElement): Option[(Proc, Map[Name, ClassInfo])] = e match {
+    case TypeClassDecl(tcName, bind, ty, e) => {
+      val r: Option[(Proc, Map[Name, ClassInfo])] = contextualProc(e)
+      ???
+    }
+    case TypeClassInst(tcName, ty, witness, e) => {
+      val r: Option[(Proc, Map[Name, ClassInfo])] = contextualProc(e)
+      ???
+    }
+    case TypeClassProc(p) => Some((p, Map.empty))
+  }
+}
+
 class Desugar ( nextName: NumName ) {
 
   private var nn: NumName = nextName

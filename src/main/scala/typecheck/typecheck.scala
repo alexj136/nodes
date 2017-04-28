@@ -1,6 +1,8 @@
 package typecheck
 
 import syntax._
+import typeclass.syntax._
+import typeclass.desugar._
 
 case class ConstraintSet( val set: Set [ Constraint ] ) {
 
@@ -105,12 +107,15 @@ class Typecheck ( nextName: NumName ) {
 
   def fresh: NumName = { val freshN: NumName = nn ; nn = nn.next ; freshN }
 
-  def checkProc(p: Proc): Option[SType] = {
-    val (tyP: SType, constrP: ConstraintSet) = constraintsProc(p, Map.empty)
-    unify (constrP, ConstraintSet.empty) match {
-      case Right(unifyFn) => Some(unifyFn(tyP))
-      case Left (_      ) => None
+  def checkProc(e: TypeClassElement): Option[SType] = contextualProc(e) match {
+    case Some((p, info)) => {
+      val (tyP: SType, constrP: ConstraintSet) = constraintsProc(p, Map.empty)
+      unify(constrP, ConstraintSet.empty, info) match {
+        case Right(unifyFn) => Some(unifyFn(tyP))
+        case Left (_      ) => None
+      }
     }
+    case None => None
   }
 
   /**
@@ -121,50 +126,51 @@ class Typecheck ( nextName: NumName ) {
   def unify
     ( constrs: ConstraintSet
     , failed:  ConstraintSet
+    , info:    Map [ Name , ClassInfo ]
     ): Either [ ConstraintSet , SType => SType ] = {
     val exception = new RuntimeException (
       "SQuant not removed from type before unification" )
     constrs.split match {
       case (None, _) => if (failed.isEmpty) Right(identity) else Left(failed)
-      case (Some(c), rest) if c.trivial => unify(rest, failed)
+      case (Some(c), rest) if c.trivial => unify(rest, failed, info)
       case (Some(c), rest) if c.isInstanceOf[ArityConstraint] =>
-        unify (rest, failed + c)
+        unify (rest, failed + c, info)
       case (Some(c), rest) if c.isInstanceOf[TypeConstraint] =>
         c.asInstanceOf[TypeConstraint].asPair match {
 
           case (SVar(n, _), ty     ) if !(ty free n) =>
             val subFn: SType => SType = _ sTypeSubst(n, ty)
-            unify (rest map subFn, failed map subFn)
+            unify (rest map subFn, failed map subFn, info)
               .right.map(_ compose subFn)
 
           case (ty     , SVar(n, _)) if !(ty free n) =>
             val subFn: SType => SType = _ sTypeSubst(n, ty)
-            unify (rest map subFn, failed map subFn)
+            unify (rest map subFn, failed map subFn, info)
               .right.map(_ compose subFn)
 
           case (SList(t1o), SList(t2o)) =>
-            unify(rest + TypeConstraint(t1o, t2o, c.origins), failed)
+            unify(rest + TypeConstraint(t1o, t2o, c.origins), failed, info)
 
           case (SPair(t1l, t1r), SPair(t2l, t2r)) =>
             unify(rest + TypeConstraint(t1l, t2l, c.origins) +
-              TypeConstraint(t1r, t2r, c.origins), failed)
+              TypeConstraint(t1r, t2r, c.origins), failed, info)
 
           case (SFunc(t1a, t1r), SFunc(t2a, t2r)) =>
             unify(rest + TypeConstraint(t1a, t2a, c.origins) +
-              TypeConstraint(t1r, t2r, c.origins), failed)
+              TypeConstraint(t1r, t2r, c.origins), failed, info)
 
           case (SChan(qs1, ts1), SChan(qs2, ts2)) =>
-            if (ts1.size != ts2.size) unify(rest, failed + c) else {
+            if (ts1.size != ts2.size) unify(rest, failed + c, info) else {
               val ts1d: List[SType] =
                 ts1 map (dequantify(Set.empty ++ (qs1 map (_._1)), _))
               val ts2d: List[SType] =
                 ts2 map (dequantify(Set.empty ++ (qs2 map (_._1)), _))
               val constrs: List[Constraint] = (ts1d, ts2d).zipped
                 .map(TypeConstraint(_, _, c.origins))
-              unify(rest ++ constrs, failed)
+              unify(rest ++ constrs, failed, info)
             }
 
-          case _ => unify(rest, failed + c)
+          case _ => unify(rest, failed + c, info)
         }
     }
   }
@@ -282,16 +288,12 @@ class Typecheck ( nextName: NumName ) {
    * Propagate type class information down a type as described in the paper
    * 'Implementing Type Classes - Peterson & Jones', 1993.
    */
-  def propagateClasses(classes: List[Name], ty: SType): SType = ty match {
-    case SVar (x, cs) => SVar(x, (classes.toSet union cs.toSet).toList)
-    case SList(a    ) => SList(propagateClasses(classes, a))
-    case SPair(l, r ) => SPair(propagateClasses(classes, l),
-                               propagateClasses(classes, r))
-    case SFunc(a, r ) => SFunc(propagateClasses(classes, a),
-                               propagateClasses(classes, r))
-    case SChan(n, cs) => ???
-    case _            => ty
-  }
+  def propagateClasses(info: Map[Name, ClassInfo], classes: List[Name],
+    ty: SType): Option[SType] = ty match {
+      case SVar(x, cs) => Some(SVar(x, (classes.toSet union cs.toSet).toList))
+      case _           => if ((classes map (info(_).instances.contains(ty)))
+        .foldLeft(true)(_ && _)) None else Some(ty)
+    }
 }
 
 object Typecheck {
