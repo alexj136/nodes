@@ -12,6 +12,7 @@ package parser
  */
 
 import syntax._
+import typeclass.syntax._
 import scala.io.Source
 import scala.util.parsing.input._
 import scala.util.parsing.combinator._
@@ -89,6 +90,22 @@ object Parser extends Parsers {
   def name: Parser [ Name ] = accept ( "POSTIDENT" , {
     case p @ POSTIDENT ( n ) => putPos ( n , p , p )
   } )
+
+  def tcElem: Parser [ TypeClassElement ] = tcProc | tcClass | tcInst
+
+  def tcClass: Parser [ TypeClassElement ] =
+    CLASS() ~ name ~ SEMI() ~ name ~ COLON() ~ ty ~ DOT() ~ tcElem ^^ {
+      case _ ~ c ~ _ ~ b ~ _ ~ t ~ _ ~ e  => TypeClassDecl ( c , b , t , e )
+    }
+
+  def tcInst: Parser [ TypeClassElement ] =
+    INST() ~ name ~ SEMI() ~ ty ~ WHERE() ~ proc ~ IN() ~ tcElem ^^ {
+      case _ ~ n ~ _ ~ t ~ _ ~ w ~ _ ~ e =>
+        TypeClassInst ( n , t , w.asInstanceOf[Receive] , e )
+    }
+
+  def tcProc: Parser [ TypeClassElement ] =
+    proc ^^ { case p => TypeClassProc ( p ) }
 
   def proc: Parser [ Proc ] = phrase ( seq )
 
@@ -374,7 +391,11 @@ object Lexer extends RegexParsers {
     positioned { "string"                ^^ { _ => TYSTR   ( ) } } |||
     positioned { "stdout"                ^^ { _ => STDOUT  ( ) } } |||
     positioned { "stdin"                 ^^ { _ => STDIN   ( ) } } |||
-    positioned { "stderr"                ^^ { _ => STDERR  ( ) } } ) )
+    positioned { "stderr"                ^^ { _ => STDERR  ( ) } } |||
+    positioned { "class"                 ^^ { _ => CLASS   ( ) } } |||
+    positioned { "instance"              ^^ { _ => INST    ( ) } } |||
+    positioned { "where"                 ^^ { _ => WHERE   ( ) } } |||
+    positioned { "in"                    ^^ { _ => IN      ( ) } } ) )
 }
 
 /** Below we have the token classes. We have PreTokens and PostTokens to
@@ -493,57 +514,61 @@ sealed abstract class KeyWdToken extends PreToken with PostToken {
     ( nameMap , nextName , this )
 }
 
-case class BANG    ( ) extends KeyWdToken { val text: String = "!"       }
-case class STAR    ( ) extends KeyWdToken { val text: String = "*"       }
-case class DOT     ( ) extends KeyWdToken { val text: String = "."       }
-case class COLON   ( ) extends KeyWdToken { val text: String = ":"       }
-case class SEMI    ( ) extends KeyWdToken { val text: String = ";"       }
-case class AT      ( ) extends KeyWdToken { val text: String = "@"       }
-case class TILDE   ( ) extends KeyWdToken { val text: String = "~"       }
-case class LET     ( ) extends KeyWdToken { val text: String = "let"     }
-case class NEW     ( ) extends KeyWdToken { val text: String = "new"     }
-case class IF      ( ) extends KeyWdToken { val text: String = "if"      }
-case class THEN    ( ) extends KeyWdToken { val text: String = "then"    }
-case class ELSE    ( ) extends KeyWdToken { val text: String = "else"    }
-case class ENDIF   ( ) extends KeyWdToken { val text: String = "endif"   }
-case class SEND    ( ) extends KeyWdToken { val text: String = "send"    }
-case class RECEIVE ( ) extends KeyWdToken { val text: String = "receive" }
-case class SERVER  ( ) extends KeyWdToken { val text: String = "server"  }
-case class OF      ( ) extends KeyWdToken { val text: String = "of"      }
-case class BAR     ( ) extends KeyWdToken { val text: String = "|"       }
-case class END     ( ) extends KeyWdToken { val text: String = "end"     }
-case class LPAREN  ( ) extends KeyWdToken { val text: String = "("       }
-case class RPAREN  ( ) extends KeyWdToken { val text: String = ")"       }
-case class LCURLY  ( ) extends KeyWdToken { val text: String = "{"       }
-case class RCURLY  ( ) extends KeyWdToken { val text: String = "}"       }
-case class LSQUARE ( ) extends KeyWdToken { val text: String = "["       }
-case class RSQUARE ( ) extends KeyWdToken { val text: String = "]"       }
-case class COMMA   ( ) extends KeyWdToken { val text: String = ","       }
-case class LARROW  ( ) extends KeyWdToken { val text: String = "<-"      }
-case class RARROW  ( ) extends KeyWdToken { val text: String = "->"      }
-case class TRUE    ( ) extends KeyWdToken { val text: String = "true"    }
-case class FALSE   ( ) extends KeyWdToken { val text: String = "false"   }
-case class PLUS    ( ) extends KeyWdToken { val text: String = "+"       }
-case class DASH    ( ) extends KeyWdToken { val text: String = "-"       }
-case class FSLASH  ( ) extends KeyWdToken { val text: String = "/"       }
-case class PERC    ( ) extends KeyWdToken { val text: String = "%"       }
-case class EQUAL   ( ) extends KeyWdToken { val text: String = "="       }
-case class EQEQ    ( ) extends KeyWdToken { val text: String = "=="      }
-case class NEQ     ( ) extends KeyWdToken { val text: String = "!="      }
-case class LESS    ( ) extends KeyWdToken { val text: String = "<"       }
-case class LESSEQ  ( ) extends KeyWdToken { val text: String = "<="      }
-case class GRTR    ( ) extends KeyWdToken { val text: String = ">"       }
-case class GRTREQ  ( ) extends KeyWdToken { val text: String = ">="      }
-case class AND     ( ) extends KeyWdToken { val text: String = "&&"      }
-case class OR      ( ) extends KeyWdToken { val text: String = "||"      }
-case class CONS    ( ) extends KeyWdToken { val text: String = "::"      }
-case class QMARK   ( ) extends KeyWdToken { val text: String = "?"       }
-case class HEAD    ( ) extends KeyWdToken { val text: String = "*--"     }
-case class TAIL    ( ) extends KeyWdToken { val text: String = "-**"     }
-case class TYINT   ( ) extends KeyWdToken { val text: String = "int"     }
-case class TYBOOL  ( ) extends KeyWdToken { val text: String = "bool"    }
-case class TYCHAR  ( ) extends KeyWdToken { val text: String = "char"    }
-case class TYSTR   ( ) extends KeyWdToken { val text: String = "string"  }
-case class STDOUT  ( ) extends KeyWdToken { val text: String = "stdout"  }
-case class STDIN   ( ) extends KeyWdToken { val text: String = "stdin"   }
-case class STDERR  ( ) extends KeyWdToken { val text: String = "stderr"  }
+case class BANG    ( ) extends KeyWdToken { val text: String = "!"        }
+case class STAR    ( ) extends KeyWdToken { val text: String = "*"        }
+case class DOT     ( ) extends KeyWdToken { val text: String = "."        }
+case class COLON   ( ) extends KeyWdToken { val text: String = ":"        }
+case class SEMI    ( ) extends KeyWdToken { val text: String = ";"        }
+case class AT      ( ) extends KeyWdToken { val text: String = "@"        }
+case class TILDE   ( ) extends KeyWdToken { val text: String = "~"        }
+case class LET     ( ) extends KeyWdToken { val text: String = "let"      }
+case class NEW     ( ) extends KeyWdToken { val text: String = "new"      }
+case class IF      ( ) extends KeyWdToken { val text: String = "if"       }
+case class THEN    ( ) extends KeyWdToken { val text: String = "then"     }
+case class ELSE    ( ) extends KeyWdToken { val text: String = "else"     }
+case class ENDIF   ( ) extends KeyWdToken { val text: String = "endif"    }
+case class SEND    ( ) extends KeyWdToken { val text: String = "send"     }
+case class RECEIVE ( ) extends KeyWdToken { val text: String = "receive"  }
+case class SERVER  ( ) extends KeyWdToken { val text: String = "server"   }
+case class OF      ( ) extends KeyWdToken { val text: String = "of"       }
+case class BAR     ( ) extends KeyWdToken { val text: String = "|"        }
+case class END     ( ) extends KeyWdToken { val text: String = "end"      }
+case class LPAREN  ( ) extends KeyWdToken { val text: String = "("        }
+case class RPAREN  ( ) extends KeyWdToken { val text: String = ")"        }
+case class LCURLY  ( ) extends KeyWdToken { val text: String = "{"        }
+case class RCURLY  ( ) extends KeyWdToken { val text: String = "}"        }
+case class LSQUARE ( ) extends KeyWdToken { val text: String = "["        }
+case class RSQUARE ( ) extends KeyWdToken { val text: String = "]"        }
+case class COMMA   ( ) extends KeyWdToken { val text: String = ","        }
+case class LARROW  ( ) extends KeyWdToken { val text: String = "<-"       }
+case class RARROW  ( ) extends KeyWdToken { val text: String = "->"       }
+case class TRUE    ( ) extends KeyWdToken { val text: String = "true"     }
+case class FALSE   ( ) extends KeyWdToken { val text: String = "false"    }
+case class PLUS    ( ) extends KeyWdToken { val text: String = "+"        }
+case class DASH    ( ) extends KeyWdToken { val text: String = "-"        }
+case class FSLASH  ( ) extends KeyWdToken { val text: String = "/"        }
+case class PERC    ( ) extends KeyWdToken { val text: String = "%"        }
+case class EQUAL   ( ) extends KeyWdToken { val text: String = "="        }
+case class EQEQ    ( ) extends KeyWdToken { val text: String = "=="       }
+case class NEQ     ( ) extends KeyWdToken { val text: String = "!="       }
+case class LESS    ( ) extends KeyWdToken { val text: String = "<"        }
+case class LESSEQ  ( ) extends KeyWdToken { val text: String = "<="       }
+case class GRTR    ( ) extends KeyWdToken { val text: String = ">"        }
+case class GRTREQ  ( ) extends KeyWdToken { val text: String = ">="       }
+case class AND     ( ) extends KeyWdToken { val text: String = "&&"       }
+case class OR      ( ) extends KeyWdToken { val text: String = "||"       }
+case class CONS    ( ) extends KeyWdToken { val text: String = "::"       }
+case class QMARK   ( ) extends KeyWdToken { val text: String = "?"        }
+case class HEAD    ( ) extends KeyWdToken { val text: String = "*--"      }
+case class TAIL    ( ) extends KeyWdToken { val text: String = "-**"      }
+case class TYINT   ( ) extends KeyWdToken { val text: String = "int"      }
+case class TYBOOL  ( ) extends KeyWdToken { val text: String = "bool"     }
+case class TYCHAR  ( ) extends KeyWdToken { val text: String = "char"     }
+case class TYSTR   ( ) extends KeyWdToken { val text: String = "string"   }
+case class STDOUT  ( ) extends KeyWdToken { val text: String = "stdout"   }
+case class STDIN   ( ) extends KeyWdToken { val text: String = "stdin"    }
+case class STDERR  ( ) extends KeyWdToken { val text: String = "stderr"   }
+case class CLASS   ( ) extends KeyWdToken { val text: String = "class"    }
+case class INST    ( ) extends KeyWdToken { val text: String = "instance" }
+case class WHERE   ( ) extends KeyWdToken { val text: String = "where"    }
+case class IN      ( ) extends KeyWdToken { val text: String = "in"       }

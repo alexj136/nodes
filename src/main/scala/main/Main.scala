@@ -1,6 +1,7 @@
 package main
 
 import syntax._
+import typeclass.desugar._
 import parser._
 import typecheck._
 import interpreter._
@@ -31,8 +32,8 @@ object Main extends App {
 
   try {
 
-    lexAndParse ( Parser.proc , Source fromFile args(0) ) match {
-      case Right ( ( names , nextName , proc ) ) =>
+    lexAndParse ( Parser.tcElem , Source fromFile args(0) ) match {
+      case Right ( ( names , nextName , program ) ) =>
 
         // 'flip' the name map from the lexer such that we can easily use it to
         // print terms.
@@ -40,12 +41,17 @@ object Main extends App {
 
         val checker: Typecheck = new Typecheck ( nextName )
 
+        val cp: Option [ ( Proc , Map [ Name, ClassInfo ] ) ] =
+          contextualProc ( program )
+
+        val ( proc: Proc , tcInfo: Map [ Name, ClassInfo ] ) = cp.get
+
         // Generate typing constraints
         val ( _ , constr: ConstraintSet ) =
           checker.constraintsProc ( proc , Map.empty )
 
         // Try to solve constraints
-        checker.unify ( constr , ConstraintSet.empty ) match {
+        checker.unify ( constr , ConstraintSet.empty , tcInfo ) match {
 
           // If constraints are solved, run the program
           case Right ( _  ) =>
