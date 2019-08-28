@@ -1,6 +1,12 @@
 # Nodes
 
-## About
+Nodes is a toy programming language I implemented in order to teach myself about
+pi-calculus during my PhD in computer science. It's written in Scala, as you can
+see. Some example code in the language is in `examples/`, and of course the
+Scala source is in `src/`. This project helped me learn Scala and and Akka, and
+get familiar with property-based testing with ScalaCheck (Scala's QuickCheck).
+
+## About the language
 
 Nodes is a concurrent programming language, based on the Pi-Calculus. It is
 implemented in scala, both sequentially and concurrently. The sequential
@@ -76,10 +82,6 @@ Akka, scala's concurrency library.
         | { T , U }                     Pair
         | @T                            Channel
         | X                             Type Variable
-
-## Language semantics
-
-TODO
 
 ## Dependencies
 Just SBT and a JRE8. SBT will download the required scala compiler and
